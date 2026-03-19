@@ -2,7 +2,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Challenge } from "./page";
+import { createSupabaseBrowserClient } from "@/lib/supabase";
 
 type GuessRow = {
   value: number;
@@ -128,13 +131,17 @@ function emojiForVerdict(v: GuessRow["verdict"]) {
 export function DailyGameClient({
   challenge,
   today,
+  userEmail,
 }: {
   challenge: Challenge | null;
   today: string;
+  userEmail: string | null;
 }) {
   const answer = challenge?.layer_count ?? null;
   const dayNumber = challenge?.day_number ?? null;
+  const signedIn = Boolean(userEmail);
 
+  const router = useRouter();
   const [now, setNow] = useState(() => new Date());
   const [guessInput, setGuessInput] = useState<number | "">("");
   const [guesses, setGuesses] = useState<GuessRow[]>([]);
@@ -146,7 +153,9 @@ export function DailyGameClient({
     return hit || guesses.length >= 6;
   }, [answer, guesses]);
 
-  const canGuess = Boolean(challenge && answer && answer > 0 && !finished);
+  const canGuess = Boolean(
+    signedIn && challenge && answer && answer > 0 && !finished
+  );
 
   const secondsLeft = secondsUntilLocalMidnight(now);
 
@@ -177,6 +186,12 @@ export function DailyGameClient({
     setGuessInput("");
   }
 
+  async function signOut() {
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    router.refresh();
+  }
+
   async function share() {
     if (!challenge) return;
     const header = `Layers Daily #${dayNumber ?? "—"} (${today})`;
@@ -204,8 +219,33 @@ export function DailyGameClient({
       <div className="mx-auto w-full max-w-3xl px-5 py-6">
         <header className="flex items-center justify-between">
           <div className="text-xl font-extrabold tracking-tight">layers</div>
-          <div className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-sm font-semibold">
-            {challenge ? `Daily #${dayNumber ?? "—"}` : "Daily"}
+          <div className="flex items-center gap-3">
+            {signedIn ? (
+              <div className="hidden sm:block text-sm text-white/70">
+                {userEmail}
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+              >
+                Sign in to play
+              </Link>
+            )}
+
+            {signedIn && (
+              <button
+                type="button"
+                onClick={signOut}
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+              >
+                Sign out
+              </button>
+            )}
+
+            <div className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-sm font-semibold">
+              {challenge ? `Daily #${dayNumber ?? "—"}` : "Daily"}
+            </div>
           </div>
         </header>
 
@@ -261,6 +301,11 @@ export function DailyGameClient({
                   <div className="text-sm font-semibold text-white/80">
                     Guess the layer count
                   </div>
+                  {!signedIn && (
+                    <div className="mt-1 text-xs text-white/55">
+                      Sign in to submit guesses.
+                    </div>
+                  )}
                   <input
                     type="number"
                     inputMode="numeric"

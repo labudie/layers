@@ -1,5 +1,6 @@
-import { supabase } from "@/lib/supabase";
 import { DailyGameClient } from "@/app/DailyGameClient";
+import { cookies } from "next/headers";
+import { createSupabaseServerClient } from "@/lib/supabase";
 
 export type Challenge = {
   title: string | null;
@@ -16,13 +17,21 @@ function formatDateYYYYMMDD(date: Date) {
 export default async function Home() {
   const today = formatDateYYYYMMDD(new Date());
 
-  const { data, error } = await supabase
+  const supabase = createSupabaseServerClient(await cookies());
+
+  const [{ data: authData }, { data, error }] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase
     .from("challenges")
     .select("title, day_number, software, category, layer_count")
     .eq("active_date", today)
-    .maybeSingle<Challenge>();
+    .maybeSingle<Challenge>(),
+  ]);
 
   const challenge = error ? null : data ?? null;
+  const userEmail = authData.user?.email ?? null;
 
-  return <DailyGameClient challenge={challenge} today={today} />;
+  return (
+    <DailyGameClient challenge={challenge} today={today} userEmail={userEmail} />
+  );
 }
