@@ -142,7 +142,7 @@ export function DailyGameClient({
   const signedIn = Boolean(userEmail);
 
   const router = useRouter();
-  const [now, setNow] = useState(() => new Date());
+  const [countdownText, setCountdownText] = useState<string | null>(null);
   const [guessInput, setGuessInput] = useState<number | "">("");
   const [guesses, setGuesses] = useState<GuessRow[]>([]);
   const [copied, setCopied] = useState(false);
@@ -157,10 +157,14 @@ export function DailyGameClient({
     signedIn && challenge && answer && answer > 0 && !finished
   );
 
-  const secondsLeft = secondsUntilLocalMidnight(now);
-
   useEffect(() => {
-    const t = window.setInterval(() => setNow(new Date()), 250);
+    const tick = () => {
+      const secondsLeft = secondsUntilLocalMidnight(new Date());
+      setCountdownText(formatHMS(secondsLeft));
+    };
+
+    tick();
+    const t = window.setInterval(tick, 250);
     return () => window.clearInterval(t);
   }, []);
 
@@ -255,7 +259,7 @@ export function DailyGameClient({
             className="font-mono text-base font-semibold"
             style={{ letterSpacing: "0.02em" }}
           >
-            {formatHMS(secondsLeft)}
+            {countdownText ?? "--:--:--"}
           </div>
         </div>
 
