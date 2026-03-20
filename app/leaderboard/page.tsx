@@ -20,13 +20,15 @@ export default async function LeaderboardPage() {
   const today = todayYYYYMMDDUSEastern();
   const supabase = createSupabaseServerClient(await cookies());
 
-  const { data: challenge, error: challengeError } = await supabase
+  const { data: chRows, error: challengeError } = await supabase
     .from("challenges")
     .select("id")
     .eq("active_date", today)
-    .maybeSingle<{ id: string }>();
+    .order("position", { ascending: true })
+    .limit(1);
 
-  const challengeId = challengeError ? null : challenge?.id ?? null;
+  const challengeId =
+    challengeError || !chRows?.length ? null : chRows[0]?.id ?? null;
 
   let rows: ResultRow[] = [];
 

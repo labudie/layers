@@ -5,6 +5,7 @@ import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 
 export type Challenge = {
   id: string;
+  position: number;
   title: string | null;
   day_number: number | null;
   software: string | null;
@@ -21,19 +22,20 @@ export default async function Home() {
     supabase.auth.getUser(),
     supabase
       .from("challenges")
-      .select("id, title, day_number, software, category, layer_count")
+      .select(
+        "id, position, title, day_number, software, category, layer_count"
+      )
       .eq("active_date", today)
-      .maybeSingle<Challenge>(),
+      .order("position", { ascending: true }),
   ]);
 
-  const challenge = error ? null : data ?? null;
+  const challenges = error ? [] : (data ?? []) as Challenge[];
   const userEmail = authData.user?.email ?? null;
   const userId = authData.user?.id ?? null;
 
   return (
     <DailyGameClient
-      challenge={challenge}
-      today={today}
+      challenges={challenges}
       userEmail={userEmail}
       userId={userId}
     />
