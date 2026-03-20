@@ -189,7 +189,7 @@ export function DailyGameClient({
         return;
       }
 
-      const restored: GuessRow[] = data.map((row) => {
+      const restored: GuessRow[] = data.map((row: { guess: unknown }) => {
         const v = Math.max(0, Math.floor(Number(row.guess)));
         const meta = verdictForGuess(v, answer);
         return { value: v, ...meta };
@@ -314,9 +314,17 @@ export function DailyGameClient({
   return (
     <div className="min-h-screen w-full bg-black text-white">
       <div className="mx-auto w-full max-w-3xl px-5 py-6">
-        <header className="flex items-center justify-between">
-          <div className="text-xl font-extrabold tracking-tight">layers</div>
-          <div className="flex items-center gap-3">
+        <header className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="text-xl font-extrabold tracking-tight">layers</div>
+            <Link
+              href="/leaderboard"
+              className="shrink-0 text-sm font-semibold text-white/70 underline-offset-4 hover:text-white hover:underline"
+            >
+              Leaderboard
+            </Link>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
             {signedIn ? (
               <div className="hidden sm:block text-sm text-white/70">
                 {userEmail}
