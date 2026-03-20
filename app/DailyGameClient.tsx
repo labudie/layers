@@ -290,22 +290,17 @@ export function DailyGameClient({
   }
 
   async function share() {
-    if (!challenge) return;
-    const header = `Layers Daily #${dayNumber ?? "—"} (${today})`;
-    const grid =
-      guesses.length === 0
-        ? "(no guesses)"
-        : guesses.map((g) => emojiForVerdict(g.verdict)).join("");
-    const score =
-      guesses.some((g) => g.verdict === "correct")
-        ? `${guesses.findIndex((g) => g.verdict === "correct") + 1}/6`
-        : `X/6`;
-    const text = `${header}\n${score}\n${grid}`;
+    if (!challenge || !finished || guesses.length === 0) return;
+
+    const header = `layers #${dayNumber ?? "—"}`;
+    const scoreLine = `${guesses.length}/6`;
+    const grid = guesses.map((g) => emojiForVerdict(g.verdict)).join("\n");
+    const text = `${header}\n${scoreLine}\n\n${grid}`;
 
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      window.setTimeout(() => setCopied(false), 2000);
     } catch {
       // ignore
     }
@@ -489,17 +484,14 @@ export function DailyGameClient({
                 <div className="mt-2 text-white/80">
                   Answer: <span className="font-bold text-white">{answer}</span>
                 </div>
-                <div className="mt-4 flex items-center gap-3">
+                <div className="mt-4">
                   <button
                     type="button"
                     onClick={share}
-                    className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-black"
+                    className="rounded-xl border-2 border-white bg-transparent px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10"
                   >
-                    {copied ? "Copied" : "Share"}
+                    {copied ? "Copied!" : "Share"}
                   </button>
-                  <div className="text-xs text-white/50">
-                    Copies a Wordle-style emoji grid to your clipboard.
-                  </div>
                 </div>
               </div>
             )}
