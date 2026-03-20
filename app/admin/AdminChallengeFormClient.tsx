@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormState, useFormStatus } from "react-dom";
+import { useState } from "react";
 
 type AddChallengeState = {
   error: string | null;
@@ -48,6 +49,7 @@ export function AdminChallengeFormClient({
   initialState: AddChallengeState;
 }) {
   const [state, formAction] = useFormState(action, initialState);
+  const [isSponsoredChecked, setIsSponsoredChecked] = useState(false);
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
@@ -158,6 +160,7 @@ export function AdminChallengeFormClient({
             type="checkbox"
             value="true"
             className="peer h-4 w-4 cursor-pointer"
+            onChange={(e) => setIsSponsoredChecked(e.target.checked)}
           />
           <label
             htmlFor="is_sponsored"
@@ -167,7 +170,8 @@ export function AdminChallengeFormClient({
           </label>
         </div>
 
-        <div className="hidden peer-checked:block">
+        {isSponsoredChecked ? (
+          <div>
           <label
             className="text-sm font-semibold text-white/80"
             htmlFor="sponsor_name"
@@ -183,7 +187,8 @@ export function AdminChallengeFormClient({
           <div className="mt-1 text-xs text-white/55">
             Required when “Is Sponsored” is checked.
           </div>
-        </div>
+          </div>
+        ) : null}
 
         {state.error ? (
           <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">

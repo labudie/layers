@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import { AdminChallengeFormClient } from "@/app/admin/AdminChallengeFormClient";
+import { DeleteButton } from "@/app/admin/DeleteButton";
 
 const ADMIN_EMAIL = "rjlabudie@gmail.com";
 
@@ -109,7 +110,7 @@ async function addChallengeAction(
 
   try {
     const sb = createSupabaseServerClient(await cookies());
-    const { error } = await sb.from("challenges").insert({
+    const insertPayload = {
       title,
       day_number: Math.trunc(dayNumber),
       software,
@@ -118,8 +119,12 @@ async function addChallengeAction(
       active_date: activeDate,
       position: Math.trunc(position),
       is_sponsored: isSponsored,
-      sponsor_name: isSponsored ? sponsorName : null,
-    });
+      sponsor_name: isSponsored ? (sponsorName.trim() ? sponsorName : null) : null,
+    };
+
+    console.log("[admin][addChallenge] insert payload", insertPayload);
+
+    const { error } = await sb.from("challenges").insert(insertPayload);
 
     if (error) {
       console.error("[admin][addChallenge] Supabase insert error", error);
@@ -183,13 +188,13 @@ export default async function AdminPage() {
             Ordered by `active_date` then `position`
           </div>
 
-          <div className="mt-5 overflow-hidden rounded-2xl border border-white/10">
+          <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10">
             {challenges.length === 0 ? (
               <div className="px-4 py-8 text-center text-white/70">
                 No upcoming challenges
               </div>
             ) : (
-              <table className="w-full text-left text-sm">
+              <table className="min-w-[980px] w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
                     <th className="px-4 py-3">Active date</th>
@@ -234,7 +239,7 @@ export default async function AdminPage() {
                         {ch.is_sponsored ? ch.sponsor_name ?? "—" : "—"}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <DeleteChallengeButton id={ch.id} />
+                        <DeleteButton id={ch.id} />
                       </td>
                     </tr>
                   ))}
@@ -245,34 +250,6 @@ export default async function AdminPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-function DeleteChallengeButton({ id }: { id: string }) {
-  async function deleteChallengeAction(formData: FormData) {
-    "use server";
-    const allowed = await assertAdminOrNull();
-    if (!allowed) return;
-
-    const rawId = formData.get("id");
-    const challengeId = typeof rawId === "string" ? rawId : "";
-    if (!challengeId) return;
-
-    const sb = createSupabaseServerClient(await cookies());
-    await sb.from("challenges").delete().eq("id", challengeId);
-    revalidatePath("/admin");
-  }
-
-  return (
-    <form action={deleteChallengeAction}>
-      <input type="hidden" name="id" value={id} />
-      <button
-        type="submit"
-        className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white hover:bg-white/10"
-      >
-        Delete
-      </button>
-    </form>
   );
 }
 
