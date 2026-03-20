@@ -177,7 +177,9 @@ export function DailyGameClient({
   const [copied, setCopied] = useState(false);
 
   const challengesRef = useRef(challenges);
-  challengesRef.current = challenges;
+  useEffect(() => {
+    challengesRef.current = challenges;
+  }, [challengeIdsKey]);
 
   const currentChallenge = challenges[currentChallengeIndex] ?? null;
   const currentGuesses = guessesByIndex[currentChallengeIndex] ?? [];
@@ -201,16 +203,18 @@ export function DailyGameClient({
   // Restore guesses + resume position / summary
   useEffect(() => {
     const list = challengesRef.current;
-    if (!list.length) {
-      setGuessesByIndex([]);
-      setCurrentChallengeIndex(0);
-      setShowSummary(false);
-      return;
-    }
-
     let cancelled = false;
 
     (async () => {
+      if (!list.length) {
+        if (!cancelled) {
+          setGuessesByIndex([]);
+          setCurrentChallengeIndex(0);
+          setShowSummary(false);
+        }
+        return;
+      }
+
       if (!userId) {
         if (!cancelled) {
           setGuessesByIndex(list.map(() => []));
