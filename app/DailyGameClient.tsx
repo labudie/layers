@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Challenge } from "./page";
-import { createSupabaseBrowserClient } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 type GuessRow = {
   value: number;
@@ -132,10 +132,12 @@ export function DailyGameClient({
   challenge,
   today,
   userEmail,
+  userId,
 }: {
   challenge: Challenge | null;
   today: string;
   userEmail: string | null;
+  userId: string | null;
 }) {
   const answer = challenge?.layer_count ?? null;
   const dayNumber = challenge?.day_number ?? null;
@@ -154,8 +156,85 @@ export function DailyGameClient({
   }, [answer, guesses]);
 
   const canGuess = Boolean(
-    signedIn && challenge && answer && answer > 0 && !finished
+    signedIn &&
+      userId &&
+      challenge?.id &&
+      challenge &&
+      answer &&
+      answer > 0 &&
+      !finished
   );
+
+  // Restore guesses for today's challenge (persist across refresh)
+  useEffect(() => {
+    if (!userId || !challenge?.id || !answer || answer <= 0) {
+      setGuesses([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase()
+        .from("guesses")
+        .select("guess, attempt_number")
+        .eq("user_id", userId)
+        .eq("challenge_id", challenge.id)
+        .order("attempt_number", { ascending: true });
+
+      if (cancelled || error) return;
+
+      if (!data?.length) {
+        setGuesses([]);
+        return;
+      }
+
+      const restored: GuessRow[] = data.map((row) => {
+        const v = Math.max(0, Math.floor(Number(row.guess)));
+        const meta = verdictForGuess(v, answer);
+        return { value: v, ...meta };
+      });
+
+      setGuesses(restored.slice(0, 6));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, challenge?.id, answer]);
+
+  // Persist final result once when the game ends
+  useEffect(() => {
+    if (!finished || !userId || !challenge?.id || guesses.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const sb = supabase();
+      const { data: existing } = await sb
+        .from("results")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("challenge_id", challenge.id)
+        .maybeSingle();
+
+      if (cancelled || existing) return;
+
+      const solved = guesses.some((g) => g.verdict === "correct");
+      const attemptsUsed = guesses.length;
+
+      await sb.from("results").insert({
+        user_id: userId,
+        challenge_id: challenge.id,
+        solved,
+        attempts_used: attemptsUsed,
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [finished, userId, challenge?.id, guesses]);
 
   useEffect(() => {
     const tick = () => {
@@ -182,17 +261,31 @@ export function DailyGameClient({
     return () => window.removeEventListener("resize", onResize);
   }, [dayNumber]);
 
-  function submitGuess() {
+  async function submitGuess() {
     if (!canGuess || typeof guessInput !== "number" || !answer) return;
+    if (!userId || !challenge?.id) return;
+
     const v = Math.max(0, Math.floor(guessInput));
     const { verdict, direction, closeness } = verdictForGuess(v, answer);
-    setGuesses((prev) => [...prev, { value: v, verdict, direction, closeness }].slice(0, 6));
+    const attemptNumber = guesses.length + 1;
+    const nextRow: GuessRow = { value: v, verdict, direction, closeness };
+
+    const { error } = await supabase().from("guesses").insert({
+      user_id: userId,
+      challenge_id: challenge.id,
+      guess: v,
+      attempt_number: attemptNumber,
+      is_correct: verdict === "correct",
+    });
+
+    if (error) return;
+
+    setGuesses((prev) => [...prev, nextRow].slice(0, 6));
     setGuessInput("");
   }
 
   async function signOut() {
-    const supabase = createSupabaseBrowserClient();
-    await supabase.auth.signOut();
+    await supabase().auth.signOut();
     router.refresh();
   }
 

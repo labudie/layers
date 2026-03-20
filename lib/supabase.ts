@@ -4,8 +4,19 @@ import type { CookieOptions } from "@supabase/ssr";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export function createSupabaseBrowserClient() {
+let browserSingleton: ReturnType<typeof createBrowserClient> | null = null;
+
+/** Browser Supabase client for Client Components (singleton in the browser). */
+export function supabase() {
+  if (typeof window !== "undefined") {
+    browserSingleton ??= createBrowserClient(supabaseUrl, supabaseAnonKey);
+    return browserSingleton;
+  }
   return createBrowserClient(supabaseUrl, supabaseAnonKey);
+}
+
+export function createSupabaseBrowserClient() {
+  return supabase();
 }
 
 type CookieStore = {
