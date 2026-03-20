@@ -1,13 +1,23 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase";
-import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 
 type ResultRow = {
   user_id: string;
+  challenge_id: string;
   solved: boolean | null;
   attempts_used: number | null;
   created_at: string | null;
+};
+
+type ProfileRow = {
+  id: string;
+  username: string | null;
+};
+
+type ChallengeRow = {
+  id: string;
+  title: string | null;
 };
 
 function shortUsername(userId: string) {
@@ -17,36 +27,52 @@ function shortUsername(userId: string) {
 }
 
 export default async function LeaderboardPage() {
-  const today = todayYYYYMMDDUSEastern();
   const supabase = createSupabaseServerClient(await cookies());
 
-  const { data: chRows, error: challengeError } = await supabase
-    .from("challenges")
-    .select("id")
-    .eq("active_date", today)
-    .order("position", { ascending: true })
-    .limit(1);
-
-  const challengeId =
-    challengeError || !chRows?.length ? null : chRows[0]?.id ?? null;
-
   let rows: ResultRow[] = [];
+  const { data, error } = await supabase
+    .from("results")
+    .select("user_id, challenge_id, solved, attempts_used, created_at")
+    .order("attempts_used", { ascending: true })
+    .order("created_at", { ascending: true });
 
-  if (challengeId) {
-    const { data, error } = await supabase
-      .from("results")
-      .select("user_id, solved, attempts_used, created_at")
-      .eq("challenge_id", challengeId)
-      .order("attempts_used", { ascending: true })
-      .order("created_at", { ascending: true });
+  if (!error && data?.length) {
+    rows = data as ResultRow[];
+  }
 
-    if (!error && data?.length) {
-      rows = data as ResultRow[];
+  const empty = !rows.length;
+
+  // Load usernames for the players we need (fallback to user_id prefix).
+  const usernameMap = new Map<string, string | null>();
+  if (rows.length) {
+    const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
+    const { data: profileRows, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, username")
+      .in("id", userIds);
+
+    if (!profilesError && profileRows?.length) {
+      (profileRows as ProfileRow[]).forEach((p) => {
+        usernameMap.set(p.id, p.username);
+      });
     }
   }
 
-  const hasChallenge = Boolean(challengeId);
-  const empty = !rows.length;
+  // Load challenge metadata for results.
+  const challengeMap = new Map<string, string | null>();
+  if (rows.length) {
+    const challengeIds = Array.from(new Set(rows.map((r) => r.challenge_id)));
+    const { data: challengeRows, error: challengesError } = await supabase
+      .from("challenges")
+      .select("id, title")
+      .in("id", challengeIds);
+
+    if (!challengesError && challengeRows?.length) {
+      (challengeRows as ChallengeRow[]).forEach((c) => {
+        challengeMap.set(c.id, c.title);
+      });
+    }
+  }
 
   return (
     <div className="min-h-screen w-full bg-black text-white">
@@ -62,14 +88,10 @@ export default async function LeaderboardPage() {
 
         <h1 className="text-3xl font-extrabold tracking-tight">Leaderboard</h1>
         <p className="mt-2 text-sm text-white/60">
-          Today&apos;s challenge{hasChallenge ? "" : " (no active challenge)"}
+          All-time results
         </p>
 
-        {!hasChallenge ? (
-          <p className="mt-10 text-center text-lg font-semibold text-white/75">
-            No challenge today
-          </p>
-        ) : empty ? (
+        {empty ? (
           <p className="mt-10 text-center text-lg font-semibold text-white/75">
             No results yet
           </p>
@@ -80,34 +102,44 @@ export default async function LeaderboardPage() {
                 <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
                   <th className="px-4 py-3">Rank</th>
                   <th className="px-4 py-3">Username</th>
+                  <th className="px-4 py-3">Challenge</th>
                   <th className="px-4 py-3">Solved</th>
                   <th className="px-4 py-3">Attempts</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, i) => (
-                  <tr
-                    key={`${row.user_id}-${row.created_at ?? ""}-${i}`}
-                    className="border-b border-white/5 last:border-0"
-                  >
-                    <td className="px-4 py-3 font-mono font-semibold text-white/90">
-                      {i + 1}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-sm font-medium text-white/90">
-                      {shortUsername(row.user_id)}
-                    </td>
+                {rows.map((row, i) => {
+                  const username = usernameMap.get(row.user_id);
+                  const display =
+                    username && username.trim() ? username.trim() : shortUsername(row.user_id);
+
+                  return (
+                    <tr
+                      key={`${row.user_id}-${row.created_at ?? ""}-${i}`}
+                      className="border-b border-white/5 last:border-0"
+                    >
+                      <td className="px-4 py-3 font-mono font-semibold text-white/90">
+                        {i + 1}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-sm font-medium text-white/90">
+                        {display}
+                      </td>
                     <td className="px-4 py-3 text-white/80">
-                      {row.solved === true
-                        ? "Yes"
-                        : row.solved === false
-                          ? "No"
-                          : "—"}
+                      {challengeMap.get(row.challenge_id) ?? "—"}
                     </td>
-                    <td className="px-4 py-3 text-white/80">
-                      {row.attempts_used ?? "—"}
-                    </td>
-                  </tr>
-                ))}
+                      <td className="px-4 py-3 text-white/80">
+                        {row.solved === true
+                          ? "Yes"
+                          : row.solved === false
+                            ? "No"
+                            : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-white/80">
+                        {row.attempts_used ?? "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

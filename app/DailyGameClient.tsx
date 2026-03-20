@@ -447,13 +447,22 @@ export function DailyGameClient({
             )}
 
             {signedIn && (
-              <button
-                type="button"
-                onClick={signOut}
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
-              >
-                Sign out
-              </button>
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/profile"
+                  className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+                >
+                  Profile
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={signOut}
+                  className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+                >
+                  Sign out
+                </button>
+              </div>
             )}
 
             <div className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-sm font-semibold">
