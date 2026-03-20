@@ -110,6 +110,61 @@ async function addChallengeAction(
 
   try {
     const sb = createSupabaseServerClient(await cookies());
+
+    const sanitizeForFilename = (value: string) => {
+      const v = value
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-_]/g, "")
+        .slice(0, 80);
+      return v || "challenge";
+    };
+
+    const imageFileRaw = formData.get("image");
+    let imageUrl: string | null = null;
+
+    if (
+      imageFileRaw &&
+      typeof imageFileRaw === "object" &&
+      "arrayBuffer" in imageFileRaw
+    ) {
+      const imageFile = imageFileRaw as unknown as File;
+      const contentType = imageFile.type || "image/png";
+
+      const isPngOrJpg =
+        contentType === "image/png" || contentType === "image/jpeg";
+
+      if (isPngOrJpg && imageFile.size > 0) {
+        const storagePath = `${activeDate}-${Math.trunc(
+          position
+        )}-${sanitizeForFilename(title)}.png`;
+
+        console.log("[admin][addChallenge] uploading image", {
+          storagePath,
+          contentType,
+        });
+
+        const { error: uploadError } = await sb.storage
+          .from("challenge-images")
+          .upload(storagePath, imageFile, {
+            contentType,
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error("[admin][addChallenge] image upload error", uploadError);
+          return { error: uploadError.message };
+        }
+
+        const { data } = sb.storage
+          .from("challenge-images")
+          .getPublicUrl(storagePath);
+
+        imageUrl = data.publicUrl ?? null;
+      }
+    }
+
     const insertPayload = {
       title,
       day_number: Math.trunc(dayNumber),
@@ -120,6 +175,7 @@ async function addChallengeAction(
       position: Math.trunc(position),
       is_sponsored: isSponsored,
       sponsor_name: isSponsored ? (sponsorName.trim() ? sponsorName : null) : null,
+      image_url: imageUrl,
     };
 
     console.log("[admin][addChallenge] insert payload", insertPayload);

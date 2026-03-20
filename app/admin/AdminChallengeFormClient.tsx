@@ -1,7 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
-import { useState } from "react";
+import { useFormStatus } from "react-dom";
+import { useActionState, useState } from "react";
 
 type AddChallengeState = {
   error: string | null;
@@ -48,7 +48,7 @@ export function AdminChallengeFormClient({
   action: (prevState: AddChallengeState, formData: FormData) => Promise<AddChallengeState>;
   initialState: AddChallengeState;
 }) {
-  const [state, formAction] = useFormState(action, initialState);
+  const [state, formAction] = useActionState(action, initialState);
   const [isSponsoredChecked, setIsSponsoredChecked] = useState(false);
 
   return (
@@ -189,6 +189,21 @@ export function AdminChallengeFormClient({
           </div>
           </div>
         ) : null}
+
+        <div>
+          <label className="text-sm font-semibold text-white/80">
+            Challenge Image (PNG or JPG)
+          </label>
+          <input
+            name="image"
+            type="file"
+            accept="image/png,image/jpeg"
+            className="mt-2 w-full cursor-pointer rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-sm text-white outline-none file:mr-4 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-white/90"
+          />
+          <div className="mt-1 text-xs text-white/55">
+            Optional. If provided, this image will be shown on the daily game.
+          </div>
+        </div>
 
         {state.error ? (
           <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">

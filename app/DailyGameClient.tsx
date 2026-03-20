@@ -343,6 +343,8 @@ export function DailyGameClient({
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
+    // If an uploaded image exists, we don't need (and don't mount) the canvas.
+    if (currentChallenge?.image_url) return;
     if (!canvasRef.current || !currentChallenge) return;
     const seed = canvasSeedForChallenge(currentChallenge);
     drawProcedural(canvasRef.current, seed);
@@ -352,7 +354,7 @@ export function DailyGameClient({
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [currentChallenge?.id]);
+  }, [currentChallenge?.id, currentChallenge?.image_url]);
 
   const submitGuess = useCallback(async () => {
     if (!canGuess || typeof guessInput !== "number" || !currentAnswer) return;
@@ -570,19 +572,40 @@ export function DailyGameClient({
                 </div>
 
                 <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <canvas
-                    ref={canvasRef}
-                    className="w-full rounded-xl"
-                    style={{
-                      height: 360,
-                      background: "rgba(255,255,255,0.03)",
-                    }}
-                  />
-                  <div className="mt-3 text-xs text-white/50">
-                    Procedural placeholder (seed:{" "}
-                    {currentChallenge.day_number ?? "—"} · pos{" "}
-                    {currentChallenge.position ?? currentChallengeIndex + 1})
-                  </div>
+                  {currentChallenge.image_url ? (
+                    <>
+                      <img
+                        src={currentChallenge.image_url}
+                        alt="Challenge"
+                        className="w-full rounded-xl border border-white/10"
+                        style={{
+                          height: 360,
+                          objectFit: "cover",
+                          background: "rgba(255,255,255,0.03)",
+                        }}
+                      />
+                      <div className="mt-3 text-xs text-white/50">
+                        Challenge image
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <canvas
+                        ref={canvasRef}
+                        className="w-full rounded-xl"
+                        style={{
+                          height: 360,
+                          background: "rgba(255,255,255,0.03)",
+                        }}
+                      />
+                      <div className="mt-3 text-xs text-white/50">
+                        Procedural placeholder (seed:{" "}
+                        {currentChallenge.day_number ?? "—"} · pos{" "}
+                        {currentChallenge.position ??
+                          currentChallengeIndex + 1})
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">

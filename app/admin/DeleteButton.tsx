@@ -17,6 +17,8 @@ export function DeleteButton({ id }: { id: string }) {
 
       if (error) {
         console.error("[admin][delete] supabase delete error", error);
+      } else {
+        console.log("[admin][delete] deleted challenge", id);
       }
     } catch (e) {
       console.error("[admin][delete] unexpected error", e);

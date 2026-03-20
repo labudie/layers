@@ -11,6 +11,7 @@ export type Challenge = {
   software: string | null;
   category: string | null;
   layer_count: number | null;
+  image_url: string | null;
 };
 
 export default async function Home() {
@@ -23,7 +24,7 @@ export default async function Home() {
     supabase
       .from("challenges")
       .select(
-        "id, position, title, day_number, software, category, layer_count"
+        "id, position, title, day_number, software, category, layer_count, image_url"
       )
       .eq("active_date", today)
       .order("position", { ascending: true }),
