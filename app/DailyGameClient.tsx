@@ -184,6 +184,7 @@ export function DailyGameClient({
   const [infoPopoverOpen, setInfoPopoverOpen] = useState(false);
   const infoButtonRef = useRef<HTMLButtonElement | null>(null);
   const infoPopoverRef = useRef<HTMLDivElement | null>(null);
+  const guessInputRef = useRef<HTMLInputElement | null>(null);
 
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
@@ -551,8 +552,20 @@ export function DailyGameClient({
       }`
     : "";
 
+  const handleInputFocus = useCallback(() => {
+    window.setTimeout(() => {
+      guessInputRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 120);
+  }, []);
+
   return (
-    <div className="flex min-h-screen w-full flex-col bg-black text-white">
+    <div
+      className="flex min-h-screen w-full flex-col bg-black text-white"
+      style={{ scrollPaddingBottom: "9rem" }}
+    >
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-4 md:px-5 md:py-6">
         <header className="flex shrink-0 items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2 md:gap-4">
@@ -567,14 +580,14 @@ export function DailyGameClient({
             </Link>
           </div>
           <div className="flex min-w-0 flex-col items-end gap-1 text-right">
-            <div className="shrink-0 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs font-semibold md:px-3 md:text-sm">
+            <div className="shrink-0 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-base font-semibold">
               {total ? `Daily #${dayNumber ?? "—"}` : "Daily"}
             </div>
-            <div
-              className="font-mono text-[0.7rem] font-medium text-white/55 md:text-xs"
-              style={{ letterSpacing: "0.02em" }}
-            >
-              Next challenge {countdownText ?? "--:--:--"}
+            <div className="text-base text-white/75" style={{ letterSpacing: "0.01em" }}>
+              <span>Next challenge </span>
+              <span className="font-mono font-bold text-white">
+                {countdownText ?? "--:--:--"}
+              </span>
             </div>
           </div>
         </header>
@@ -681,18 +694,18 @@ export function DailyGameClient({
                   <div
                     className={`relative -mx-4 min-h-0 flex-1 md:mx-0 ${challengeVisualFadeClassName}`}
                   >
-                    <div className="overflow-hidden rounded-2xl bg-black md:rounded-2xl">
+                    <div className="aspect-[4/3] overflow-hidden rounded-2xl border border-white/15 bg-black">
                       {currentChallenge.image_url ? (
                         <img
                           src={currentChallenge.image_url}
                           alt=""
-                          className="block h-[min(52vh,28rem)] w-full object-cover md:h-[420px]"
+                          className="block h-full w-full object-cover"
                           style={{ background: "#000" }}
                         />
                       ) : (
                         <canvas
                           ref={canvasRef}
-                          className="block h-[min(52vh,28rem)] w-full md:h-[420px]"
+                          className="block h-full w-full"
                           style={{ background: "#000" }}
                         />
                       )}
@@ -796,11 +809,13 @@ export function DailyGameClient({
 
                     <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:gap-3">
                       <input
+                        ref={guessInputRef}
                         type="number"
                         inputMode="numeric"
                         min={0}
                         disabled={!roundActive}
                         value={guessInput}
+                        onFocus={handleInputFocus}
                         onChange={(e) =>
                           setGuessInput(
                             e.target.value === ""
@@ -904,11 +919,6 @@ export function DailyGameClient({
                   ) : null}
                 </>
               )}
-
-              <div
-                className="mt-auto h-2 w-[calc(100%+2rem)] shrink-0 bg-[#ff5c4d] md:hidden"
-                aria-hidden
-              />
             </div>
           </>
         )}
