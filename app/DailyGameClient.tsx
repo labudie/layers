@@ -175,10 +175,62 @@ export function DailyGameClient({
   const [currentChallengeIndex, setCurrentChallengeIndex] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
   const [copied, setCopied] = useState(false);
+  /** After a correct submit, brief hold before auto-advance (no "Next" click). */
+  const [pendingAutoAdvance, setPendingAutoAdvance] = useState(false);
+  /** Opacity fade on title, image, attempt rows, result only — not whole page. */
+  const [challengeTransitioning, setChallengeTransitioning] = useState(false);
+  /** Hydration-safe: dynamic transition classes only after mount. */
+  const [mounted, setMounted] = useState(false);
+
+  const autoAdvanceTimeoutRef = useRef<number | null>(null);
+  const fadeTimeoutRef = useRef<number | null>(null);
+  const revealTimeoutRef = useRef<number | null>(null);
 
   const challengesRef = useRef(challenges);
   useEffect(() => {
     challengesRef.current = challenges;
+  }, [challengeIdsKey]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (autoAdvanceTimeoutRef.current != null) {
+        window.clearTimeout(autoAdvanceTimeoutRef.current);
+        autoAdvanceTimeoutRef.current = null;
+      }
+      if (fadeTimeoutRef.current != null) {
+        window.clearTimeout(fadeTimeoutRef.current);
+        fadeTimeoutRef.current = null;
+      }
+      if (revealTimeoutRef.current != null) {
+        window.clearTimeout(revealTimeoutRef.current);
+        revealTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (showSummary) setChallengeTransitioning(false);
+  }, [showSummary]);
+
+  useEffect(() => {
+    if (autoAdvanceTimeoutRef.current != null) {
+      window.clearTimeout(autoAdvanceTimeoutRef.current);
+      autoAdvanceTimeoutRef.current = null;
+    }
+    if (fadeTimeoutRef.current != null) {
+      window.clearTimeout(fadeTimeoutRef.current);
+      fadeTimeoutRef.current = null;
+    }
+    if (revealTimeoutRef.current != null) {
+      window.clearTimeout(revealTimeoutRef.current);
+      revealTimeoutRef.current = null;
+    }
+    setPendingAutoAdvance(false);
+    setChallengeTransitioning(false);
   }, [challengeIdsKey]);
 
   const currentChallenge = challenges[currentChallengeIndex] ?? null;
@@ -189,6 +241,8 @@ export function DailyGameClient({
     () => isChallengeFinished(currentAnswer, currentGuesses),
     [currentAnswer, currentGuesses]
   );
+
+  const solvedWithCorrect = currentGuesses.some((g) => g.verdict === "correct");
 
   const canGuess = Boolean(
     !showSummary &&
@@ -356,6 +410,34 @@ export function DailyGameClient({
     return () => window.removeEventListener("resize", onResize);
   }, [currentChallenge?.id, currentChallenge?.image_url]);
 
+  /** Fade out challenge visuals for 300ms, swap challenge or open summary, then fade in. */
+  const advanceAfterTransitionOut = useCallback((isLast: boolean) => {
+    if (fadeTimeoutRef.current != null) {
+      window.clearTimeout(fadeTimeoutRef.current);
+      fadeTimeoutRef.current = null;
+    }
+    if (revealTimeoutRef.current != null) {
+      window.clearTimeout(revealTimeoutRef.current);
+      revealTimeoutRef.current = null;
+    }
+
+    setChallengeTransitioning(true);
+    fadeTimeoutRef.current = window.setTimeout(() => {
+      fadeTimeoutRef.current = null;
+      setPendingAutoAdvance(false);
+      if (isLast) {
+        setShowSummary(true);
+      } else {
+        setCurrentChallengeIndex((x) => x + 1);
+        setGuessInput("");
+      }
+      revealTimeoutRef.current = window.setTimeout(() => {
+        revealTimeoutRef.current = null;
+        setChallengeTransitioning(false);
+      }, 0);
+    }, 300);
+  }, []);
+
   const submitGuess = useCallback(async () => {
     if (!canGuess || typeof guessInput !== "number" || !currentAnswer) return;
     if (!userId || !currentChallenge?.id) return;
@@ -385,7 +467,21 @@ export function DailyGameClient({
       return next;
     });
     setGuessInput("");
+
+    if (verdict === "correct") {
+      if (autoAdvanceTimeoutRef.current != null) {
+        window.clearTimeout(autoAdvanceTimeoutRef.current);
+      }
+      setPendingAutoAdvance(true);
+      const listLength = challengesRef.current.length;
+      autoAdvanceTimeoutRef.current = window.setTimeout(() => {
+        autoAdvanceTimeoutRef.current = null;
+        const isLast = idx >= listLength - 1;
+        advanceAfterTransitionOut(isLast);
+      }, 750);
+    }
   }, [
+    advanceAfterTransitionOut,
     canGuess,
     guessInput,
     currentAnswer,
@@ -418,6 +514,19 @@ export function DailyGameClient({
   }
 
   const isLastChallenge = currentChallengeIndex >= total - 1;
+
+  const defaultProgressFillClass = "h-full rounded-full bg-white/50";
+  const progressFillClassName = mounted
+    ? `${defaultProgressFillClass} transition-all duration-500`
+    : defaultProgressFillClass;
+
+  const challengeVisualFadeClassName = mounted
+    ? `transition-opacity duration-300 ease-out ${
+        challengeTransitioning
+          ? "pointer-events-none opacity-0"
+          : "opacity-100"
+      }`
+    : "";
 
   return (
     <div className="min-h-screen w-full bg-black text-white">
@@ -547,13 +656,14 @@ export function DailyGameClient({
           </div>
         ) : (
           <>
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+            <div className="mt-6 space-y-6">
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
               <div className="text-sm font-semibold text-white/90">
                 Challenge {currentChallengeIndex + 1} of {total}
               </div>
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
                 <div
-                  className="h-full rounded-full bg-white/50 transition-all"
+                  className={progressFillClassName}
                   style={{
                     width: `${((currentChallengeIndex + (currentFinished ? 1 : 0)) / total) * 100}%`,
                   }}
@@ -563,7 +673,9 @@ export function DailyGameClient({
 
             {currentChallenge && (
               <>
-                <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+                <div
+                  className={`mt-6 rounded-2xl border border-white/10 bg-white/5 p-5 ${challengeVisualFadeClassName}`}
+                >
                   <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
                     Today&apos;s challenge
                   </div>
@@ -580,7 +692,9 @@ export function DailyGameClient({
                   </div>
                 </div>
 
-                <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div
+                  className={`mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 ${challengeVisualFadeClassName}`}
+                >
                   {currentChallenge.image_url ? (
                     <>
                       <img
@@ -658,7 +772,9 @@ export function DailyGameClient({
                     </button>
                   </div>
 
-                  <div className="mt-5 grid gap-2">
+                  <div
+                    className={`mt-5 grid gap-2 ${challengeVisualFadeClassName}`}
+                  >
                     {Array.from({ length: 6 }).map((_, i) => {
                       const g = currentGuesses[i];
                       const color =
@@ -705,7 +821,9 @@ export function DailyGameClient({
                 </div>
 
                 {currentFinished && (
-                  <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+                  <div
+                    className={`mt-6 rounded-2xl border border-white/10 bg-white/5 p-5 ${challengeVisualFadeClassName}`}
+                  >
                     <div className="text-lg font-extrabold">Result</div>
                     <div className="mt-2 text-white/80">
                       Answer:{" "}
@@ -714,22 +832,49 @@ export function DailyGameClient({
                       </span>
                     </div>
                     <div className="mt-4">
-                      {!isLastChallenge ? (
+                      {pendingAutoAdvance ? (
+                        <p className="text-sm font-semibold text-emerald-300/95">
+                          Correct! Continuing…
+                        </p>
+                      ) : solvedWithCorrect ? (
+                        <>
+                          {!isLastChallenge ? (
+                            <button
+                              type="button"
+                              disabled={challengeTransitioning}
+                              onClick={() =>
+                                advanceAfterTransitionOut(false)
+                              }
+                              className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-black disabled:opacity-40"
+                            >
+                              Next challenge
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={challengeTransitioning}
+                              onClick={() => advanceAfterTransitionOut(true)}
+                              className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-black disabled:opacity-40"
+                            >
+                              View daily summary
+                            </button>
+                          )}
+                        </>
+                      ) : !isLastChallenge ? (
                         <button
                           type="button"
-                          onClick={() => {
-                            setCurrentChallengeIndex((x) => x + 1);
-                            setGuessInput("");
-                          }}
-                          className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-black"
+                          disabled={challengeTransitioning}
+                          onClick={() => advanceAfterTransitionOut(false)}
+                          className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-black disabled:opacity-40"
                         >
                           Next challenge
                         </button>
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setShowSummary(true)}
-                          className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-black"
+                          disabled={challengeTransitioning}
+                          onClick={() => advanceAfterTransitionOut(true)}
+                          className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-black disabled:opacity-40"
                         >
                           View daily summary
                         </button>
@@ -739,6 +884,7 @@ export function DailyGameClient({
                 )}
               </>
             )}
+            </div>
           </>
         )}
       </div>

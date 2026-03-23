@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase";
+import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 
 type ResultRow = {
   user_id: string;
@@ -28,16 +29,30 @@ function shortUsername(userId: string) {
 
 export default async function LeaderboardPage() {
   const supabase = createSupabaseServerClient(await cookies());
+  const today = todayYYYYMMDDUSEastern();
+
+  const { data: todayChallenges, error: challengesError } = await supabase
+    .from("challenges")
+    .select("id")
+    .eq("active_date", today);
+
+  const challengeIdsForToday =
+    !challengesError && todayChallenges?.length
+      ? (todayChallenges as { id: string }[]).map((c) => c.id)
+      : [];
 
   let rows: ResultRow[] = [];
-  const { data, error } = await supabase
-    .from("results")
-    .select("user_id, challenge_id, solved, attempts_used, created_at")
-    .order("attempts_used", { ascending: true })
-    .order("created_at", { ascending: true });
+  if (challengeIdsForToday.length) {
+    const { data, error } = await supabase
+      .from("results")
+      .select("user_id, challenge_id, solved, attempts_used, created_at")
+      .in("challenge_id", challengeIdsForToday)
+      .order("attempts_used", { ascending: true })
+      .order("created_at", { ascending: true });
 
-  if (!error && data?.length) {
-    rows = data as ResultRow[];
+    if (!error && data?.length) {
+      rows = data as ResultRow[];
+    }
   }
 
   const empty = !rows.length;
@@ -88,7 +103,7 @@ export default async function LeaderboardPage() {
 
         <h1 className="text-3xl font-extrabold tracking-tight">Leaderboard</h1>
         <p className="mt-2 text-sm text-white/60">
-          All-time results
+          Today&apos;s results (US Eastern calendar date: {today})
         </p>
 
         {empty ? (
