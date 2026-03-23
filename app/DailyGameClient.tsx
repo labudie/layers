@@ -699,7 +699,7 @@ export function DailyGameClient({
                         <img
                           src={currentChallenge.image_url}
                           alt=""
-                          className="block h-full w-full object-cover"
+                          className="block h-full w-full object-contain"
                           style={{ background: "#000" }}
                         />
                       ) : (
@@ -771,7 +771,7 @@ export function DailyGameClient({
                     </div>
                     {currentGuesses.length > 0 ? (
                       <div
-                        className={`flex flex-nowrap gap-0.5 sm:gap-1 ${challengeVisualFadeClassName}`}
+                        className={`flex flex-nowrap gap-0.5 ${challengeVisualFadeClassName}`}
                         role="list"
                         aria-label="Guess history"
                       >
@@ -789,16 +789,16 @@ export function DailyGameClient({
                             <div
                               key={`${g.value}-${i}`}
                               role="listitem"
-                              className={`flex min-h-[2.85rem] min-w-0 flex-1 flex-col items-center justify-center rounded border border-black/25 px-px py-0.5 text-center sm:min-h-[3.1rem] sm:rounded-md sm:px-0.5 sm:py-1 ${
+                              className={`flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center rounded-md border border-black/25 px-px py-1 text-center ${
                                 isCorrect
                                   ? "bg-emerald-600 text-white"
                                   : "bg-red-600 text-white"
                               }`}
                             >
-                              <span className="text-[0.7rem] font-bold tabular-nums leading-none sm:text-xs">
+                              <span className="text-[22px] font-bold tabular-nums leading-none">
                                 {g.value}
                               </span>
-                              <span className="mt-0.5 max-w-full truncate px-px text-[0.45rem] font-medium leading-[1.05] text-white/95 sm:text-[0.5rem]">
+                              <span className="mt-0.5 max-w-full truncate px-px text-[12px] font-medium leading-none text-white/95">
                                 {sub}
                               </span>
                             </div>
