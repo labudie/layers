@@ -17,7 +17,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen w-full bg-black text-white flex items-center justify-center px-6">
+    <main className="flex min-h-screen w-full items-center justify-center bg-black px-4 text-white md:px-6">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
         <div className="text-2xl font-extrabold tracking-tight">layers</div>
         <div className="mt-2 text-sm text-white/70">

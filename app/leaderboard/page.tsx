@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import {
+  narrowToLatestActiveDate,
+  utcActiveDateWindow,
+} from "@/lib/challenge-active-date-window";
 import { createSupabaseServerClient } from "@/lib/supabase";
-import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 
 type ResultRow = {
   user_id: string;
@@ -29,17 +32,22 @@ function shortUsername(userId: string) {
 
 export default async function LeaderboardPage() {
   const supabase = createSupabaseServerClient(await cookies());
-  const today = todayYYYYMMDDUSEastern();
+  const { start, end } = utcActiveDateWindow();
 
-  const { data: todayChallenges, error: challengesError } = await supabase
+  const { data: windowChallenges, error: windowChallengesError } = await supabase
     .from("challenges")
-    .select("id")
-    .eq("active_date", today);
+    .select("id, active_date")
+    .gte("active_date", start)
+    .lte("active_date", end)
+    .order("active_date", { ascending: false });
 
-  const challengeIdsForToday =
-    !challengesError && todayChallenges?.length
-      ? (todayChallenges as { id: string }[]).map((c) => c.id)
+  const raw =
+    !windowChallengesError && windowChallenges?.length
+      ? (windowChallenges as { id: string; active_date: string | null }[])
       : [];
+  const narrowedRows = narrowToLatestActiveDate(raw);
+  const leaderboardDay = narrowedRows[0]?.active_date ?? "—";
+  const challengeIdsForToday = narrowedRows.map((c) => c.id);
 
   let rows: ResultRow[] = [];
   if (challengeIdsForToday.length) {
@@ -91,7 +99,7 @@ export default async function LeaderboardPage() {
 
   return (
     <div className="min-h-screen w-full bg-black text-white">
-      <div className="mx-auto w-full max-w-2xl px-5 py-8">
+      <div className="mx-auto w-full max-w-2xl px-4 py-8 md:px-5">
         <div className="mb-8">
           <Link
             href="/"
@@ -103,7 +111,7 @@ export default async function LeaderboardPage() {
 
         <h1 className="text-3xl font-extrabold tracking-tight">Leaderboard</h1>
         <p className="mt-2 text-sm text-white/60">
-          Today&apos;s results (US Eastern calendar date: {today})
+          Today&apos;s results (active date: {leaderboardDay})
         </p>
 
         {empty ? (

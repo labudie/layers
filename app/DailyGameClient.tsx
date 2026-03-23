@@ -181,6 +181,9 @@ export function DailyGameClient({
   const [challengeTransitioning, setChallengeTransitioning] = useState(false);
   /** Hydration-safe: dynamic transition classes only after mount. */
   const [mounted, setMounted] = useState(false);
+  const [infoPopoverOpen, setInfoPopoverOpen] = useState(false);
+  const infoButtonRef = useRef<HTMLButtonElement | null>(null);
+  const infoPopoverRef = useRef<HTMLDivElement | null>(null);
 
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
@@ -194,6 +197,26 @@ export function DailyGameClient({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setInfoPopoverOpen(false);
+  }, [currentChallengeIndex, challengeIdsKey]);
+
+  useEffect(() => {
+    if (!infoPopoverOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (
+        infoPopoverRef.current?.contains(t) ||
+        infoButtonRef.current?.contains(t)
+      ) {
+        return;
+      }
+      setInfoPopoverOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [infoPopoverOpen]);
 
   useEffect(() => {
     return () => {
@@ -244,14 +267,18 @@ export function DailyGameClient({
 
   const solvedWithCorrect = currentGuesses.some((g) => g.verdict === "correct");
 
-  const canGuess = Boolean(
+  /** Current puzzle round is playable (input may be used; submit needs auth). */
+  const roundActive = Boolean(
     !showSummary &&
-      signedIn &&
-      userId &&
       currentChallenge?.id &&
       currentAnswer &&
       currentAnswer > 0 &&
       !currentFinished
+  );
+
+  /** Persisting guesses/results requires a signed-in user. */
+  const canSubmitGuess = Boolean(
+    roundActive && signedIn && userId
   );
 
   // Restore guesses + resume position / summary
@@ -439,8 +466,8 @@ export function DailyGameClient({
   }, []);
 
   const submitGuess = useCallback(async () => {
-    if (!canGuess || typeof guessInput !== "number" || !currentAnswer) return;
-    if (!userId || !currentChallenge?.id) return;
+    if (!roundActive || typeof guessInput !== "number" || !currentAnswer) return;
+    if (!userId || !signedIn || !currentChallenge?.id) return;
 
     const idx = currentChallengeIndex;
     const g = guessesByIndex[idx] ?? [];
@@ -482,7 +509,8 @@ export function DailyGameClient({
     }
   }, [
     advanceAfterTransitionOut,
-    canGuess,
+    roundActive,
+    signedIn,
     guessInput,
     currentAnswer,
     userId,
@@ -515,11 +543,6 @@ export function DailyGameClient({
 
   const isLastChallenge = currentChallengeIndex >= total - 1;
 
-  const defaultProgressFillClass = "h-full rounded-full bg-white/50";
-  const progressFillClassName = mounted
-    ? `${defaultProgressFillClass} transition-all duration-500`
-    : defaultProgressFillClass;
-
   const challengeVisualFadeClassName = mounted
     ? `transition-opacity duration-300 ease-out ${
         challengeTransitioning
@@ -529,65 +552,61 @@ export function DailyGameClient({
     : "";
 
   return (
-    <div className="min-h-screen w-full bg-black text-white">
-      <div className="mx-auto w-full max-w-3xl px-5 py-6">
-        <header className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="text-xl font-extrabold tracking-tight">layers</div>
+    <div className="flex min-h-screen w-full flex-col bg-black text-white">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-4 md:px-5 md:py-6">
+        <header className="flex shrink-0 items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2 md:gap-4">
+            <div className="shrink-0 text-xl font-extrabold tracking-tight">
+              Layers
+            </div>
             <Link
               href="/leaderboard"
-              className="shrink-0 text-sm font-semibold text-white/70 underline-offset-4 hover:text-white hover:underline"
+              className="hidden shrink-0 text-sm font-semibold text-white/70 underline-offset-4 hover:text-white hover:underline md:inline"
             >
               Leaderboard
             </Link>
           </div>
-          <div className="flex shrink-0 items-center gap-3">
-            {signedIn ? (
-              <div className="hidden sm:block text-sm text-white/70">
-                {userEmail}
-              </div>
-            ) : (
-              <Link
-                href="/login"
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
-              >
-                Sign in to play
-              </Link>
-            )}
-
-            {signedIn && (
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/profile"
-                  className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
-                >
-                  Profile
-                </Link>
-
-                <button
-                  type="button"
-                  onClick={signOut}
-                  className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
-                >
-                  Sign out
-                </button>
-              </div>
-            )}
-
-            <div className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-sm font-semibold">
+          <div className="flex min-w-0 flex-col items-end gap-1 text-right">
+            <div className="shrink-0 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs font-semibold md:px-3 md:text-sm">
               {total ? `Daily #${dayNumber ?? "—"}` : "Daily"}
+            </div>
+            <div
+              className="font-mono text-[0.7rem] font-medium text-white/55 md:text-xs"
+              style={{ letterSpacing: "0.02em" }}
+            >
+              Next challenge {countdownText ?? "--:--:--"}
             </div>
           </div>
         </header>
 
-        <div className="mt-6 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-          <div className="text-sm text-white/70">Next challenge in</div>
-          <div
-            className="font-mono text-base font-semibold"
-            style={{ letterSpacing: "0.02em" }}
-          >
-            {countdownText ?? "--:--:--"}
-          </div>
+        <div className="mt-3 hidden flex-wrap items-center justify-end gap-2 border-b border-white/10 pb-4 md:flex md:gap-3">
+          {signedIn ? (
+            <div className="hidden text-sm text-white/70 sm:block">{userEmail}</div>
+          ) : (
+            <Link
+              href="/login"
+              className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+            >
+              Sign in
+            </Link>
+          )}
+          {signedIn && (
+            <>
+              <Link
+                href="/profile"
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+              >
+                Profile
+              </Link>
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+              >
+                Sign out
+              </button>
+            </>
+          )}
         </div>
 
         {!total ? (
@@ -656,97 +675,131 @@ export function DailyGameClient({
           </div>
         ) : (
           <>
-            <div className="mt-6 space-y-6">
-            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
-              <div className="text-sm font-semibold text-white/90">
-                Challenge {currentChallengeIndex + 1} of {total}
-              </div>
-              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                <div
-                  className={progressFillClassName}
-                  style={{
-                    width: `${((currentChallengeIndex + (currentFinished ? 1 : 0)) / total) * 100}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {currentChallenge && (
-              <>
-                <div
-                  className={`mt-6 rounded-2xl border border-white/10 bg-white/5 p-5 ${challengeVisualFadeClassName}`}
-                >
-                  <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
-                    Today&apos;s challenge
-                  </div>
-                  <div className="mt-2 text-2xl font-extrabold leading-tight">
-                    {currentChallenge.title ?? "Untitled"}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="rounded-full border border-white/15 bg-black/40 px-3 py-1 text-sm text-white/80">
-                      Software: {currentChallenge.software ?? "—"}
-                    </span>
-                    <span className="rounded-full border border-white/15 bg-black/40 px-3 py-1 text-sm text-white/80">
-                      Category: {currentChallenge.category ?? "—"}
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  className={`mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 ${challengeVisualFadeClassName}`}
-                >
-                  {currentChallenge.image_url ? (
-                    <>
-                      <img
-                        src={currentChallenge.image_url}
-                        alt="Challenge"
-                        className="w-full rounded-xl border border-white/10"
-                        style={{
-                          height: 360,
-                          objectFit: "cover",
-                          background: "rgba(255,255,255,0.03)",
-                        }}
-                      />
-                      <div className="mt-3 text-xs text-white/50">
-                        Challenge image
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <canvas
-                        ref={canvasRef}
-                        className="w-full rounded-xl"
-                        style={{
-                          height: 360,
-                          background: "rgba(255,255,255,0.03)",
-                        }}
-                      />
-                      <div className="mt-3 text-xs text-white/50">
-                        Procedural placeholder (seed:{" "}
-                        {currentChallenge.day_number ?? "—"} · pos{" "}
-                        {currentChallenge.position ??
-                          currentChallengeIndex + 1})
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                    <div className="flex-1">
-                      <div className="text-sm font-semibold text-white/80">
-                        Guess the layer count
-                      </div>
-                      {!signedIn && (
-                        <div className="mt-1 text-xs text-white/55">
-                          Sign in to submit guesses.
-                        </div>
+            <div className="mt-3 flex min-h-0 flex-1 flex-col gap-4 md:mt-6 md:gap-6">
+              {currentChallenge && (
+                <>
+                  <div
+                    className={`relative -mx-4 min-h-0 flex-1 md:mx-0 ${challengeVisualFadeClassName}`}
+                  >
+                    <div className="overflow-hidden rounded-2xl bg-black md:rounded-2xl">
+                      {currentChallenge.image_url ? (
+                        <img
+                          src={currentChallenge.image_url}
+                          alt=""
+                          className="block h-[min(52vh,28rem)] w-full object-cover md:h-[420px]"
+                          style={{ background: "#000" }}
+                        />
+                      ) : (
+                        <canvas
+                          ref={canvasRef}
+                          className="block h-[min(52vh,28rem)] w-full md:h-[420px]"
+                          style={{ background: "#000" }}
+                        />
                       )}
+                    </div>
+                  </div>
+
+                  <div
+                    className={`relative flex items-start gap-3 ${challengeVisualFadeClassName}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-lg font-bold leading-snug md:text-2xl">
+                        {currentChallenge.title ?? "Untitled"}
+                      </h2>
+                      <p className="mt-1 text-3xl font-extrabold tabular-nums tracking-tight text-white md:text-4xl">
+                        {currentChallengeIndex + 1}/{total}
+                      </p>
+                    </div>
+                    <div className="relative shrink-0 pt-0.5">
+                      <button
+                        ref={infoButtonRef}
+                        type="button"
+                        aria-expanded={infoPopoverOpen}
+                        aria-haspopup="dialog"
+                        aria-label="Challenge details"
+                        onClick={() => setInfoPopoverOpen((o) => !o)}
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 text-base font-serif font-bold leading-none text-white/85 hover:bg-white/10"
+                      >
+                        ⓘ
+                      </button>
+                      {infoPopoverOpen ? (
+                        <div
+                          ref={infoPopoverRef}
+                          role="dialog"
+                          aria-label="Challenge info"
+                          className="absolute right-0 top-full z-[60] mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-white/15 bg-zinc-900/98 p-3.5 text-left text-xs shadow-2xl backdrop-blur-md"
+                        >
+                          <p className="text-white/85">
+                            <span className="font-semibold text-white">
+                              Creator:
+                            </span>{" "}
+                            —
+                          </p>
+                          <p className="mt-2 text-white/85">
+                            <span className="font-semibold text-white">
+                              Software:
+                            </span>{" "}
+                            {currentChallenge.software ?? "—"}
+                          </p>
+                          <p className="mt-1.5 text-white/85">
+                            <span className="font-semibold text-white">
+                              Category:
+                            </span>{" "}
+                            {currentChallenge.category ?? "—"}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <div className="hidden text-sm font-semibold text-white/70 md:block">
+                      Guess the layer count
+                    </div>
+                    {currentGuesses.length > 0 ? (
+                      <div
+                        className={`flex flex-nowrap gap-0.5 sm:gap-1 ${challengeVisualFadeClassName}`}
+                        role="list"
+                        aria-label="Guess history"
+                      >
+                        {currentGuesses.map((g, i) => {
+                          const isCorrect = g.verdict === "correct";
+                          const sub =
+                            isCorrect
+                              ? "Correct"
+                              : g.direction === "high"
+                                ? "↓ too high"
+                                : g.direction === "low"
+                                  ? "↑ too low"
+                                  : "—";
+                          return (
+                            <div
+                              key={`${g.value}-${i}`}
+                              role="listitem"
+                              className={`flex min-h-[2.85rem] min-w-0 flex-1 flex-col items-center justify-center rounded border border-black/25 px-px py-0.5 text-center sm:min-h-[3.1rem] sm:rounded-md sm:px-0.5 sm:py-1 ${
+                                isCorrect
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-red-600 text-white"
+                              }`}
+                            >
+                              <span className="text-[0.7rem] font-bold tabular-nums leading-none sm:text-xs">
+                                {g.value}
+                              </span>
+                              <span className="mt-0.5 max-w-full truncate px-px text-[0.45rem] font-medium leading-[1.05] text-white/95 sm:text-[0.5rem]">
+                                {sub}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+
+                    <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:gap-3">
                       <input
                         type="number"
                         inputMode="numeric"
                         min={0}
-                        disabled={!canGuess}
+                        disabled={!roundActive}
                         value={guessInput}
                         onChange={(e) =>
                           setGuessInput(
@@ -758,132 +811,104 @@ export function DailyGameClient({
                         onKeyDown={(e) => {
                           if (e.key === "Enter") void submitGuess();
                         }}
-                        className="mt-2 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none placeholder:text-white/30 disabled:opacity-40"
-                        placeholder="Type a number…"
+                        className="h-12 w-full rounded-full border-0 bg-white px-5 text-base font-medium text-black outline-none placeholder:text-neutral-400 focus-visible:ring-2 focus-visible:ring-white/40 disabled:opacity-40 md:rounded-xl md:px-4"
+                        placeholder="Layer count…"
                       />
+                      <button
+                        type="button"
+                        disabled={
+                          !canSubmitGuess || typeof guessInput !== "number"
+                        }
+                        onClick={() => void submitGuess()}
+                        className="h-11 w-full shrink-0 rounded-full bg-white text-sm font-bold text-black disabled:opacity-40 md:h-12 md:w-auto md:rounded-xl md:px-8"
+                      >
+                        Submit
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      disabled={!canGuess || typeof guessInput !== "number"}
-                      onClick={() => void submitGuess()}
-                      className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-black disabled:opacity-40"
+                    {!signedIn && roundActive ? (
+                      <p className="text-center text-sm text-white/55">
+                        Sign in to save your progress —{" "}
+                        <Link
+                          href="/login"
+                          className="font-semibold text-white/85 underline-offset-2 hover:text-white hover:underline"
+                        >
+                          Sign in
+                        </Link>
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {currentFinished ? (
+                    <div
+                      className={`rounded-xl border border-white/10 bg-white/[0.06] p-4 ${challengeVisualFadeClassName}`}
                     >
-                      Submit
-                    </button>
-                  </div>
-
-                  <div
-                    className={`mt-5 grid gap-2 ${challengeVisualFadeClassName}`}
-                  >
-                    {Array.from({ length: 6 }).map((_, i) => {
-                      const g = currentGuesses[i];
-                      const color =
-                        g?.verdict === "correct"
-                          ? "rgba(34,197,94,0.9)"
-                          : g?.verdict === "close"
-                            ? "rgba(234,179,8,0.9)"
-                            : g
-                              ? "rgba(239,68,68,0.9)"
-                              : "rgba(255,255,255,0.08)";
-                      const bar = g
-                        ? Math.max(0.06, clamp01(g.closeness))
-                        : 0;
-                      const label = !g
-                        ? `Attempt ${i + 1}`
-                        : g.verdict === "correct"
-                          ? `${g.value} — correct`
-                          : `${g.value} — too ${g.direction}`;
-
-                      return (
-                        <div
-                          key={i}
-                          className="rounded-xl border border-white/10 bg-black/30 px-4 py-3"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="text-sm font-semibold text-white/85">
-                              {label}
-                            </div>
-                            <div className="text-xs text-white/45">#{i + 1}</div>
-                          </div>
-                          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${Math.round(bar * 100)}%`,
-                                backgroundColor: color,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {currentFinished && (
-                  <div
-                    className={`mt-6 rounded-2xl border border-white/10 bg-white/5 p-5 ${challengeVisualFadeClassName}`}
-                  >
-                    <div className="text-lg font-extrabold">Result</div>
-                    <div className="mt-2 text-white/80">
-                      Answer:{" "}
-                      <span className="font-bold text-white">
-                        {currentAnswer}
-                      </span>
+                      <div className="text-base font-extrabold md:text-lg">
+                        Result
+                      </div>
+                      <div className="mt-1 text-sm text-white/80">
+                        Answer:{" "}
+                        <span className="font-bold text-white">
+                          {currentAnswer}
+                        </span>
+                      </div>
+                      <div className="mt-3">
+                        {pendingAutoAdvance ? (
+                          <p className="text-sm font-semibold text-emerald-300/95">
+                            Correct! Continuing…
+                          </p>
+                        ) : solvedWithCorrect ? (
+                          <>
+                            {!isLastChallenge ? (
+                              <button
+                                type="button"
+                                disabled={challengeTransitioning}
+                                onClick={() =>
+                                  advanceAfterTransitionOut(false)
+                                }
+                                className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black disabled:opacity-40 md:rounded-xl md:py-3"
+                              >
+                                Next challenge
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={challengeTransitioning}
+                                onClick={() => advanceAfterTransitionOut(true)}
+                                className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black disabled:opacity-40 md:rounded-xl md:py-3"
+                              >
+                                View daily summary
+                              </button>
+                            )}
+                          </>
+                        ) : !isLastChallenge ? (
+                          <button
+                            type="button"
+                            disabled={challengeTransitioning}
+                            onClick={() => advanceAfterTransitionOut(false)}
+                            className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black disabled:opacity-40 md:rounded-xl md:py-3"
+                          >
+                            Next challenge
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={challengeTransitioning}
+                            onClick={() => advanceAfterTransitionOut(true)}
+                            className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black disabled:opacity-40 md:rounded-xl md:py-3"
+                          >
+                            View daily summary
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-4">
-                      {pendingAutoAdvance ? (
-                        <p className="text-sm font-semibold text-emerald-300/95">
-                          Correct! Continuing…
-                        </p>
-                      ) : solvedWithCorrect ? (
-                        <>
-                          {!isLastChallenge ? (
-                            <button
-                              type="button"
-                              disabled={challengeTransitioning}
-                              onClick={() =>
-                                advanceAfterTransitionOut(false)
-                              }
-                              className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-black disabled:opacity-40"
-                            >
-                              Next challenge
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={challengeTransitioning}
-                              onClick={() => advanceAfterTransitionOut(true)}
-                              className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-black disabled:opacity-40"
-                            >
-                              View daily summary
-                            </button>
-                          )}
-                        </>
-                      ) : !isLastChallenge ? (
-                        <button
-                          type="button"
-                          disabled={challengeTransitioning}
-                          onClick={() => advanceAfterTransitionOut(false)}
-                          className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-black disabled:opacity-40"
-                        >
-                          Next challenge
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={challengeTransitioning}
-                          onClick={() => advanceAfterTransitionOut(true)}
-                          className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-black disabled:opacity-40"
-                        >
-                          View daily summary
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+                  ) : null}
+                </>
+              )}
+
+              <div
+                className="mt-auto h-2 w-[calc(100%+2rem)] shrink-0 bg-[#ff5c4d] md:hidden"
+                aria-hidden
+              />
             </div>
           </>
         )}

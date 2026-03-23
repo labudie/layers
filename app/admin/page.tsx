@@ -213,7 +213,7 @@ export default async function AdminPage() {
 
   return (
     <div className="min-h-screen w-full bg-black text-white">
-      <div className="mx-auto w-full max-w-3xl px-5 py-8">
+      <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-5">
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
             <div className="text-2xl font-extrabold tracking-tight">
