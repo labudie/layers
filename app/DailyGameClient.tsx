@@ -694,7 +694,7 @@ export function DailyGameClient({
                   <div
                     className={`relative -mx-4 min-h-0 flex-1 md:mx-0 ${challengeVisualFadeClassName}`}
                   >
-                    <div className="aspect-[4/3] overflow-hidden rounded-2xl border border-white/15 bg-black">
+                    <div className="aspect-square overflow-hidden rounded-2xl border border-white/15 bg-black md:aspect-[4/3]">
                       {currentChallenge.image_url ? (
                         <img
                           src={currentChallenge.image_url}
