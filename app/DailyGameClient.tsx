@@ -1,7 +1,14 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Zoom from "react-medium-image-zoom";
@@ -188,10 +195,14 @@ export function DailyGameClient({
   const infoPopoverRef = useRef<HTMLDivElement | null>(null);
   const guessInputRef = useRef<HTMLInputElement | null>(null);
   const [summaryImageUrl, setSummaryImageUrl] = useState<string | null>(null);
+  const [imageFeedbackClassName, setImageFeedbackClassName] = useState("");
+  const [confettiBursts, setConfettiBursts] = useState<number[]>([]);
 
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
   const revealTimeoutRef = useRef<number | null>(null);
+  const imageFeedbackTimeoutRef = useRef<number | null>(null);
+  const confettiTimeoutsRef = useRef<number[]>([]);
 
   const challengesRef = useRef(challenges);
   useEffect(() => {
@@ -245,6 +256,14 @@ export function DailyGameClient({
         window.clearTimeout(revealTimeoutRef.current);
         revealTimeoutRef.current = null;
       }
+      if (imageFeedbackTimeoutRef.current != null) {
+        window.clearTimeout(imageFeedbackTimeoutRef.current);
+        imageFeedbackTimeoutRef.current = null;
+      }
+      for (const t of confettiTimeoutsRef.current) {
+        window.clearTimeout(t);
+      }
+      confettiTimeoutsRef.current = [];
     };
   }, []);
 
@@ -272,6 +291,16 @@ export function DailyGameClient({
   const currentChallenge = challenges[currentChallengeIndex] ?? null;
   const currentGuesses = guessesByIndex[currentChallengeIndex] ?? [];
   const currentAnswer = currentChallenge?.layer_count ?? null;
+  const challengeMeta = currentChallenge as
+    | (Challenge & {
+        is_sponsored?: boolean | null;
+        sponsor_name?: string | null;
+      })
+    | null;
+  const sponsorName =
+    challengeMeta?.is_sponsored && challengeMeta?.sponsor_name
+      ? challengeMeta.sponsor_name
+      : null;
 
   const currentFinished = useMemo(
     () => isChallengeFinished(currentAnswer, currentGuesses),
@@ -279,6 +308,8 @@ export function DailyGameClient({
   );
 
   const solvedWithCorrect = currentGuesses.some((g) => g.verdict === "correct");
+  const failedWithSixGuesses =
+    currentFinished && !solvedWithCorrect && currentGuesses.length >= 6;
 
   /** Current puzzle round is playable (input may be used; submit needs auth). */
   const roundActive = Boolean(
@@ -507,8 +538,29 @@ export function DailyGameClient({
       return next;
     });
     setGuessInput("");
+    if (imageFeedbackTimeoutRef.current != null) {
+      window.clearTimeout(imageFeedbackTimeoutRef.current);
+      imageFeedbackTimeoutRef.current = null;
+    }
+    const feedbackClass =
+      verdict === "correct"
+        ? "challenge-image-feedback-correct"
+        : verdict === "close"
+          ? "challenge-image-feedback-close"
+          : "challenge-image-feedback-wrong";
+    setImageFeedbackClassName(feedbackClass);
+    imageFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setImageFeedbackClassName("");
+      imageFeedbackTimeoutRef.current = null;
+    }, 320);
 
     if (verdict === "correct") {
+      const burstId = Date.now() + Math.floor(Math.random() * 1_000_000);
+      setConfettiBursts((prev) => [...prev, burstId]);
+      const confettiTimeout = window.setTimeout(() => {
+        setConfettiBursts((prev) => prev.filter((id) => id !== burstId));
+      }, 900);
+      confettiTimeoutsRef.current.push(confettiTimeout);
       if (autoAdvanceTimeoutRef.current != null) {
         window.clearTimeout(autoAdvanceTimeoutRef.current);
       }
@@ -726,7 +778,9 @@ export function DailyGameClient({
                   <div
                     className={`relative -mx-4 min-h-0 flex-1 md:mx-0 ${challengeVisualFadeClassName}`}
                   >
-                    <div className="aspect-[3/4] overflow-hidden rounded-2xl border border-white/15 bg-black md:aspect-[4/3]">
+                    <div
+                      className={`challenge-image-frame aspect-[3/4] overflow-hidden rounded-2xl border border-white/15 bg-black md:aspect-[4/3] ${imageFeedbackClassName}`}
+                    >
                       {currentChallenge.image_url ? (
                         <Zoom>
                           <img
@@ -776,6 +830,14 @@ export function DailyGameClient({
                           aria-label="Challenge info"
                           className="absolute right-0 top-full z-[60] mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-white/15 bg-zinc-900/98 p-3.5 text-left text-xs shadow-2xl backdrop-blur-md"
                         >
+                          {sponsorName ? (
+                            <p className="text-amber-300">
+                              <span className="font-semibold text-amber-200">
+                                Sponsored by:
+                              </span>{" "}
+                              {sponsorName}
+                            </p>
+                          ) : null}
                           <p className="text-white/85">
                             <span className="font-semibold text-white">
                               Creator:
@@ -803,6 +865,13 @@ export function DailyGameClient({
                     <div className="hidden text-sm font-semibold text-white/70 md:block">
                       Guess the layer count
                     </div>
+                    {failedWithSixGuesses ? (
+                      <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-3 text-center">
+                        <span className="text-2xl font-extrabold tracking-tight text-emerald-300 md:text-3xl">
+                          Answer: {currentAnswer}
+                        </span>
+                      </div>
+                    ) : null}
                     {currentGuesses.length > 0 ? (
                       <div
                         className={`flex flex-nowrap gap-0.5 ${challengeVisualFadeClassName}`}
@@ -986,6 +1055,32 @@ export function DailyGameClient({
           />
         </div>
       ) : null}
+      {confettiBursts.map((burstId) => (
+        <div
+          key={burstId}
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-[250] overflow-hidden"
+        >
+          {Array.from({ length: 20 }).map((_, i) => {
+            const angleDeg = (360 / 20) * i + ((burstId + i) % 19) - 9;
+            const distance = 72 + ((burstId + i * 17) % 55);
+            const hue = (burstId + i * 31) % 360;
+            return (
+              <span
+                key={`${burstId}-${i}`}
+                className="confetti-dot"
+                style={
+                  {
+                    "--dx": `${Math.cos((angleDeg * Math.PI) / 180) * distance}px`,
+                    "--dy": `${-Math.sin((angleDeg * Math.PI) / 180) * distance - 28}px`,
+                    backgroundColor: `hsl(${hue} 90% 60%)`,
+                  } as CSSProperties
+                }
+              />
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
