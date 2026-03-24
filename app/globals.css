@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Dark overlay for image zoom (library defaults to white). Styles imported in DailyGameClient. */
+[data-rmiz-modal-overlay="visible"] {
+  background-color: rgb(0 0 0 / 0.96) !important;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

@@ -4,6 +4,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Zoom from "react-medium-image-zoom";
+import "react-medium-image-zoom/dist/styles.css";
 import type { Challenge } from "./page";
 import { supabase } from "@/lib/supabase";
 
@@ -185,6 +187,7 @@ export function DailyGameClient({
   const infoButtonRef = useRef<HTMLButtonElement | null>(null);
   const infoPopoverRef = useRef<HTMLDivElement | null>(null);
   const guessInputRef = useRef<HTMLInputElement | null>(null);
+  const [summaryImageUrl, setSummaryImageUrl] = useState<string | null>(null);
 
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
@@ -202,6 +205,15 @@ export function DailyGameClient({
   useEffect(() => {
     setInfoPopoverOpen(false);
   }, [currentChallengeIndex, challengeIdsKey]);
+
+  useEffect(() => {
+    if (!summaryImageUrl) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSummaryImageUrl(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [summaryImageUrl]);
 
   useEffect(() => {
     if (!infoPopoverOpen) return;
@@ -649,24 +661,44 @@ export function DailyGameClient({
                       key={ch.id}
                       className="rounded-xl border border-white/10 bg-black/30 p-4"
                     >
-                      <div className="text-xs font-semibold uppercase tracking-wider text-white/45">
-                        Challenge {i + 1}
-                        {ch.position != null ? ` · #${ch.position}` : ""}
-                      </div>
-                      <div className="mt-1 font-semibold text-white">
-                        {ch.title ?? "Untitled"}
-                      </div>
-                      <div className="mt-2 text-sm text-white/70">
-                        Answer:{" "}
-                        <span className="font-bold text-white">{ans ?? "—"}</span>
-                        {" · "}
-                        {solved ? "Solved" : "Not solved"} · {g.length}/6 attempts
-                      </div>
-                      {emojiRow ? (
-                        <div className="mt-2 font-mono text-lg tracking-widest">
-                          {emojiRow}
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                        {ch.image_url ? (
+                          <button
+                            type="button"
+                            onClick={() => setSummaryImageUrl(ch.image_url)}
+                            className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 sm:w-32"
+                          >
+                            <img
+                              src={ch.image_url}
+                              alt=""
+                              className="h-full w-full object-contain"
+                            />
+                          </button>
+                        ) : null}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-semibold uppercase tracking-wider text-white/45">
+                            Challenge {i + 1}
+                            {ch.position != null ? ` · #${ch.position}` : ""}
+                          </div>
+                          <div className="mt-1 font-semibold text-white">
+                            {ch.title ?? "Untitled"}
+                          </div>
+                          <div className="mt-2 text-sm text-white/70">
+                            Answer:{" "}
+                            <span className="font-bold text-white">
+                              {ans ?? "—"}
+                            </span>
+                            {" · "}
+                            {solved ? "Solved" : "Not solved"} · {g.length}/6
+                            attempts
+                          </div>
+                          {emojiRow ? (
+                            <div className="mt-2 font-mono text-lg tracking-widest">
+                              {emojiRow}
+                            </div>
+                          ) : null}
                         </div>
-                      ) : null}
+                      </div>
                     </div>
                   );
                 })}
@@ -696,12 +728,14 @@ export function DailyGameClient({
                   >
                     <div className="aspect-[3/4] overflow-hidden rounded-2xl border border-white/15 bg-black md:aspect-[4/3]">
                       {currentChallenge.image_url ? (
-                        <img
-                          src={currentChallenge.image_url}
-                          alt=""
-                          className="block h-full w-full object-contain"
-                          style={{ background: "#000" }}
-                        />
+                        <Zoom>
+                          <img
+                            src={currentChallenge.image_url}
+                            alt={currentChallenge.title ?? "Challenge image"}
+                            className="block h-full w-full cursor-zoom-in object-contain"
+                            style={{ background: "#000" }}
+                          />
+                        </Zoom>
                       ) : (
                         <canvas
                           ref={canvasRef}
@@ -923,6 +957,35 @@ export function DailyGameClient({
           </>
         )}
       </div>
+
+      {summaryImageUrl ? (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Challenge image"
+          onClick={() => setSummaryImageUrl(null)}
+        >
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/70 text-2xl leading-none text-white hover:bg-white/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSummaryImageUrl(null);
+            }}
+          >
+            ×
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={summaryImageUrl}
+            alt=""
+            className="max-h-[min(90dvh,100%)] max-w-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

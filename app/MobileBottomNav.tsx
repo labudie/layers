@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { usePathname } from "next/navigation";
 
 function NavItem({
   href,
@@ -36,14 +35,6 @@ function NavItem({
 }
 
 export function MobileBottomNav() {
-  const router = useRouter();
-
-  async function handleSignOut() {
-    await supabase().auth.signOut();
-    router.refresh();
-    router.push("/");
-  }
-
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/15 bg-zinc-950/98 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur-md md:hidden"
@@ -54,18 +45,7 @@ export function MobileBottomNav() {
         <NavItem href="/" icon="🏠" label="Home" exact />
         <NavItem href="/leaderboard" icon="🏆" label="Leaderboard" />
         <NavItem href="/profile" icon="👤" label="Profile" />
-        <button
-          type="button"
-          onClick={() => void handleSignOut()}
-          className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[0.65rem] font-semibold leading-tight text-white/55 hover:text-white/85"
-        >
-          <span className="text-xl leading-none" aria-hidden>
-            🚪
-          </span>
-          <span className="max-w-full truncate px-0.5 text-center">
-            Sign out
-          </span>
-        </button>
+        <NavItem href="/settings" icon="⚙️" label="Settings" />
       </div>
     </nav>
   );
