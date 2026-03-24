@@ -41,10 +41,9 @@ export function MobileBottomNav() {
       role="navigation"
       aria-label="Main mobile"
     >
-      <div className="mx-auto flex max-w-3xl items-stretch justify-between px-1">
+      <div className="mx-auto flex max-w-3xl items-stretch justify-evenly px-1">
         <NavItem href="/" icon="🏠" label="Home" exact />
         <NavItem href="/leaderboard" icon="🏆" label="Leaderboard" />
-        <NavItem href="/profile" icon="👤" label="Profile" />
         <NavItem href="/settings" icon="⚙️" label="Settings" />
       </div>
     </nav>
