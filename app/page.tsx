@@ -15,9 +15,8 @@ export type Challenge = {
   category: string | null;
   layer_count: number | null;
   image_url: string | null;
-  is_sponsored?: boolean | null;
-  sponsor_name?: string | null;
-  creator?: { avatar_url?: string | null } | null;
+  is_sponsored: boolean | null;
+  sponsor_name: string | null;
 };
 
 type ChallengeRow = Challenge & { active_date: string | null };
@@ -33,7 +32,7 @@ export default async function Home() {
     supabase
       .from("challenges")
       .select(
-        "id, position, title, day_number, software, category, layer_count, image_url, is_sponsored, sponsor_name, creator:profiles!challenges_creator_id_fkey(avatar_url), active_date"
+        "id, position, title, day_number, software, category, layer_count, image_url, is_sponsored, sponsor_name, active_date"
       )
       .gte("active_date", start)
       .lte("active_date", end)
