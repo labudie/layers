@@ -821,24 +821,26 @@ export function DailyGameClient({
                               />
                             </button>
 
-                            <button
-                              type="button"
-                              aria-label="Download image"
-                              disabled={downloadBusyId === ch.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                void downloadChallengeImage(ch);
-                              }}
-                              className="absolute right-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/40 text-xl text-white/90 backdrop-blur-sm transition hover:bg-black/55 disabled:opacity-40"
-                            >
-                              ↓
-                            </button>
+                            <div className="absolute bottom-1 right-2 z-20 flex items-center gap-2">
+                              <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[var(--accent)]">
+                                <span className="text-sm font-extrabold text-[var(--text)]">
+                                  L
+                                </span>
+                              </div>
 
-                            <div className="absolute bottom-2 right-2 z-20 flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[var(--accent)]">
-                              <span className="text-sm font-extrabold text-[var(--text)]">
-                                L
-                              </span>
+                              <button
+                                type="button"
+                                aria-label="Download image"
+                                disabled={downloadBusyId === ch.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  void downloadChallengeImage(ch);
+                                }}
+                                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/40 text-lg text-white/90 backdrop-blur-sm transition hover:bg-black/55 disabled:opacity-40"
+                              >
+                                ↓
+                              </button>
                             </div>
                           </div>
                         ) : null}
@@ -1019,54 +1021,79 @@ export function DailyGameClient({
                       </div>
                     ) : null}
 
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                      <input
-                        ref={guessInputRef}
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        disabled={!roundActive}
-                        value={guessInput}
-                        onFocus={handleInputFocus}
-                        onChange={(e) =>
-                          setGuessInput(
-                            e.target.value === ""
-                              ? ""
-                              : Number(e.target.value)
-                          )
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") void submitGuess();
-                        }}
-                        className="h-11 w-full rounded-full border border-white/10 bg-[var(--surface)] px-4 text-base font-semibold text-[var(--text)] outline-none placeholder:text-white/30 focus-visible:ring-2 focus-visible:ring-[rgba(124,58,237,0.4)] disabled:opacity-40"
-                        placeholder="Layer count…"
-                      />
-                      <button
-                        type="button"
-                        disabled={
-                          !canSubmitGuess || typeof guessInput !== "number"
-                        }
-                        onClick={() => void submitGuess()}
-                        className="h-11 w-full shrink-0 rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white disabled:opacity-40 sm:w-auto"
-                      >
-                        Submit
-                      </button>
-                    </div>
-
-                    {!signedIn && roundActive ? (
-                      <p className="text-center text-sm text-white/55">
-                        Sign in to save your progress —{" "}
-                        <Link
-                          href="/login"
-                          className="font-semibold text-[var(--text)] underline-offset-2 hover:underline"
+                    {failedWithSixGuesses ? (
+                      !isLastChallenge ? (
+                        <button
+                          type="button"
+                          disabled={challengeTransitioning}
+                          onClick={() => advanceAfterTransitionOut(false)}
+                          className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40 md:rounded-xl md:py-3 shadow-sm transition-colors hover:bg-[var(--accent2)]"
                         >
-                          Sign in
-                        </Link>
-                      </p>
-                    ) : null}
+                          Next challenge
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={challengeTransitioning}
+                          onClick={() => advanceAfterTransitionOut(true)}
+                          className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40 md:rounded-xl md:py-3 shadow-sm transition-colors hover:bg-[var(--accent2)]"
+                        >
+                          View daily summary
+                        </button>
+                      )
+                    ) : (
+                      <>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                          <input
+                            ref={guessInputRef}
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            disabled={!roundActive}
+                            value={guessInput}
+                            onFocus={handleInputFocus}
+                            onChange={(e) =>
+                              setGuessInput(
+                                e.target.value === ""
+                                  ? ""
+                                  : Number(e.target.value)
+                              )
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") void submitGuess();
+                            }}
+                            className="h-11 w-full rounded-full border border-white/10 bg-[var(--surface)] px-4 text-base font-semibold text-[var(--text)] outline-none placeholder:text-white/30 focus-visible:ring-2 focus-visible:ring-[rgba(124,58,237,0.4)] disabled:opacity-40"
+                            placeholder="Layer count…"
+                          />
+                          <button
+                            type="button"
+                            disabled={
+                              !canSubmitGuess ||
+                              typeof guessInput !== "number"
+                            }
+                            onClick={() => void submitGuess()}
+                            className="h-11 w-full shrink-0 rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white disabled:opacity-40 sm:w-auto"
+                          >
+                            Submit
+                          </button>
+                        </div>
+
+                        {!signedIn && roundActive ? (
+                          <p className="text-center text-sm text-white/55">
+                            Sign in to save your progress —{" "}
+                            <Link
+                              href="/login"
+                              className="font-semibold text-[var(--text)] underline-offset-2 hover:underline"
+                            >
+                              Sign in
+                            </Link>
+                          </p>
+                        ) : null}
+                      </>
+                    )}
                   </div>
 
-                  {currentFinished ? (
+                  {currentFinished && !failedWithSixGuesses ? (
                     <div
                       className={`rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.6)] p-4 shadow-sm ${challengeVisualFadeClassName}`}
                     >
