@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import {
@@ -10,6 +9,7 @@ import {
   type CSSProperties,
 } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Zoom from "react-medium-image-zoom";
 import "react-medium-image-zoom/dist/styles.css";
@@ -21,6 +21,8 @@ type GuessRow = {
   verdict: "correct" | "close" | "wrong";
   direction: "high" | "low" | "equal";
   closeness: number;
+  attemptNumber: number;
+  pending?: boolean;
 };
 
 function clamp01(n: number) {
@@ -198,6 +200,7 @@ export function DailyGameClient({
   const [imageFeedbackClassName, setImageFeedbackClassName] = useState("");
   const [confettiBursts, setConfettiBursts] = useState<number[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [downloadBusyId, setDownloadBusyId] = useState<string | null>(null);
 
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
@@ -311,16 +314,8 @@ export function DailyGameClient({
   const currentChallenge = challenges[currentChallengeIndex] ?? null;
   const currentGuesses = guessesByIndex[currentChallengeIndex] ?? [];
   const currentAnswer = currentChallenge?.layer_count ?? null;
-  const challengeMeta = currentChallenge as
-    | (Challenge & {
-        is_sponsored?: boolean | null;
-        sponsor_name?: string | null;
-      })
-    | null;
-  const sponsorName =
-    challengeMeta?.is_sponsored && challengeMeta?.sponsor_name
-      ? challengeMeta.sponsor_name
-      : null;
+  const isSponsored = currentChallenge?.is_sponsored === true;
+  const sponsorName = isSponsored ? currentChallenge?.sponsor_name ?? null : null;
 
   const currentFinished = useMemo(
     () => isChallengeFinished(currentAnswer, currentGuesses),
@@ -390,10 +385,13 @@ export function DailyGameClient({
           continue;
         }
 
-        const restored: GuessRow[] = data.map((row: { guess: unknown }) => {
+        const restored: GuessRow[] = data.map((row: {
+          guess: unknown;
+          attempt_number: number;
+        }) => {
           const v = Math.max(0, Math.floor(Number(row.guess)));
           const meta = verdictForGuess(v, answer);
-          return { value: v, ...meta };
+          return { value: v, ...meta, attemptNumber: row.attempt_number, pending: false };
         });
         matrix.push(restored.slice(0, 6));
       }
@@ -446,6 +444,7 @@ export function DailyGameClient({
         const g = guessesByIndex[idx] ?? [];
         const ans = ch.layer_count ?? 0;
         if (ans <= 0 || g.length === 0) continue;
+        if (g.some((row) => row.pending)) continue;
         if (!isChallengeFinished(ans, g)) continue;
 
         const sb = supabase();
@@ -485,6 +484,15 @@ export function DailyGameClient({
     const t = window.setInterval(tick, 250);
     return () => window.clearInterval(t);
   }, []);
+
+  // Preload the next challenge image for instant transitions.
+  useEffect(() => {
+    if (showSummary) return;
+    const nextCh = challengesRef.current[currentChallengeIndex + 1];
+    if (!nextCh?.image_url) return;
+    const img = new window.Image();
+    img.src = nextCh.image_url;
+  }, [currentChallengeIndex, showSummary]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -539,18 +547,16 @@ export function DailyGameClient({
     const v = Math.max(0, Math.floor(guessInput));
     const { verdict, direction, closeness } = verdictForGuess(v, currentAnswer);
     const attemptNumber = g.length + 1;
-    const nextRow: GuessRow = { value: v, verdict, direction, closeness };
+    const nextRow: GuessRow = {
+      value: v,
+      verdict,
+      direction,
+      closeness,
+      attemptNumber,
+      pending: true,
+    };
 
-    const { error } = await supabase().from("guesses").insert({
-      user_id: userId,
-      challenge_id: currentChallenge.id,
-      guess: v,
-      attempt_number: attemptNumber,
-      is_correct: verdict === "correct",
-    });
-
-    if (error) return;
-
+    // Optimistic UI: show the guess chip immediately (with loading state).
     setGuessesByIndex((prev) => {
       const next = prev.map((arr, i) =>
         i === idx ? [...arr, nextRow].slice(0, 6) : arr
@@ -573,6 +579,37 @@ export function DailyGameClient({
       setImageFeedbackClassName("");
       imageFeedbackTimeoutRef.current = null;
     }, 320);
+
+    const { error } = await supabase().from("guesses").insert({
+      user_id: userId,
+      challenge_id: currentChallenge.id,
+      guess: v,
+      attempt_number: attemptNumber,
+      is_correct: verdict === "correct",
+    });
+
+    if (error) {
+      // Roll back optimistic guess chip on failure.
+      setGuessesByIndex((prev) =>
+        prev.map((arr, i) => {
+          if (i !== idx) return arr;
+          return arr.filter((row) => row.attemptNumber !== attemptNumber);
+        })
+      );
+      return;
+    }
+
+    // Confirm guess chip (remove loading state).
+    setGuessesByIndex((prev) =>
+      prev.map((arr, i) => {
+        if (i !== idx) return arr;
+        return arr.map((row) =>
+          row.attemptNumber === attemptNumber
+            ? { ...row, pending: false }
+            : row
+        );
+      })
+    );
 
     if (verdict === "correct") {
       const burstId = Date.now() + Math.floor(Math.random() * 1_000_000);
@@ -607,6 +644,51 @@ export function DailyGameClient({
   async function signOut() {
     await supabase().auth.signOut();
     router.refresh();
+  }
+
+  async function downloadChallengeImage(ch: Challenge) {
+    if (!ch.image_url || !userId) return;
+    if (downloadBusyId === ch.id) return;
+    setDownloadBusyId(ch.id);
+    try {
+      // Download to the device (best-effort; relies on CORS being allowed for the public URL).
+      const res = await fetch(ch.image_url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      const extRaw = ch.image_url.split("?")[0].split(".").pop() || "png";
+      const ext = extRaw.length <= 5 ? extRaw : "png";
+      const safeTitle = (ch.title ?? "challenge")
+        .trim()
+        .replace(/[^a-z0-9]+/gi, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 40)
+        .toLowerCase();
+      const filename = `${safeTitle || "challenge"}.${ext}`;
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      const { error } = await supabase().from("image_downloads").insert({
+        user_id: userId,
+        challenge_id: ch.id,
+        downloaded_at: new Date().toISOString(),
+      });
+      if (error) {
+        // Non-fatal: downloading still succeeded client-side.
+        console.error("[downloadChallengeImage] insert failed", error);
+      }
+    } catch (e) {
+      console.error("[downloadChallengeImage] failed", e);
+    } finally {
+      setDownloadBusyId(null);
+    }
   }
 
   async function shareDaily() {
@@ -745,7 +827,7 @@ export function DailyGameClient({
         </div>
       </div>
 
-      <div className={`mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 ${showSummary ? "overflow-y-auto" : "overflow-hidden"} md:px-5`}>
+            <div className={`mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 ${showSummary ? "overflow-y-auto" : "overflow-hidden"} md:px-5`}>
         {!total ? (
           <div className="mt-10 flex items-center justify-center">
             <div className="text-lg font-semibold text-white/80">
@@ -765,6 +847,7 @@ export function DailyGameClient({
                   const g = guessesByIndex[i] ?? [];
                   const ans = ch.layer_count;
                   const solved = g.some((x) => x.verdict === "correct");
+                  const creatorAvatarUrl = ch.creator?.avatar_url ?? null;
                   const emojiRow = g
                     .map((x) => emojiForVerdict(x.verdict))
                     .join("");
@@ -775,17 +858,60 @@ export function DailyGameClient({
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                         {ch.image_url ? (
-                          <button
-                            type="button"
+                          <div
+                            role="button"
+                            tabIndex={0}
                             onClick={() => setSummaryImageUrl(ch.image_url)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setSummaryImageUrl(ch.image_url);
+                              }
+                            }}
                             className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-lg border border-white/10 bg-[rgba(26,10,46,0.6)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(124,58,237,0.4)] sm:w-32"
                           >
-                            <img
+                            <Image
                               src={ch.image_url}
                               alt=""
-                              className="h-full w-full object-contain"
+                              fill
+                              sizes="(max-width: 640px) 100vw, 128px"
+                              className="object-contain"
                             />
-                          </button>
+
+                            <button
+                              type="button"
+                              aria-label="Download image"
+                              disabled={downloadBusyId === ch.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void downloadChallengeImage(ch);
+                              }}
+                              className="absolute left-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/40 text-xl text-white/90 backdrop-blur-sm transition hover:bg-black/55 disabled:opacity-40"
+                            >
+                              ↓
+                            </button>
+
+                            <div className="absolute bottom-2 right-2 z-20 flex items-center gap-2 rounded-full bg-black/35 px-2 py-1.5 backdrop-blur-sm">
+                              <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[var(--accent)]">
+                                {creatorAvatarUrl ? (
+                                  <Image
+                                    src={creatorAvatarUrl}
+                                    alt=""
+                                    width={28}
+                                    height={28}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-sm font-extrabold text-[var(--text)]">
+                                    L
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[13px] leading-none text-[var(--accent2)]">
+                                ✦
+                              </span>
+                            </div>
+                          </div>
                         ) : null}
                         <div className="min-w-0 flex-1">
                           <div className="text-xs font-semibold uppercase tracking-wider text-white/45">
@@ -832,22 +958,24 @@ export function DailyGameClient({
           </div>
         ) : (
           <>
-            <div className="flex min-h-0 flex-1 flex-col gap-3 pb-2">
+            <div className="mt-[12px] flex min-h-0 flex-1 flex-col gap-3 pb-2">
               {currentChallenge && (
                 <>
                   <div
                     className={`relative mx-[calc(50%-50vw)] w-[100vw] ${challengeVisualFadeClassName}`}
                   >
                     <div
-                      className={`challenge-image-frame aspect-[4/5] overflow-hidden rounded-none bg-[var(--surface)] ${imageFeedbackClassName}`}
+                      className={`challenge-image-frame relative aspect-[4/5] overflow-hidden rounded-none bg-[var(--surface)] ${imageFeedbackClassName}`}
                     >
                       {currentChallenge.image_url ? (
-                        <Zoom>
-                          <img
+                        <Zoom canSwipeToUnzoom={true} swipeToUnzoomThreshold={15}>
+                          <Image
                             src={currentChallenge.image_url}
                             alt={currentChallenge.title ?? "Challenge image"}
-                            className="block h-full w-full cursor-zoom-in object-contain"
-                            style={{ background: "var(--surface)" }}
+                            fill
+                            priority
+                            sizes="(max-width: 768px) 100vw, 720px"
+                            className="object-contain"
                           />
                         </Zoom>
                       ) : (
@@ -858,6 +986,11 @@ export function DailyGameClient({
                         />
                       )}
                     </div>
+                    {isSponsored && sponsorName ? (
+                      <div className="absolute left-3 bottom-3 z-20 rounded-full border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.15)] px-3 py-1 text-[11px] font-semibold text-amber-200 backdrop-blur-sm">
+                        Sponsored
+                      </div>
+                    ) : null}
                   </div>
 
                   <div
@@ -890,11 +1023,9 @@ export function DailyGameClient({
                           aria-label="Challenge info"
                           className="absolute right-0 top-full z-[60] mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-white/10 bg-[rgba(26,10,46,0.98)] p-3.5 text-left text-xs shadow-2xl backdrop-blur-md"
                         >
-                          {sponsorName ? (
-                            <p className="text-amber-300">
-                              <span className="font-semibold text-amber-200">
-                                Sponsored by:
-                              </span>{" "}
+                          {isSponsored && sponsorName ? (
+                            <p className="text-amber-200">
+                              <span className="font-semibold">⭐ Sponsored by:</span>{" "}
                               {sponsorName}
                             </p>
                           ) : null}
@@ -950,9 +1081,19 @@ export function DailyGameClient({
                             <div
                               key={`${g.value}-${i}`}
                               role="listitem"
-                              className={`flex h-9 w-9 items-center justify-center rounded-full border px-0.5 text-sm font-bold tabular-nums ${chipClass}`}
+                              className={`relative flex h-9 w-9 items-center justify-center rounded-full border px-0.5 text-sm font-bold tabular-nums ${chipClass} ${
+                                g.pending ? "opacity-85" : ""
+                              }`}
                             >
-                              {g.value}
+                              <span className="leading-none">{g.value}</span>
+                              {g.pending ? (
+                                <span
+                                  aria-hidden
+                                  className="absolute inset-0 flex items-center justify-center"
+                                >
+                                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-transparent" />
+                                </span>
+                              ) : null}
                             </div>
                           );
                         })}
@@ -1096,13 +1237,19 @@ export function DailyGameClient({
           >
             ×
           </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={summaryImageUrl}
-            alt=""
-            className="max-h-[min(90dvh,100%)] max-w-full object-contain"
+          <div
+            className="relative flex h-full w-full items-center justify-center"
             onClick={(e) => e.stopPropagation()}
-          />
+          >
+            <Image
+              src={summaryImageUrl}
+              alt=""
+              fill
+              sizes="100vw"
+              priority
+              className="object-contain"
+            />
+          </div>
         </div>
       ) : null}
       {confettiBursts.map((burstId) => (

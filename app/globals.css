@@ -36,6 +36,22 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* react-medium-image-zoom: make the unzoom (X) close button subtle */
+[data-rmiz-btn-unzoom] {
+  background-color: rgba(124, 58, 237, 0.22) !important;
+  border: 1px solid rgba(248, 244, 255, 0.16) !important;
+  box-shadow: none !important;
+  opacity: 0.7 !important;
+  height: 34px !important;
+  width: 34px !important;
+  padding: 8px !important;
+}
+
+[data-rmiz-btn-unzoom]:hover,
+[data-rmiz-btn-unzoom]:focus-visible {
+  opacity: 0.95 !important;
+}
+
 .challenge-image-frame {
   border-width: 1px;
   border-style: solid;
@@ -129,5 +145,26 @@ body {
     opacity: 0;
     transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)))
       scale(0.4);
+  }
+}
+
+/* Skeleton loading (shimmer) */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(26, 10, 46, 0.25) 0%,
+    rgba(124, 58, 237, 0.28) 45%,
+    rgba(26, 10, 46, 0.25) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.2s infinite ease-in-out;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
   }
 }
