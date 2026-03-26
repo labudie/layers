@@ -197,12 +197,14 @@ export function DailyGameClient({
   const [summaryImageUrl, setSummaryImageUrl] = useState<string | null>(null);
   const [imageFeedbackClassName, setImageFeedbackClassName] = useState("");
   const [confettiBursts, setConfettiBursts] = useState<number[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
   const revealTimeoutRef = useRef<number | null>(null);
   const imageFeedbackTimeoutRef = useRef<number | null>(null);
   const confettiTimeoutsRef = useRef<number[]>([]);
+  const drawerRef = useRef<HTMLDivElement | null>(null);
 
   const challengesRef = useRef(challenges);
   useEffect(() => {
@@ -212,6 +214,24 @@ export function DailyGameClient({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDrawerOpen(false);
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (drawerRef.current?.contains(t)) return;
+      setDrawerOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [drawerOpen]);
 
   useEffect(() => {
     setInfoPopoverOpen(false);
@@ -626,66 +646,106 @@ export function DailyGameClient({
   }, []);
 
   return (
-    <div
-      className="flex min-h-screen w-full flex-col bg-black text-white"
-      style={{ scrollPaddingBottom: "9rem" }}
-    >
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-4 md:px-5 md:py-6">
-        <header className="flex shrink-0 items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2 md:gap-4">
-            <div className="shrink-0 text-xl font-extrabold tracking-tight">
-              Layers
-            </div>
-            <Link
-              href="/leaderboard"
-              className="hidden shrink-0 text-sm font-semibold text-white/70 underline-offset-4 hover:text-white hover:underline md:inline"
-            >
-              Leaderboard
-            </Link>
-          </div>
-          <div className="flex min-w-0 flex-col items-end gap-1 text-right">
-            <div className="shrink-0 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-base font-semibold">
-              {total ? `Daily #${dayNumber ?? "—"}` : "Daily"}
-            </div>
-            <div className="text-base text-white/75" style={{ letterSpacing: "0.01em" }}>
-              <span>Next challenge </span>
-              <span className="font-mono font-bold text-white">
-                {countdownText ?? "--:--:--"}
-              </span>
-            </div>
-          </div>
-        </header>
-
-        <div className="mt-3 hidden flex-wrap items-center justify-end gap-2 border-b border-white/10 pb-4 md:flex md:gap-3">
-          {signedIn ? (
-            <div className="hidden text-sm text-white/70 sm:block">{userEmail}</div>
-          ) : (
-            <Link
-              href="/login"
-              className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
-            >
-              Sign in
-            </Link>
-          )}
-          {signedIn && (
-            <>
-              <Link
-                href="/profile"
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
-              >
-                Profile
-              </Link>
-              <button
-                type="button"
-                onClick={() => void signOut()}
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold hover:bg-white/10"
-              >
-                Sign out
-              </button>
-            </>
-          )}
+    <div className="flex h-dvh w-full flex-col overflow-hidden bg-[var(--background)] text-[var(--text)]">
+      <header className="flex shrink-0 items-center justify-between px-4 pt-4 md:px-5">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="text-xl font-extrabold tracking-tight">Layers</div>
         </div>
 
+        <button
+          type="button"
+          aria-label="Open menu"
+          onClick={() => setDrawerOpen(true)}
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-[rgba(26,10,46,0.7)] text-xl font-semibold text-[var(--text)] shadow-sm transition hover:bg-[var(--surface)]"
+        >
+          ☰
+        </button>
+      </header>
+
+      <div className="flex shrink-0 items-center justify-center px-4 pt-2 md:px-5">
+        <div className="rounded-full border border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.1)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-sm">
+          <span className="text-white/70">Next challenge </span>
+          <span className="font-mono text-base font-bold text-[var(--text)]">
+            {countdownText ?? "--:--:--"}
+          </span>
+        </div>
+      </div>
+
+      <div
+        className={`fixed inset-0 z-[120] transition-opacity duration-200 ${
+          drawerOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+        }`}
+      >
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="absolute inset-0 bg-[#0f0520]/85 backdrop-blur-sm"
+          onClick={() => setDrawerOpen(false)}
+        />
+        <div
+          ref={drawerRef}
+          className={`absolute right-0 top-0 h-full w-[min(18rem,86vw)] bg-[rgba(26,10,46,0.98)] shadow-2xl transition-transform duration-300 ${
+            drawerOpen ? "translate-x-0" : "translate-x-full"
+          }`}
+        >
+            <div className="flex items-center justify-between px-4 py-4">
+              <div className="text-sm font-semibold text-[var(--text)]">Menu</div>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-xl font-semibold text-[var(--text)]"
+                aria-label="Close menu"
+              >
+                ×
+              </button>
+            </div>
+            <nav className="flex flex-col gap-2 px-4 pb-6">
+              <Link
+                href="/"
+                onClick={() => setDrawerOpen(false)}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-[var(--text)] hover:bg-white/10"
+              >
+                Home
+              </Link>
+              <Link
+                href="/leaderboard"
+                onClick={() => setDrawerOpen(false)}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-[var(--text)] hover:bg-white/10"
+              >
+                Leaderboard
+              </Link>
+              <Link
+                href="/settings"
+                onClick={() => setDrawerOpen(false)}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-[var(--text)] hover:bg-white/10"
+              >
+                Settings
+              </Link>
+              {signedIn ? (
+                <button
+                  type="button"
+                  onClick={() => void (async () => {
+                    setDrawerOpen(false);
+                    await signOut();
+                  })()}
+                  className="mt-1 rounded-xl border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.1)] px-4 py-3 text-sm font-semibold text-red-200 hover:bg-[rgba(239,68,68,0.2)]"
+                >
+                  Sign out
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  onClick={() => setDrawerOpen(false)}
+                  className="mt-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-[var(--text)] hover:bg-white/10"
+                >
+                  Sign in
+                </Link>
+              )}
+            </nav>
+        </div>
+      </div>
+
+      <div className={`mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 ${showSummary ? "overflow-y-auto" : "overflow-hidden"} md:px-5`}>
         {!total ? (
           <div className="mt-10 flex items-center justify-center">
             <div className="text-lg font-semibold text-white/80">
@@ -711,14 +771,14 @@ export function DailyGameClient({
                   return (
                     <div
                       key={ch.id}
-                      className="rounded-xl border border-white/10 bg-black/30 p-4"
+                      className="rounded-xl border border-white/10 bg-[rgba(26,10,46,0.6)] p-4"
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                         {ch.image_url ? (
                           <button
                             type="button"
                             onClick={() => setSummaryImageUrl(ch.image_url)}
-                            className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 sm:w-32"
+                            className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-lg border border-white/10 bg-[rgba(26,10,46,0.6)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(124,58,237,0.4)] sm:w-32"
                           >
                             <img
                               src={ch.image_url}
@@ -772,14 +832,14 @@ export function DailyGameClient({
           </div>
         ) : (
           <>
-            <div className="mt-3 flex min-h-0 flex-1 flex-col gap-4 md:mt-6 md:gap-6">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 pb-2">
               {currentChallenge && (
                 <>
                   <div
-                    className={`relative -mx-4 min-h-0 flex-1 md:mx-0 ${challengeVisualFadeClassName}`}
+                    className={`relative mx-[calc(50%-50vw)] w-[100vw] ${challengeVisualFadeClassName}`}
                   >
                     <div
-                      className={`challenge-image-frame aspect-[3/4] overflow-hidden rounded-2xl border border-white/15 bg-black md:aspect-[4/3] ${imageFeedbackClassName}`}
+                      className={`challenge-image-frame aspect-[4/5] overflow-hidden rounded-none bg-[var(--surface)] ${imageFeedbackClassName}`}
                     >
                       {currentChallenge.image_url ? (
                         <Zoom>
@@ -787,27 +847,27 @@ export function DailyGameClient({
                             src={currentChallenge.image_url}
                             alt={currentChallenge.title ?? "Challenge image"}
                             className="block h-full w-full cursor-zoom-in object-contain"
-                            style={{ background: "#000" }}
+                            style={{ background: "var(--surface)" }}
                           />
                         </Zoom>
                       ) : (
                         <canvas
                           ref={canvasRef}
                           className="block h-full w-full"
-                          style={{ background: "#000" }}
+                          style={{ background: "var(--surface)" }}
                         />
                       )}
                     </div>
                   </div>
 
                   <div
-                    className={`relative flex items-start gap-3 ${challengeVisualFadeClassName}`}
+                    className={`relative flex items-start justify-between gap-3 ${challengeVisualFadeClassName}`}
                   >
-                    <div className="min-w-0 flex-1">
-                      <h2 className="text-lg font-bold leading-snug md:text-2xl">
+                    <div className="min-w-0">
+                      <h2 className="text-base font-semibold leading-snug">
                         {currentChallenge.title ?? "Untitled"}
                       </h2>
-                      <p className="mt-1 text-3xl font-extrabold tabular-nums tracking-tight text-white md:text-4xl">
+                      <p className="mt-1 text-sm font-mono text-white/60">
                         {currentChallengeIndex + 1}/{total}
                       </p>
                     </div>
@@ -819,7 +879,7 @@ export function DailyGameClient({
                         aria-haspopup="dialog"
                         aria-label="Challenge details"
                         onClick={() => setInfoPopoverOpen((o) => !o)}
-                        className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 text-base font-serif font-bold leading-none text-white/85 hover:bg-white/10"
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-base font-semibold leading-none text-white/85 hover:bg-white/10"
                       >
                         ⓘ
                       </button>
@@ -828,7 +888,7 @@ export function DailyGameClient({
                           ref={infoPopoverRef}
                           role="dialog"
                           aria-label="Challenge info"
-                          className="absolute right-0 top-full z-[60] mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-white/15 bg-zinc-900/98 p-3.5 text-left text-xs shadow-2xl backdrop-blur-md"
+                          className="absolute right-0 top-full z-[60] mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-white/10 bg-[rgba(26,10,46,0.98)] p-3.5 text-left text-xs shadow-2xl backdrop-blur-md"
                         >
                           {sponsorName ? (
                             <p className="text-amber-300">
@@ -861,56 +921,45 @@ export function DailyGameClient({
                     </div>
                   </div>
 
-                  <div className="space-y-2.5">
-                    <div className="hidden text-sm font-semibold text-white/70 md:block">
-                      Guess the layer count
-                    </div>
+                  <div className="flex flex-col gap-3">
                     {failedWithSixGuesses ? (
-                      <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-3 text-center">
-                        <span className="text-2xl font-extrabold tracking-tight text-emerald-300 md:text-3xl">
-                          Answer: {currentAnswer}
-                        </span>
+                      <div className="rounded-2xl border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] px-4 py-3 text-center shadow-sm">
+                        <div className="text-sm font-semibold text-[rgba(16,185,129,0.9)]">
+                          Answer
+                        </div>
+                        <div className="mt-1 text-3xl font-extrabold tracking-tight text-emerald-300 md:text-4xl">
+                          {currentAnswer}
+                        </div>
                       </div>
                     ) : null}
+
                     {currentGuesses.length > 0 ? (
                       <div
-                        className={`flex flex-nowrap gap-0.5 ${challengeVisualFadeClassName}`}
+                        className={`flex flex-nowrap items-center gap-2 ${challengeVisualFadeClassName}`}
                         role="list"
                         aria-label="Guess history"
                       >
                         {currentGuesses.map((g, i) => {
-                          const isCorrect = g.verdict === "correct";
-                          const sub =
-                            isCorrect
-                              ? "Correct"
-                              : g.direction === "high"
-                                ? "↓ too high"
-                                : g.direction === "low"
-                                  ? "↑ too low"
-                                  : "—";
+                          const chipClass =
+                            g.verdict === "correct"
+                              ? "border-[rgba(16,185,129,0.4)] bg-[rgba(16,185,129,0.15)] text-emerald-300"
+                              : g.verdict === "close"
+                                ? "border-amber-400/35 bg-amber-400/15 text-amber-200"
+                                : "border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.15)] text-red-200";
                           return (
                             <div
                               key={`${g.value}-${i}`}
                               role="listitem"
-                              className={`flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center rounded-md border border-black/25 px-px py-1 text-center ${
-                                isCorrect
-                                  ? "bg-emerald-600 text-white"
-                                  : "bg-red-600 text-white"
-                              }`}
+                              className={`flex h-9 w-9 items-center justify-center rounded-full border px-0.5 text-sm font-bold tabular-nums ${chipClass}`}
                             >
-                              <span className="text-[22px] font-bold tabular-nums leading-none">
-                                {g.value}
-                              </span>
-                              <span className="mt-0.5 max-w-full truncate px-px text-[12px] font-medium leading-none text-white/95">
-                                {sub}
-                              </span>
+                              {g.value}
                             </div>
                           );
                         })}
                       </div>
                     ) : null}
 
-                    <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                       <input
                         ref={guessInputRef}
                         type="number"
@@ -929,7 +978,7 @@ export function DailyGameClient({
                         onKeyDown={(e) => {
                           if (e.key === "Enter") void submitGuess();
                         }}
-                        className="h-12 w-full rounded-full border-0 bg-white px-5 text-base font-medium text-black outline-none placeholder:text-neutral-400 focus-visible:ring-2 focus-visible:ring-white/40 disabled:opacity-40 md:rounded-xl md:px-4"
+                        className="h-11 w-full rounded-full border border-white/10 bg-[var(--surface)] px-4 text-base font-semibold text-[var(--text)] outline-none placeholder:text-white/30 focus-visible:ring-2 focus-visible:ring-[rgba(124,58,237,0.4)] disabled:opacity-40"
                         placeholder="Layer count…"
                       />
                       <button
@@ -938,17 +987,18 @@ export function DailyGameClient({
                           !canSubmitGuess || typeof guessInput !== "number"
                         }
                         onClick={() => void submitGuess()}
-                        className="h-11 w-full shrink-0 rounded-full bg-white text-sm font-bold text-black disabled:opacity-40 md:h-12 md:w-auto md:rounded-xl md:px-8"
+                        className="h-11 w-full shrink-0 rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white disabled:opacity-40 sm:w-auto"
                       >
                         Submit
                       </button>
                     </div>
+
                     {!signedIn && roundActive ? (
                       <p className="text-center text-sm text-white/55">
                         Sign in to save your progress —{" "}
                         <Link
                           href="/login"
-                          className="font-semibold text-white/85 underline-offset-2 hover:text-white hover:underline"
+                          className="font-semibold text-[var(--text)] underline-offset-2 hover:underline"
                         >
                           Sign in
                         </Link>
@@ -958,12 +1008,12 @@ export function DailyGameClient({
 
                   {currentFinished ? (
                     <div
-                      className={`rounded-xl border border-white/10 bg-white/[0.06] p-4 ${challengeVisualFadeClassName}`}
+                      className={`rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.6)] p-4 shadow-sm ${challengeVisualFadeClassName}`}
                     >
                       <div className="text-base font-extrabold md:text-lg">
                         Result
                       </div>
-                      <div className="mt-1 text-sm text-white/80">
+                      <div className="mt-1 text-sm text-white/70">
                         Answer:{" "}
                         <span className="font-bold text-white">
                           {currentAnswer}
@@ -971,7 +1021,7 @@ export function DailyGameClient({
                       </div>
                       <div className="mt-3">
                         {pendingAutoAdvance ? (
-                          <p className="text-sm font-semibold text-emerald-300/95">
+                          <p className="text-sm font-semibold text-[var(--success)]">
                             Correct! Continuing…
                           </p>
                         ) : solvedWithCorrect ? (
@@ -983,7 +1033,7 @@ export function DailyGameClient({
                                 onClick={() =>
                                   advanceAfterTransitionOut(false)
                                 }
-                                className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black disabled:opacity-40 md:rounded-xl md:py-3"
+                                className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40 md:rounded-xl md:py-3 shadow-sm transition-colors hover:bg-[var(--accent2)]"
                               >
                                 Next challenge
                               </button>
@@ -992,7 +1042,7 @@ export function DailyGameClient({
                                 type="button"
                                 disabled={challengeTransitioning}
                                 onClick={() => advanceAfterTransitionOut(true)}
-                                className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black disabled:opacity-40 md:rounded-xl md:py-3"
+                                className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40 md:rounded-xl md:py-3 shadow-sm transition-colors hover:bg-[var(--accent2)]"
                               >
                                 View daily summary
                               </button>
@@ -1003,7 +1053,7 @@ export function DailyGameClient({
                             type="button"
                             disabled={challengeTransitioning}
                             onClick={() => advanceAfterTransitionOut(false)}
-                            className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black disabled:opacity-40 md:rounded-xl md:py-3"
+                            className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40 md:rounded-xl md:py-3 shadow-sm transition-colors hover:bg-[var(--accent2)]"
                           >
                             Next challenge
                           </button>
@@ -1012,7 +1062,7 @@ export function DailyGameClient({
                             type="button"
                             disabled={challengeTransitioning}
                             onClick={() => advanceAfterTransitionOut(true)}
-                            className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black disabled:opacity-40 md:rounded-xl md:py-3"
+                            className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40 md:rounded-xl md:py-3 shadow-sm transition-colors hover:bg-[var(--accent2)]"
                           >
                             View daily summary
                           </button>
@@ -1029,7 +1079,7 @@ export function DailyGameClient({
 
       {summaryImageUrl ? (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black p-4"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f0520]/92 p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Challenge image"
@@ -1038,7 +1088,7 @@ export function DailyGameClient({
           <button
             type="button"
             aria-label="Close"
-            className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/70 text-2xl leading-none text-white hover:bg-white/10"
+            className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-[#0f0520]/70 text-2xl leading-none text-white hover:bg-white/10"
             onClick={(e) => {
               e.stopPropagation();
               setSummaryImageUrl(null);

@@ -201,7 +201,7 @@ export default async function AdminPage() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen w-full bg-black text-white flex items-center justify-center px-6">
+      <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)] flex items-center justify-center px-6">
         <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-6 text-center">
           Access denied
         </div>
@@ -212,7 +212,7 @@ export default async function AdminPage() {
   const challenges = await getUpcomingChallenges(today);
 
   return (
-    <div className="min-h-screen w-full bg-black text-white">
+    <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)]">
       <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-5">
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>

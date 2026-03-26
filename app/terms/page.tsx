@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen w-full bg-black px-4 py-10 text-white md:px-6">
+    <div className="min-h-screen w-full bg-[var(--background)] px-4 py-10 text-[var(--text)] md:px-6">
       <div className="mx-auto max-w-2xl">
         <Link
           href="/settings"

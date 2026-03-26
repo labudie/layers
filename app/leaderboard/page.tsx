@@ -98,7 +98,7 @@ export default async function LeaderboardPage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-black text-white">
+    <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)]">
       <div className="mx-auto w-full max-w-2xl px-4 py-8 md:px-5">
         <div className="mb-8">
           <Link
