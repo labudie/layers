@@ -10,8 +10,6 @@ function getSupabaseImageDomain() {
   }
 }
 
-const supabaseDomain = getSupabaseImageDomain();
-
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
@@ -19,7 +17,7 @@ const nextConfig: NextConfig = {
     },
   },
   images: {
-    domains: supabaseDomain ? [supabaseDomain] : [],
+    domains: ["gmlcbfbrlpktqbkigqcw.supabase.co"],
   },
 };
 
