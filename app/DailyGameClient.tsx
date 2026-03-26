@@ -896,7 +896,7 @@ export function DailyGameClient({
                     className={`relative mx-[calc(50%-50vw)] w-[100vw] ${challengeVisualFadeClassName}`}
                   >
                     <div
-                      className={`challenge-image-frame aspect-[4/5] overflow-hidden rounded-none bg-[var(--surface)] ${imageFeedbackClassName}`}
+                    className={`challenge-image-frame aspect-[4/5] overflow-hidden rounded-none bg-[#0f0520] ${imageFeedbackClassName}`}
                     >
                       {currentChallenge.image_url ? (
                         <Zoom>
@@ -904,14 +904,14 @@ export function DailyGameClient({
                             src={currentChallenge.image_url}
                             alt={currentChallenge.title ?? "Challenge image"}
                             className="block h-full w-full cursor-zoom-in object-contain"
-                            style={{ background: "var(--surface)" }}
+                            style={{ background: "#0f0520" }}
                           />
                         </Zoom>
                       ) : (
                         <canvas
                           ref={canvasRef}
                           className="block h-full w-full"
-                          style={{ background: "var(--surface)" }}
+                          style={{ background: "#0f0520" }}
                         />
                       )}
                     </div>
