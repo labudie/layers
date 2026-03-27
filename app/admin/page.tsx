@@ -67,7 +67,6 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
   const dayNumber =
     typeof dayNumberRaw === "string" ? Number(dayNumberRaw) : Number(dayNumberRaw);
   const cardsJson = String(formData.get("cards_json") ?? "[]");
-  const imageFilesRaw = formData.getAll("images");
 
   if (!activeDate) {
     return { error: "Active Date is required.", publishedCount: 0, publishedTitles: [] };
@@ -86,6 +85,7 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
       layer_count: string;
       is_sponsored: boolean;
       sponsor_name: string;
+      image_url: string;
     }>;
 
     if (!Array.isArray(cards) || cards.length === 0) {
@@ -102,27 +102,6 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
         publishedTitles: [],
       };
     }
-
-    const imageFiles = imageFilesRaw.filter(
-      (x): x is File => typeof x === "object" && x != null && "arrayBuffer" in x
-    );
-    if (imageFiles.length !== cards.length) {
-      return {
-        error: "Each challenge card must have a matching image.",
-        publishedCount: 0,
-        publishedTitles: [],
-      };
-    }
-
-    const sanitizeForFilename = (value: string) => {
-      const v = value
-        .toLowerCase()
-        .trim()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9-_]/g, "")
-        .slice(0, 80);
-      return v || "challenge";
-    };
 
     const insertPayload: Array<{
       title: string;
@@ -141,7 +120,6 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
 
     for (let i = 0; i < cards.length; i++) {
       const card = cards[i];
-      const imageFile = imageFiles[i];
       const title = String(card.title ?? "").trim();
       const software = String(card.software ?? "").trim();
       const category = String(card.category ?? "").trim();
@@ -149,6 +127,7 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
       const creatorName = String(card.creator_name ?? "").trim();
       const isSponsored = Boolean(card.is_sponsored);
       const sponsorName = String(card.sponsor_name ?? "").trim();
+      const imageUrl = String(card.image_url ?? "").trim();
 
       if (!title || !software || !category) {
         return {
@@ -171,32 +150,15 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
           publishedTitles: [],
         };
       }
-
-      const position = i + 1;
-      const contentType = imageFile.type || "image/png";
-      if (
-        imageFile.size <= 0 ||
-        (contentType !== "image/png" && contentType !== "image/jpeg")
-      ) {
+      if (!imageUrl) {
         return {
-          error: `Card ${i + 1}: image must be PNG or JPG.`,
+          error: `Card ${i + 1}: missing image URL.`,
           publishedCount: 0,
           publishedTitles: [],
         };
       }
 
-      const storagePath = `${activeDate}-${position}-${sanitizeForFilename(title)}.png`;
-      const { error: uploadError } = await sb.storage
-        .from("challenge-images")
-        .upload(storagePath, imageFile, {
-          contentType,
-          upsert: true,
-        });
-      if (uploadError) {
-        return { error: uploadError.message, publishedCount: 0, publishedTitles: [] };
-      }
-
-      const { data } = sb.storage.from("challenge-images").getPublicUrl(storagePath);
+      const position = i + 1;
       insertPayload.push({
         title,
         creator_name: creatorName || null,
@@ -208,7 +170,7 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
         position,
         is_sponsored: isSponsored,
         sponsor_name: isSponsored ? sponsorName || null : null,
-        image_url: data.publicUrl ?? null,
+        image_url: imageUrl,
       });
       publishedTitles.push(title);
     }

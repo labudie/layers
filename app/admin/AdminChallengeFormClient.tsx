@@ -60,7 +60,6 @@ export function AdminChallengeFormClient({
   const [successSummary, setSuccessSummary] = useState<string[] | null>(null);
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const progressTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,9 +92,6 @@ export function AdminChallengeFormClient({
   useEffect(() => {
     return () => {
       cards.forEach((c) => URL.revokeObjectURL(c.previewUrl));
-      if (progressTimerRef.current != null) {
-        window.clearInterval(progressTimerRef.current);
-      }
     };
   }, [cards]);
 
@@ -201,39 +197,79 @@ export function AdminChallengeFormClient({
     setSuccessSummary(null);
     setSubmitting(true);
     setProgressStep(0);
+    const sb = supabase();
+    const publishCards: Array<{
+      title: string;
+      creator_name: string;
+      software: string;
+      category: string;
+      layer_count: string;
+      is_sponsored: boolean;
+      sponsor_name: string;
+      image_url: string;
+    }> = [];
 
-    const max = cards.length;
-    if (progressTimerRef.current != null) window.clearInterval(progressTimerRef.current);
-    progressTimerRef.current = window.setInterval(() => {
-      setProgressStep((prev) => (prev < max ? prev + 1 : prev));
-    }, 450);
+    const sanitizeForFilename = (value: string) => {
+      const v = value
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-_]/g, "")
+        .slice(0, 80);
+      return v || "challenge";
+    };
+
+    for (let i = 0; i < cards.length; i++) {
+      const card = cards[i];
+      setProgressStep(i + 1);
+      const ext = card.file.type === "image/jpeg" ? "jpg" : "png";
+      const storagePath = `${activeDate}-${dayNumber}-${i + 1}-${sanitizeForFilename(card.title)}-${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await sb.storage
+        .from("challenge-images")
+        .upload(storagePath, card.file, {
+          contentType: card.file.type || "image/png",
+          upsert: true,
+        });
+
+      if (uploadError) {
+        setSubmitting(false);
+        setErrorText(`Card ${i + 1}: ${uploadError.message}`);
+        return;
+      }
+
+      const { data: publicUrlData } = sb.storage
+        .from("challenge-images")
+        .getPublicUrl(storagePath);
+      if (!publicUrlData.publicUrl) {
+        setSubmitting(false);
+        setErrorText(`Card ${i + 1}: failed to resolve public URL.`);
+        return;
+      }
+
+      publishCards.push({
+        title: card.title.trim(),
+        creator_name: card.creator_name.trim(),
+        software: card.software,
+        category: card.category,
+        layer_count: card.layer_count,
+        is_sponsored: card.is_sponsored,
+        sponsor_name: card.sponsor_name.trim(),
+        image_url: publicUrlData.publicUrl,
+      });
+    }
 
     const fd = new FormData();
     fd.set("active_date", activeDate);
     fd.set("day_number", dayNumber);
     fd.set(
       "cards_json",
-      JSON.stringify(
-        cards.map((c) => ({
-          title: c.title.trim(),
-          creator_name: c.creator_name.trim(),
-          software: c.software,
-          category: c.category,
-          layer_count: c.layer_count,
-          is_sponsored: c.is_sponsored,
-          sponsor_name: c.sponsor_name.trim(),
-        }))
-      )
+      JSON.stringify(publishCards)
     );
-    cards.forEach((c) => fd.append("images", c.file));
 
     const result = await action(fd);
 
-    if (progressTimerRef.current != null) {
-      window.clearInterval(progressTimerRef.current);
-      progressTimerRef.current = null;
-    }
-    setProgressStep(max);
+    setProgressStep(cards.length);
     setSubmitting(false);
 
     if (result.error) {
