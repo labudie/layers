@@ -11,8 +11,6 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Zoom from "react-medium-image-zoom";
-import "react-medium-image-zoom/dist/styles.css";
 import { usePostHog } from "posthog-js/react";
 import type { Challenge } from "./page";
 import { supabase } from "@/lib/supabase";
@@ -218,7 +216,9 @@ export function DailyGameClient({
   const infoButtonRef = useRef<HTMLButtonElement | null>(null);
   const infoPopoverRef = useRef<HTMLDivElement | null>(null);
   const guessInputRef = useRef<HTMLInputElement | null>(null);
-  const [showImageModal, setShowImageModal] = useState(false);
+  const [modalImageUrl, setModalImageUrl] = useState<string | null>(null);
+  const [modalScale, setModalScale] = useState(1);
+  const [modalOffset, setModalOffset] = useState({ x: 0, y: 0 });
   const [imageFeedbackClassName, setImageFeedbackClassName] = useState("");
   const [confettiBursts, setConfettiBursts] = useState<number[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -234,6 +234,12 @@ export function DailyGameClient({
   const startedChallengeIdsRef = useRef<Set<string>>(new Set());
   const completedChallengeIdsRef = useRef<Set<string>>(new Set());
   const dailyCompletedKeyRef = useRef<string | null>(null);
+  const modalBackdropTouchStartYRef = useRef<number | null>(null);
+  const pinchStartDistanceRef = useRef<number | null>(null);
+  const pinchStartScaleRef = useRef(1);
+  const panStartRef = useRef<{ x: number; y: number } | null>(null);
+  const panStartOffsetRef = useRef({ x: 0, y: 0 });
+  const lastTapRef = useRef<{ ts: number; x: number; y: number } | null>(null);
 
   const challengesRef = useRef(challenges);
   useEffect(() => {
@@ -267,13 +273,17 @@ export function DailyGameClient({
   }, [currentChallengeIndex, challengeIdsKey]);
 
   useEffect(() => {
-    if (!showImageModal) return;
+    if (!modalImageUrl) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShowImageModal(false);
+      if (e.key === "Escape") {
+        setModalImageUrl(null);
+        setModalScale(1);
+        setModalOffset({ x: 0, y: 0 });
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showImageModal]);
+  }, [modalImageUrl]);
 
   useEffect(() => {
     if (!infoPopoverOpen) return;
@@ -921,6 +931,23 @@ export function DailyGameClient({
     }, 120);
   }, []);
 
+  const openImageModal = useCallback((url: string) => {
+    setModalImageUrl(url);
+    setModalScale(1);
+    setModalOffset({ x: 0, y: 0 });
+  }, []);
+
+  const clampScale = useCallback((value: number) => {
+    return Math.max(1, Math.min(4, value));
+  }, []);
+
+  const distanceBetweenTouches = useCallback((touches: React.TouchList) => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  }, []);
+
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-[var(--background)] text-[var(--text)]">
       <header className="flex shrink-0 items-center justify-between px-4 pt-4 md:px-5">
@@ -1052,13 +1079,18 @@ export function DailyGameClient({
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                         {ch.image_url ? (
                           <div className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-lg border border-white/10 bg-[rgba(26,10,46,0.6)] sm:w-32">
-                            <Zoom>
+                            <button
+                              type="button"
+                              aria-label="Open result image fullscreen"
+                              onClick={() => openImageModal(ch.image_url ?? "")}
+                              className="h-full w-full"
+                            >
                               <img
                                 src={ch.image_url}
                                 alt=""
                                 className="h-full w-full cursor-zoom-in object-contain"
                               />
-                            </Zoom>
+                            </button>
 
                             <div className="absolute bottom-1 right-2 z-20 flex items-center gap-2">
                               <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[var(--accent)]">
@@ -1137,7 +1169,9 @@ export function DailyGameClient({
                     <div
                       className={`challenge-image-frame flex max-h-[60vh] w-full items-center justify-center overflow-hidden rounded-none bg-[#0f0520] ${imageFeedbackClassName}`}
                       onClick={() => {
-                        if (currentChallenge.image_url) setShowImageModal(true);
+                        if (currentChallenge.image_url) {
+                          openImageModal(currentChallenge.image_url);
+                        }
                       }}
                     >
                       {currentChallenge.image_url ? (
@@ -1409,13 +1443,37 @@ export function DailyGameClient({
         )}
       </div>
 
-      {showImageModal && currentChallenge?.image_url ? (
+      {modalImageUrl ? (
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Challenge image"
-          onClick={() => setShowImageModal(false)}
+          style={{ touchAction: "none" }}
+          onClick={() => {
+            if (modalScale <= 1) {
+              setModalImageUrl(null);
+              setModalScale(1);
+              setModalOffset({ x: 0, y: 0 });
+            }
+          }}
+          onTouchStart={(e) => {
+            if (modalScale <= 1) {
+              modalBackdropTouchStartYRef.current = e.touches[0]?.clientY ?? null;
+            }
+          }}
+          onTouchEnd={(e) => {
+            if (modalScale > 1) return;
+            const startY = modalBackdropTouchStartYRef.current;
+            const endY = e.changedTouches[0]?.clientY ?? null;
+            modalBackdropTouchStartYRef.current = null;
+            if (startY == null || endY == null) return;
+            if (startY - endY > 50) {
+              setModalImageUrl(null);
+              setModalScale(1);
+              setModalOffset({ x: 0, y: 0 });
+            }
+          }}
         >
           <button
             type="button"
@@ -1423,16 +1481,95 @@ export function DailyGameClient({
             className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/70 text-2xl leading-none text-white hover:bg-white/10"
             onClick={(e) => {
               e.stopPropagation();
-              setShowImageModal(false);
+              setModalImageUrl(null);
+              setModalScale(1);
+              setModalOffset({ x: 0, y: 0 });
             }}
           >
             ×
           </button>
           <img
-            src={currentChallenge.image_url}
+            src={modalImageUrl}
             alt=""
             className="max-h-full max-w-full object-contain"
+            style={{
+              transform: `translate(${modalOffset.x}px, ${modalOffset.y}px) scale(${modalScale})`,
+              transformOrigin: "center center",
+              touchAction: "none",
+            }}
             onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              if (e.touches.length === 2) {
+                const d = distanceBetweenTouches(e.touches);
+                if (d > 0) {
+                  pinchStartDistanceRef.current = d;
+                  pinchStartScaleRef.current = modalScale;
+                }
+                panStartRef.current = null;
+                return;
+              }
+              if (e.touches.length === 1) {
+                const t = e.touches[0];
+                const now = Date.now();
+                const prev = lastTapRef.current;
+                if (
+                  prev &&
+                  now - prev.ts < 280 &&
+                  Math.hypot(prev.x - t.clientX, prev.y - t.clientY) < 24
+                ) {
+                  setModalScale(1);
+                  setModalOffset({ x: 0, y: 0 });
+                  lastTapRef.current = null;
+                  return;
+                }
+                lastTapRef.current = { ts: now, x: t.clientX, y: t.clientY };
+                if (modalScale > 1) {
+                  panStartRef.current = { x: t.clientX, y: t.clientY };
+                  panStartOffsetRef.current = { ...modalOffset };
+                } else {
+                  panStartRef.current = null;
+                }
+              }
+            }}
+            onTouchMove={(e) => {
+              e.stopPropagation();
+              if (e.touches.length === 2) {
+                e.preventDefault();
+                const currentDist = distanceBetweenTouches(e.touches);
+                if (!pinchStartDistanceRef.current || currentDist <= 0) return;
+                const ratio = currentDist / pinchStartDistanceRef.current;
+                const nextScale = clampScale(pinchStartScaleRef.current * ratio);
+                setModalScale(nextScale);
+                if (nextScale <= 1) {
+                  setModalOffset({ x: 0, y: 0 });
+                }
+                return;
+              }
+              if (e.touches.length === 1 && modalScale > 1 && panStartRef.current) {
+                e.preventDefault();
+                const t = e.touches[0];
+                const dx = t.clientX - panStartRef.current.x;
+                const dy = t.clientY - panStartRef.current.y;
+                setModalOffset({
+                  x: panStartOffsetRef.current.x + dx,
+                  y: panStartOffsetRef.current.y + dy,
+                });
+              }
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+              if (e.touches.length < 2) {
+                pinchStartDistanceRef.current = null;
+              }
+              if (e.touches.length === 0) {
+                panStartRef.current = null;
+                if (modalScale <= 1) {
+                  setModalScale(1);
+                  setModalOffset({ x: 0, y: 0 });
+                }
+              }
+            }}
           />
         </div>
       ) : null}
