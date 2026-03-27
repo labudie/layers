@@ -321,14 +321,15 @@ export function DailyGameClient({
   }, [showSummary]);
 
   useEffect(() => {
-    if (showSummary || !currentChallenge?.id) return;
-    if (startedChallengeIdsRef.current.has(currentChallenge.id)) return;
-    startedChallengeIdsRef.current.add(currentChallenge.id);
+    const startedChallenge = challenges[currentChallengeIndex];
+    if (showSummary || !startedChallenge?.id) return;
+    if (startedChallengeIdsRef.current.has(startedChallenge.id)) return;
+    startedChallengeIdsRef.current.add(startedChallenge.id);
     posthog.capture("challenge_started", {
-      challenge_id: currentChallenge.id,
+      challenge_id: startedChallenge.id,
       challenge_index: currentChallengeIndex + 1,
     });
-  }, [showSummary, currentChallenge?.id, currentChallengeIndex]);
+  }, [showSummary, challenges, currentChallengeIndex]);
 
   useEffect(() => {
     if (autoAdvanceTimeoutRef.current != null) {
