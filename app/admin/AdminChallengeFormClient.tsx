@@ -66,6 +66,19 @@ export function AdminChallengeFormClient({
           />
         </div>
 
+        <div>
+          <label className="text-sm font-semibold text-white/80">Creator Name</label>
+          <input
+            name="creator_name"
+            type="text"
+            placeholder="e.g. reeselabudie"
+            className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
+          />
+          <div className="mt-1 text-xs text-white/55">
+            Optional, used for the Creators leaderboard and creator badges.
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="text-sm font-semibold text-white/80">Software</label>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { BADGE_DEFS, type BadgeId } from "@/lib/badges";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -18,6 +19,13 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [notifEmail, setNotifEmail] = useState(false);
   const [notifDaily, setNotifDaily] = useState(false);
+  const [stats, setStats] = useState({
+    current_streak: 0,
+    longest_streak: 0,
+    total_solved: 0,
+    perfect_days: 0,
+  });
+  const [earnedBadges, setEarnedBadges] = useState<BadgeId[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,16 +43,33 @@ export default function SettingsPage() {
 
     const { data: profile, error: profileError } = await sb
       .from("profiles")
-      .select("username, avatar_url")
+      .select(
+        "username, avatar_url, current_streak, longest_streak, total_solved, perfect_days, badges"
+      )
       .eq("id", user.id)
       .maybeSingle();
 
     if (profileError) {
       setError(profileError.message);
     } else {
-      const row = profile as { username?: string | null; avatar_url?: string | null } | null;
+      const row = profile as {
+        username?: string | null;
+        avatar_url?: string | null;
+        current_streak?: number | null;
+        longest_streak?: number | null;
+        total_solved?: number | null;
+        perfect_days?: number | null;
+        badges?: string[] | null;
+      } | null;
       setDisplayName(row?.username ?? "");
       setAvatarUrl(row?.avatar_url ?? null);
+      setStats({
+        current_streak: row?.current_streak ?? 0,
+        longest_streak: row?.longest_streak ?? 0,
+        total_solved: row?.total_solved ?? 0,
+        perfect_days: row?.perfect_days ?? 0,
+      });
+      setEarnedBadges(((row?.badges ?? []) as BadgeId[]).slice(0, 12));
     }
     setLoading(false);
   }, [router]);
@@ -157,6 +182,69 @@ export default function SettingsPage() {
           <div className="mt-10 text-white/70">Loading…</div>
         ) : (
           <div className="mt-8 space-y-8">
+            <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+              <h2 className="text-lg font-extrabold">Progress</h2>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3">
+                  <div className="text-xs uppercase tracking-wider text-white/50">
+                    Current streak
+                  </div>
+                  <div className="mt-1 text-lg font-bold text-orange-200">
+                    🔥 {stats.current_streak}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3">
+                  <div className="text-xs uppercase tracking-wider text-white/50">
+                    Longest streak
+                  </div>
+                  <div className="mt-1 text-lg font-bold text-white">
+                    {stats.longest_streak}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3">
+                  <div className="text-xs uppercase tracking-wider text-white/50">
+                    Total solved
+                  </div>
+                  <div className="mt-1 text-lg font-bold text-white">
+                    {stats.total_solved}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3">
+                  <div className="text-xs uppercase tracking-wider text-white/50">
+                    Perfect days
+                  </div>
+                  <div className="mt-1 text-lg font-bold text-white">
+                    {stats.perfect_days}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-bold text-white/90">My Badges</h3>
+                <Link
+                  href="/badges"
+                  className="text-xs font-semibold text-[var(--accent2)] hover:underline"
+                >
+                  View all badges →
+                </Link>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {BADGE_DEFS.filter((b) => earnedBadges.includes(b.id)).length === 0 ? (
+                  <span className="text-sm text-white/55">No badges earned yet.</span>
+                ) : (
+                  BADGE_DEFS.filter((b) => earnedBadges.includes(b.id)).map((badge) => (
+                    <span
+                      key={badge.id}
+                      title={badge.name}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--accent)]/40 bg-[var(--accent)]/20 text-sm"
+                    >
+                      {badge.icon}
+                    </span>
+                  ))
+                )}
+              </div>
+            </section>
+
             <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
               <h2 className="text-lg font-extrabold">Profile</h2>
               <p className="mt-1 text-sm text-white/55">

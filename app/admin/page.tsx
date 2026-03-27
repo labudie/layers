@@ -11,6 +11,7 @@ const ADMIN_EMAIL = "rjlabudie@gmail.com";
 type ChallengeAdminRow = {
   id: string;
   title: string | null;
+  creator_name: string | null;
   software: string | null;
   category: string | null;
   layer_count: number | null;
@@ -43,7 +44,7 @@ async function getUpcomingChallenges(today: string) {
   const { data, error } = await sb
     .from("challenges")
     .select(
-      "id,title,software,category,layer_count,active_date,position,is_sponsored,sponsor_name"
+      "id,title,creator_name,software,category,layer_count,active_date,position,is_sponsored,sponsor_name"
     )
     .gte("active_date", today)
     .order("active_date", { ascending: true })
@@ -63,6 +64,7 @@ async function addChallengeAction(
   if (!allowed) return { error: "Access denied" };
 
   const title = String(formData.get("title") ?? "").trim();
+  const creatorName = String(formData.get("creator_name") ?? "").trim();
   const software = String(formData.get("software") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim();
   const activeDate = String(formData.get("active_date") ?? "").trim();
@@ -80,6 +82,7 @@ async function addChallengeAction(
 
   console.log("[admin][addChallenge] submitted", {
     title,
+    creatorName,
     software,
     category,
     activeDate,
@@ -167,6 +170,7 @@ async function addChallengeAction(
 
     const insertPayload = {
       title,
+      creator_name: creatorName || null,
       day_number: Math.trunc(dayNumber),
       software,
       category,
@@ -256,6 +260,7 @@ export default async function AdminPage() {
                     <th className="px-4 py-3">Active date</th>
                     <th className="px-4 py-3">Position</th>
                     <th className="px-4 py-3">Title</th>
+                    <th className="px-4 py-3">Creator</th>
                     <th className="px-4 py-3">Software</th>
                     <th className="px-4 py-3">Category</th>
                     <th className="px-4 py-3">Layer count</th>
@@ -278,6 +283,9 @@ export default async function AdminPage() {
                       </td>
                       <td className="px-4 py-3 text-white/90">
                         {ch.title ?? "Untitled"}
+                      </td>
+                      <td className="px-4 py-3 text-white/80">
+                        {ch.creator_name ?? "—"}
                       </td>
                       <td className="px-4 py-3 text-white/80">
                         {ch.software ?? "—"}

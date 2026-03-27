@@ -15,6 +15,7 @@ import Zoom from "react-medium-image-zoom";
 import "react-medium-image-zoom/dist/styles.css";
 import type { Challenge } from "./page";
 import { supabase } from "@/lib/supabase";
+import type { BadgeId } from "@/lib/badges";
 
 type GuessRow = {
   value: number;
@@ -41,6 +42,25 @@ function secondsUntilLocalMidnight(now: Date) {
   const next = new Date(now);
   next.setHours(24, 0, 0, 0);
   return Math.floor((next.getTime() - now.getTime()) / 1000);
+}
+
+function easternYMD(date: Date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const y = parts.find((p) => p.type === "year")?.value;
+  const m = parts.find((p) => p.type === "month")?.value;
+  const d = parts.find((p) => p.type === "day")?.value;
+  return `${y}-${m}-${d}`;
+}
+
+function ymdDaysAgo(days: number, from: Date = new Date()) {
+  const d = new Date(from);
+  d.setDate(d.getDate() - days);
+  return easternYMD(d);
 }
 
 function mulberry32(seed: number) {
@@ -206,6 +226,7 @@ export function DailyGameClient({
   const imageFeedbackTimeoutRef = useRef<number | null>(null);
   const confettiTimeoutsRef = useRef<number[]>([]);
   const drawerRef = useRef<HTMLDivElement | null>(null);
+  const statsSyncKeyRef = useRef<string | null>(null);
 
   const challengesRef = useRef(challenges);
   useEffect(() => {
@@ -474,6 +495,135 @@ export function DailyGameClient({
       cancelled = true;
     };
   }, [userId, challengeIdsKey, guessesByIndex]);
+
+  // Update profile streak/stats/badges after the user completes today's 5 challenges.
+  useEffect(() => {
+    if (!userId || !showSummary || challenges.length !== 5) return;
+    if (!challenges.every((c) => Boolean(c.id))) return;
+
+    const today = easternYMD(new Date());
+    const uniqueKey = `${userId}:${today}:${challengeIdsKey}`;
+    if (statsSyncKeyRef.current === uniqueKey) return;
+
+    const solvedTodayCount = guessesByIndex.reduce(
+      (acc, g) => acc + (g.some((x) => x.verdict === "correct") ? 1 : 0),
+      0
+    );
+    const allFiveSolved = solvedTodayCount === 5;
+    const sharpEye = guessesByIndex.some(
+      (g) => g.length === 1 && g[0]?.verdict === "correct"
+    );
+    const dailyRows = guessesByIndex.reduce((acc, g) => acc + g.length, 0);
+    if (dailyRows === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const sb = supabase();
+      const { data: profile, error: profileErr } = await sb
+        .from("profiles")
+        .select(
+          "username, current_streak, longest_streak, total_solved, perfect_days, last_played_date, badges"
+        )
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (cancelled || profileErr) return;
+
+      const row = (profile as {
+        username?: string | null;
+        current_streak?: number | null;
+        longest_streak?: number | null;
+        total_solved?: number | null;
+        perfect_days?: number | null;
+        last_played_date?: string | null;
+        badges?: string[] | null;
+      } | null) ?? { badges: [] };
+
+      if (row.last_played_date === today) {
+        statsSyncKeyRef.current = uniqueKey;
+        return;
+      }
+
+      const yesterday = ymdDaysAgo(1, new Date());
+      const prevStreak = row.current_streak ?? 0;
+      const nextStreak = row.last_played_date === yesterday ? prevStreak + 1 : 1;
+      const nextLongest = Math.max(row.longest_streak ?? 0, nextStreak);
+      const nextTotalSolved = (row.total_solved ?? 0) + solvedTodayCount;
+      const nextPerfectDays =
+        (row.perfect_days ?? 0) + (allFiveSolved ? 1 : 0);
+
+      const currentBadges = new Set<BadgeId>((row.badges ?? []) as BadgeId[]);
+      currentBadges.add("first_play");
+      if (sharpEye) currentBadges.add("sharp_eye");
+      if (allFiveSolved) currentBadges.add("perfect_day");
+      if (nextStreak >= 7) currentBadges.add("week_streak");
+      if (nextStreak >= 30) currentBadges.add("month_streak");
+
+      const challengeIds = challenges.map((c) => c.id);
+      const { data: topDaily } = await sb
+        .from("results")
+        .select("user_id")
+        .in("challenge_id", challengeIds)
+        .order("attempts_used", { ascending: true })
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if ((topDaily as { user_id?: string } | null)?.user_id === userId) {
+        currentBadges.add("top_of_stack");
+      }
+
+      const username = row.username?.trim() ?? "";
+      if (username) {
+        const { count: creatorCount } = await sb
+          .from("challenges")
+          .select("id", { count: "exact", head: true })
+          .eq("creator_name", username);
+        if ((creatorCount ?? 0) > 0) {
+          currentBadges.add("creator");
+        }
+
+        const { data: createdChallenges } = await sb
+          .from("challenges")
+          .select("id")
+          .eq("creator_name", username);
+        const createdIds = (createdChallenges ?? []).map(
+          (x: { id: string }) => x.id
+        );
+        if (createdIds.length > 0) {
+          const { count: downloadsCount } = await sb
+            .from("image_downloads")
+            .select("id", { count: "exact", head: true })
+            .in("challenge_id", createdIds);
+          if ((downloadsCount ?? 0) >= 10) {
+            currentBadges.add("popular_work");
+          }
+        }
+      }
+
+      await sb.from("profiles").upsert(
+        {
+          id: userId,
+          username: username || `player_${userId.slice(0, 8)}`,
+          current_streak: nextStreak,
+          longest_streak: nextLongest,
+          total_solved: nextTotalSolved,
+          perfect_days: nextPerfectDays,
+          last_played_date: today,
+          badges: Array.from(currentBadges),
+        },
+        { onConflict: "id" }
+      );
+
+      if (!cancelled) {
+        statsSyncKeyRef.current = uniqueKey;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, showSummary, challengeIdsKey, challenges, guessesByIndex]);
 
   useEffect(() => {
     const tick = () => {
@@ -896,21 +1046,21 @@ export function DailyGameClient({
                     className={`relative mx-[calc(50%-50vw)] w-[100vw] ${challengeVisualFadeClassName}`}
                   >
                     <div
-                    className={`challenge-image-frame aspect-[4/5] overflow-hidden rounded-none bg-[#0f0520] ${imageFeedbackClassName}`}
+                      className={`challenge-image-frame flex max-h-[60vh] w-full items-center justify-center overflow-hidden rounded-none bg-[#0f0520] ${imageFeedbackClassName}`}
                     >
                       {currentChallenge.image_url ? (
                         <Zoom>
                           <img
                             src={currentChallenge.image_url}
                             alt={currentChallenge.title ?? "Challenge image"}
-                            className="block h-full w-full cursor-zoom-in object-contain"
+                            className="block max-h-[60vh] w-auto max-w-full cursor-zoom-in object-contain"
                             style={{ background: "#0f0520" }}
                           />
                         </Zoom>
                       ) : (
                         <canvas
                           ref={canvasRef}
-                          className="block h-full w-full"
+                          className="block h-[60vh] w-full max-w-full"
                           style={{ background: "#0f0520" }}
                         />
                       )}

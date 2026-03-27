@@ -17,11 +17,15 @@ type ResultRow = {
 type ProfileRow = {
   id: string;
   username: string | null;
+  total_solved: number | null;
+  longest_streak: number | null;
 };
 
-type ChallengeRow = {
-  id: string;
-  title: string | null;
+type CreatorRow = {
+  creator_name: string | null;
+  total_submissions: number | null;
+  total_downloads: number | null;
+  total_players: number | null;
 };
 
 function shortUsername(userId: string) {
@@ -30,7 +34,25 @@ function shortUsername(userId: string) {
   return id.length <= 8 ? id : id.slice(0, 8);
 }
 
-export default async function LeaderboardPage() {
+type TabId = "daily" | "all-time" | "creators";
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: "daily", label: "Daily" },
+  { id: "all-time", label: "All Time" },
+  { id: "creators", label: "Creators" },
+];
+
+export default async function LeaderboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string }>;
+}) {
+  const params = (await searchParams) ?? {};
+  const tab: TabId =
+    params.tab === "all-time" || params.tab === "creators"
+      ? params.tab
+      : "daily";
+
   const supabase = createSupabaseServerClient(await cookies());
   const { start, end } = utcActiveDateWindow();
 
@@ -81,21 +103,19 @@ export default async function LeaderboardPage() {
     }
   }
 
-  // Load challenge metadata for results.
-  const challengeMap = new Map<string, string | null>();
-  if (rows.length) {
-    const challengeIds = Array.from(new Set(rows.map((r) => r.challenge_id)));
-    const { data: challengeRows, error: challengesError } = await supabase
-      .from("challenges")
-      .select("id, title")
-      .in("id", challengeIds);
+  const { data: allTimeProfiles } = await supabase
+    .from("profiles")
+    .select("id, username, total_solved, longest_streak")
+    .order("total_solved", { ascending: false })
+    .order("longest_streak", { ascending: false })
+    .order("username", { ascending: true });
 
-    if (!challengesError && challengeRows?.length) {
-      (challengeRows as ChallengeRow[]).forEach((c) => {
-        challengeMap.set(c.id, c.title);
-      });
-    }
-  }
+  const { data: creatorRows } = await supabase
+    .from("creator_leaderboard")
+    .select("creator_name, total_submissions, total_downloads, total_players")
+    .order("total_submissions", { ascending: false })
+    .order("total_downloads", { ascending: false })
+    .order("total_players", { ascending: false });
 
   return (
     <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)]">
@@ -114,9 +134,126 @@ export default async function LeaderboardPage() {
           Today&apos;s results (active date: {leaderboardDay})
         </p>
 
-        {empty ? (
+        <div className="mt-5 flex flex-wrap gap-2">
+          {TABS.map((t) => {
+            const active = tab === t.id;
+            return (
+              <Link
+                key={t.id}
+                href={`/leaderboard?tab=${t.id}`}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  active
+                    ? "bg-[var(--accent)] text-white"
+                    : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+                }`}
+              >
+                {t.label}
+              </Link>
+            );
+          })}
+        </div>
+
+        {tab === "daily" ? (
+          empty ? (
+            <p className="mt-10 text-center text-lg font-semibold text-white/75">
+              No results yet
+            </p>
+          ) : (
+            <div className="mt-8 overflow-hidden rounded-2xl border border-white/10">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
+                    <th className="px-4 py-3">Rank</th>
+                    <th className="px-4 py-3">Username</th>
+                    <th className="px-4 py-3">Attempts</th>
+                    <th className="px-4 py-3">Solved</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, i) => {
+                    const username = usernameMap.get(row.user_id);
+                    const display =
+                      username && username.trim()
+                        ? username.trim()
+                        : shortUsername(row.user_id);
+
+                    return (
+                      <tr
+                        key={`${row.user_id}-${row.created_at ?? ""}-${i}`}
+                        className="border-b border-white/5 last:border-0"
+                      >
+                        <td className="px-4 py-3 font-mono font-semibold text-white/90">
+                          {i + 1}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-sm font-medium text-white/90">
+                          {display}
+                        </td>
+                        <td className="px-4 py-3 text-white/80">
+                          {row.attempts_used ?? "—"}
+                        </td>
+                        <td className="px-4 py-3 text-white/80">
+                          {row.solved === true
+                            ? "Yes"
+                            : row.solved === false
+                              ? "No"
+                              : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : tab === "all-time" ? (
+          !(allTimeProfiles?.length ?? 0) ? (
+            <p className="mt-10 text-center text-lg font-semibold text-white/75">
+              No players yet
+            </p>
+          ) : (
+            <div className="mt-8 overflow-hidden rounded-2xl border border-white/10">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
+                    <th className="px-4 py-3">Rank</th>
+                    <th className="px-4 py-3">Username</th>
+                    <th className="px-4 py-3">Total Solved</th>
+                    <th className="px-4 py-3">Longest Streak</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(allTimeProfiles as ProfileRow[]).map((row, i) => {
+                    const display =
+                      row.username && row.username.trim()
+                        ? row.username.trim()
+                        : shortUsername(row.id);
+                    return (
+                      <tr
+                        key={`${row.id}-${i}`}
+                        className="border-b border-white/5 last:border-0"
+                      >
+                        <td className="px-4 py-3 font-mono font-semibold text-white/90">
+                          {i + 1}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-sm font-medium text-white/90">
+                          {display}
+                        </td>
+                        <td className="px-4 py-3 text-white/80">
+                          {row.total_solved ?? 0}
+                        </td>
+                        <td className="px-4 py-3 text-white/80">
+                          {row.longest_streak ?? 0}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : !(creatorRows?.length ?? 0) ? (
           <p className="mt-10 text-center text-lg font-semibold text-white/75">
-            No results yet
+            No creators yet
           </p>
         ) : (
           <div className="mt-8 overflow-hidden rounded-2xl border border-white/10">
@@ -124,41 +261,33 @@ export default async function LeaderboardPage() {
               <thead>
                 <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
                   <th className="px-4 py-3">Rank</th>
-                  <th className="px-4 py-3">Username</th>
-                  <th className="px-4 py-3">Challenge</th>
-                  <th className="px-4 py-3">Solved</th>
-                  <th className="px-4 py-3">Attempts</th>
+                  <th className="px-4 py-3">Creator</th>
+                  <th className="px-4 py-3">Submissions</th>
+                  <th className="px-4 py-3">Downloads</th>
+                  <th className="px-4 py-3">Players</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, i) => {
-                  const username = usernameMap.get(row.user_id);
-                  const display =
-                    username && username.trim() ? username.trim() : shortUsername(row.user_id);
-
+                {(creatorRows as CreatorRow[]).map((row, i) => {
                   return (
                     <tr
-                      key={`${row.user_id}-${row.created_at ?? ""}-${i}`}
+                      key={`${row.creator_name ?? "creator"}-${i}`}
                       className="border-b border-white/5 last:border-0"
                     >
                       <td className="px-4 py-3 font-mono font-semibold text-white/90">
                         {i + 1}
                       </td>
                       <td className="px-4 py-3 font-mono text-sm font-medium text-white/90">
-                        {display}
-                      </td>
-                    <td className="px-4 py-3 text-white/80">
-                      {challengeMap.get(row.challenge_id) ?? "—"}
-                    </td>
-                      <td className="px-4 py-3 text-white/80">
-                        {row.solved === true
-                          ? "Yes"
-                          : row.solved === false
-                            ? "No"
-                            : "—"}
+                        {row.creator_name ?? "—"}
                       </td>
                       <td className="px-4 py-3 text-white/80">
-                        {row.attempts_used ?? "—"}
+                        {row.total_submissions ?? 0}
+                      </td>
+                      <td className="px-4 py-3 text-white/80">
+                        {row.total_downloads ?? 0}
+                      </td>
+                      <td className="px-4 py-3 text-white/80">
+                        {row.total_players ?? 0}
                       </td>
                     </tr>
                   );
