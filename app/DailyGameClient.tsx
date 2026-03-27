@@ -217,7 +217,7 @@ export function DailyGameClient({
   const infoButtonRef = useRef<HTMLButtonElement | null>(null);
   const infoPopoverRef = useRef<HTMLDivElement | null>(null);
   const guessInputRef = useRef<HTMLInputElement | null>(null);
-  const [gameImageModalUrl, setGameImageModalUrl] = useState<string | null>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
   const [imageFeedbackClassName, setImageFeedbackClassName] = useState("");
   const [confettiBursts, setConfettiBursts] = useState<number[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -230,7 +230,6 @@ export function DailyGameClient({
   const confettiTimeoutsRef = useRef<number[]>([]);
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const statsSyncKeyRef = useRef<string | null>(null);
-  const gameImageTouchStartYRef = useRef<number | null>(null);
   const startedChallengeIdsRef = useRef<Set<string>>(new Set());
   const completedChallengeIdsRef = useRef<Set<string>>(new Set());
   const dailyCompletedKeyRef = useRef<string | null>(null);
@@ -267,13 +266,13 @@ export function DailyGameClient({
   }, [currentChallengeIndex, challengeIdsKey]);
 
   useEffect(() => {
-    if (!gameImageModalUrl) return;
+    if (!showImageModal) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setGameImageModalUrl(null);
+      if (e.key === "Escape") setShowImageModal(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [gameImageModalUrl]);
+  }, [showImageModal]);
 
   useEffect(() => {
     if (!infoPopoverOpen) return;
@@ -1135,21 +1134,17 @@ export function DailyGameClient({
                   >
                     <div
                       className={`challenge-image-frame flex max-h-[60vh] w-full items-center justify-center overflow-hidden rounded-none bg-[#0f0520] ${imageFeedbackClassName}`}
+                      onClick={() => {
+                        if (currentChallenge.image_url) setShowImageModal(true);
+                      }}
                     >
                       {currentChallenge.image_url ? (
-                        <button
-                          type="button"
-                          onClick={() => setGameImageModalUrl(currentChallenge.image_url ?? null)}
-                          className="block w-auto max-w-full cursor-zoom-in"
-                          aria-label="Expand challenge image"
-                        >
-                          <img
-                            src={currentChallenge.image_url}
-                            alt={currentChallenge.title ?? "Challenge image"}
-                            className="block max-h-[60vh] w-auto max-w-full object-contain"
-                            style={{ background: "#0f0520" }}
-                          />
-                        </button>
+                        <img
+                          src={currentChallenge.image_url}
+                          alt={currentChallenge.title ?? "Challenge image"}
+                          className="block max-h-[60vh] w-auto max-w-full cursor-zoom-in object-contain"
+                          style={{ background: "#0f0520" }}
+                        />
                       ) : (
                         <canvas
                           ref={canvasRef}
@@ -1412,25 +1407,13 @@ export function DailyGameClient({
         )}
       </div>
 
-      {gameImageModalUrl ? (
+      {showImageModal && currentChallenge?.image_url ? (
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Challenge image"
-          onClick={() => setGameImageModalUrl(null)}
-          onTouchStart={(e) => {
-            gameImageTouchStartYRef.current = e.touches[0]?.clientY ?? null;
-          }}
-          onTouchEnd={(e) => {
-            const startY = gameImageTouchStartYRef.current;
-            const endY = e.changedTouches[0]?.clientY ?? null;
-            gameImageTouchStartYRef.current = null;
-            if (startY == null || endY == null) return;
-            if (startY - endY > 50) {
-              setGameImageModalUrl(null);
-            }
-          }}
+          onClick={() => setShowImageModal(false)}
         >
           <button
             type="button"
@@ -1438,15 +1421,15 @@ export function DailyGameClient({
             className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/70 text-2xl leading-none text-white hover:bg-white/10"
             onClick={(e) => {
               e.stopPropagation();
-              setGameImageModalUrl(null);
+              setShowImageModal(false);
             }}
           >
             ×
           </button>
           <img
-            src={gameImageModalUrl}
+            src={currentChallenge.image_url}
             alt=""
-            className="max-h-[min(90dvh,100%)] max-w-full object-contain"
+            className="max-h-full max-w-full object-contain"
             onClick={(e) => e.stopPropagation()}
           />
         </div>
