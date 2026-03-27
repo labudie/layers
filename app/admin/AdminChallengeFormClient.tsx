@@ -352,8 +352,8 @@ export function AdminChallengeFormClient({
           </div>
 
           <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-white/50">
-            {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
-              <div key={d}>{d}</div>
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+              <div key={i}>{d}</div>
             ))}
           </div>
           <div className="mt-1 grid grid-cols-7 gap-1">

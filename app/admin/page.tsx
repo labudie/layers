@@ -430,6 +430,9 @@ export default async function AdminPage({
   const approvedPoolSubs = submissions.filter(
     (s) => s.status === "approved" && !s.scheduled_challenge_id
   );
+  const approvedScheduledSubs = submissions.filter(
+    (s) => s.status === "approved" && Boolean(s.scheduled_challenge_id)
+  );
   const approvedCount = submissions.filter((s) => s.status === "approved").length;
   const rejectedCount = submissions.filter((s) => s.status === "rejected").length;
 
@@ -730,6 +733,40 @@ export default async function AdminPage({
                           Assign
                         </button>
                       </form>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-8">
+              <div className="text-sm font-bold text-white/90">
+                Already Scheduled (Approved)
+              </div>
+              {approvedScheduledSubs.length === 0 ? (
+                <div className="mt-3 text-sm text-white/70">
+                  No approved submissions have been scheduled yet.
+                </div>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  {approvedScheduledSubs.map((s) => (
+                    <div
+                      key={`scheduled-${s.id}`}
+                      className="flex items-center justify-between rounded-xl border border-white/10 bg-black/25 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-white">
+                          {s.title ?? "Untitled"}
+                        </div>
+                        <div className="text-xs text-white/60">
+                          {s.creator_name ?? "—"} ·{" "}
+                          {s.scheduled_active_date ?? "—"} · position{" "}
+                          {s.scheduled_position ?? "—"}
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-200">
+                        Scheduled
+                      </span>
                     </div>
                   ))}
                 </div>
