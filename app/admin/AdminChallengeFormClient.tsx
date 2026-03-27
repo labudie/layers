@@ -75,36 +75,17 @@ export function AdminChallengeFormClient({
     let cancelled = false;
     (async () => {
       const sb = supabase();
-      const { data: sameDayRows } = await sb
+      const { data: maxRow } = await sb
         .from("challenges")
         .select("day_number")
-        .eq("active_date", activeDate);
+        .order("day_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (cancelled) return;
 
-      const sameDayNumbers = Array.from(
-        new Set(
-          ((sameDayRows ?? []) as { day_number: number | null }[])
-            .map((r) => r.day_number)
-            .filter((v): v is number => typeof v === "number" && Number.isFinite(v))
-        )
-      );
-
-      let suggested = 1;
-      if (sameDayNumbers.length > 0) {
-        // If this date already has entries, default to that same daily number.
-        suggested = Math.max(...sameDayNumbers);
-      } else {
-        const { data: maxRow } = await sb
-          .from("challenges")
-          .select("day_number")
-          .order("day_number", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (cancelled) return;
-        const maxDay = (maxRow as { day_number?: number | null } | null)?.day_number;
-        suggested = typeof maxDay === "number" ? maxDay + 1 : 1;
-      }
+      const maxDay = (maxRow as { day_number?: number | null } | null)?.day_number;
+      const suggested = typeof maxDay === "number" ? maxDay + 1 : 1;
 
       const next = String(suggested);
       setDayNumberAuto(next);
