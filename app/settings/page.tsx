@@ -163,6 +163,10 @@ export default function SettingsPage() {
     router.push("/");
   }
 
+  function comingSoon() {
+    window.alert("Coming soon");
+  }
+
   useEffect(() => {
     if (!editingName) return;
     nameInputRef.current?.focus();
@@ -325,21 +329,39 @@ export default function SettingsPage() {
                 <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
                   <label className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                     <span className="text-sm text-white/85">Email notifications</span>
-                    <input
-                      type="checkbox"
-                      checked={notifEmail}
-                      onChange={(e) => setNotifEmail(e.target.checked)}
-                      className="h-5 w-5 rounded border-white/30"
-                    />
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={notifEmail}
+                      onClick={() => setNotifEmail((v) => !v)}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${
+                        notifEmail ? "bg-[#7c3aed]" : "bg-white/20"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white transition duration-200 ${
+                          notifEmail ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
                   </label>
                   <label className="flex items-center justify-between px-4 py-3">
                     <span className="text-sm text-white/85">Daily reminder</span>
-                    <input
-                      type="checkbox"
-                      checked={notifDaily}
-                      onChange={(e) => setNotifDaily(e.target.checked)}
-                      className="h-5 w-5 rounded border-white/30"
-                    />
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={notifDaily}
+                      onClick={() => setNotifDaily((v) => !v)}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${
+                        notifDaily ? "bg-[#7c3aed]" : "bg-white/20"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white transition duration-200 ${
+                          notifDaily ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
                   </label>
                 </div>
               </div>
@@ -366,13 +388,37 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-red-500/35 bg-red-950/20">
+              <div>
+                <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-white/45">
+                  Support
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
+                  <button
+                    type="button"
+                    onClick={comingSoon}
+                    className="flex w-full items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/90 hover:bg-white/5"
+                  >
+                    <span>Send feedback</span>
+                    <span className="text-white/40">→</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={comingSoon}
+                    className="flex w-full items-center justify-between px-4 py-3 text-sm text-white/90 hover:bg-white/5"
+                  >
+                    <span>Rate the app</span>
+                    <span className="text-white/40">→</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-1 text-center">
                 <button
                   type="button"
                   onClick={() => void handleSignOut()}
-                  className="w-full px-4 py-3 text-sm font-semibold text-red-200 hover:bg-red-900/25"
+                  className="text-sm font-semibold text-red-300 hover:text-red-200"
                 >
-                  Sign out
+                  Sign Out
                 </button>
               </div>
 
