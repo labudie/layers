@@ -13,7 +13,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Zoom from "react-medium-image-zoom";
 import "react-medium-image-zoom/dist/styles.css";
-import posthog from "posthog-js";
+import { usePostHog } from "posthog-js/react";
 import type { Challenge } from "./page";
 import { supabase } from "@/lib/supabase";
 import type { BadgeId } from "@/lib/badges";
@@ -190,6 +190,7 @@ export function DailyGameClient({
   const total = challenges.length;
   const dayNumber = challenges[0]?.day_number ?? null;
   const signedIn = Boolean(userEmail);
+  const posthog = usePostHog();
 
   const challengeIdsKey = useMemo(
     () => challenges.map((c) => c.id).join(","),
@@ -324,11 +325,11 @@ export function DailyGameClient({
     if (showSummary || !startedChallenge?.id) return;
     if (startedChallengeIdsRef.current.has(startedChallenge.id)) return;
     startedChallengeIdsRef.current.add(startedChallenge.id);
-    posthog.capture("challenge_started", {
+    posthog?.capture("challenge_started", {
       challenge_id: startedChallenge.id,
       challenge_index: currentChallengeIndex + 1,
     });
-  }, [showSummary, challenges, currentChallengeIndex]);
+  }, [showSummary, challenges, currentChallengeIndex, posthog]);
 
   useEffect(() => {
     if (autoAdvanceTimeoutRef.current != null) {
@@ -651,8 +652,8 @@ export function DailyGameClient({
     const key = `${challengeIdsKey}:${solvedCount}`;
     if (dailyCompletedKeyRef.current === key) return;
     dailyCompletedKeyRef.current = key;
-    posthog.capture("daily_completed", { total_solved: solvedCount });
-  }, [showSummary, challengeIdsKey, challenges.length, guessesByIndex]);
+    posthog?.capture("daily_completed", { total_solved: solvedCount });
+  }, [showSummary, challengeIdsKey, challenges.length, guessesByIndex, posthog]);
 
   useEffect(() => {
     const tick = () => {
@@ -771,7 +772,7 @@ export function DailyGameClient({
 
     if (error) return;
 
-    posthog.capture("guess_submitted", {
+    posthog?.capture("guess_submitted", {
       guess_number: attemptNumber,
       is_correct: verdict === "correct",
       attempts_used: attemptNumber,
@@ -783,7 +784,7 @@ export function DailyGameClient({
       !completedChallengeIdsRef.current.has(currentChallenge.id)
     ) {
       completedChallengeIdsRef.current.add(currentChallenge.id);
-      posthog.capture("challenge_completed", {
+      posthog?.capture("challenge_completed", {
         solved: verdict === "correct",
         attempts_used: attemptNumber,
         challenge_id: currentChallenge.id,
@@ -841,6 +842,7 @@ export function DailyGameClient({
     currentChallenge,
     currentChallengeIndex,
     guessesByIndex,
+    posthog,
   ]);
 
   async function signOut() {
@@ -884,7 +886,7 @@ export function DailyGameClient({
 
   async function shareDaily() {
     if (!challenges.length) return;
-    posthog.capture("share_clicked");
+    posthog?.capture("share_clicked");
     const dn = dayNumber ?? "—";
     const gridLines = guessesByIndex.map((guesses) =>
       guesses.map((g) => emojiForVerdict(g.verdict)).join("")
