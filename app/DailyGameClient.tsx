@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Zoom from "react-medium-image-zoom";
 import "react-medium-image-zoom/dist/styles.css";
+import posthog from "posthog-js";
 import type { Challenge } from "./page";
 import { supabase } from "@/lib/supabase";
 import type { BadgeId } from "@/lib/badges";
@@ -229,6 +230,9 @@ export function DailyGameClient({
   const confettiTimeoutsRef = useRef<number[]>([]);
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const statsSyncKeyRef = useRef<string | null>(null);
+  const startedChallengeIdsRef = useRef<Set<string>>(new Set());
+  const completedChallengeIdsRef = useRef<Set<string>>(new Set());
+  const dailyCompletedKeyRef = useRef<string | null>(null);
 
   const challengesRef = useRef(challenges);
   useEffect(() => {
@@ -314,6 +318,16 @@ export function DailyGameClient({
   useEffect(() => {
     if (showSummary) setChallengeTransitioning(false);
   }, [showSummary]);
+
+  useEffect(() => {
+    if (showSummary || !currentChallenge?.id) return;
+    if (startedChallengeIdsRef.current.has(currentChallenge.id)) return;
+    startedChallengeIdsRef.current.add(currentChallenge.id);
+    posthog.capture("challenge_started", {
+      challenge_id: currentChallenge.id,
+      challenge_index: currentChallengeIndex + 1,
+    });
+  }, [showSummary, currentChallenge?.id, currentChallengeIndex]);
 
   useEffect(() => {
     if (autoAdvanceTimeoutRef.current != null) {
@@ -628,6 +642,18 @@ export function DailyGameClient({
   }, [userId, showSummary, challengeIdsKey, challenges, guessesByIndex]);
 
   useEffect(() => {
+    if (!showSummary || challenges.length !== 5) return;
+    const solvedCount = guessesByIndex.reduce(
+      (acc, g) => acc + (g.some((x) => x.verdict === "correct") ? 1 : 0),
+      0
+    );
+    const key = `${challengeIdsKey}:${solvedCount}`;
+    if (dailyCompletedKeyRef.current === key) return;
+    dailyCompletedKeyRef.current = key;
+    posthog.capture("daily_completed", { total_solved: solvedCount });
+  }, [showSummary, challengeIdsKey, challenges.length, guessesByIndex]);
+
+  useEffect(() => {
     const tick = () => {
       const secondsLeft = secondsUntilLocalMidnight(new Date());
       setCountdownText(formatHMS(secondsLeft));
@@ -744,6 +770,25 @@ export function DailyGameClient({
 
     if (error) return;
 
+    posthog.capture("guess_submitted", {
+      guess_number: attemptNumber,
+      is_correct: verdict === "correct",
+      attempts_used: attemptNumber,
+      challenge_id: currentChallenge.id,
+    });
+
+    if (
+      (verdict === "correct" || attemptNumber >= 6) &&
+      !completedChallengeIdsRef.current.has(currentChallenge.id)
+    ) {
+      completedChallengeIdsRef.current.add(currentChallenge.id);
+      posthog.capture("challenge_completed", {
+        solved: verdict === "correct",
+        attempts_used: attemptNumber,
+        challenge_id: currentChallenge.id,
+      });
+    }
+
     setGuessesByIndex((prev) => {
       const next = prev.map((arr, i) =>
         i === idx ? [...arr, nextRow].slice(0, 6) : arr
@@ -838,6 +883,7 @@ export function DailyGameClient({
 
   async function shareDaily() {
     if (!challenges.length) return;
+    posthog.capture("share_clicked");
     const dn = dayNumber ?? "—";
     const gridLines = guessesByIndex.map((guesses) =>
       guesses.map((g) => emojiForVerdict(g.verdict)).join("")
