@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { PHProvider } from "@/app/providers";
@@ -31,7 +32,9 @@ export default function RootLayout({
     >
       <body className="flex min-h-full flex-col overflow-x-hidden">
         <PHProvider>
-          <PostHogPageView />
+          <Suspense fallback={null}>
+            <PostHogPageView />
+          </Suspense>
           <div className="flex min-h-full flex-1 flex-col pb-[env(safe-area-inset-bottom,0px)]">
             {children}
           </div>
