@@ -56,6 +56,27 @@ async function getUpcomingChallenges(today: string) {
   return data as ChallengeAdminRow[];
 }
 
+async function getScheduleOverview(today: string) {
+  const sb = createSupabaseServerClient(await cookies());
+  const { data, error } = await sb.from("challenges").select("active_date");
+  if (error || !data) {
+    return { scheduledCounts: {} as Record<string, number>, readyAheadDays: 0 };
+  }
+
+  const scheduledCounts: Record<string, number> = {};
+  for (const row of data as Array<{ active_date: string | null }>) {
+    if (!row.active_date) continue;
+    scheduledCounts[row.active_date] = (scheduledCounts[row.active_date] ?? 0) + 1;
+  }
+
+  const readyAheadDays = Object.entries(scheduledCounts).reduce((acc, [d, count]) => {
+    if (d > today && count >= 5) return acc + 1;
+    return acc;
+  }, 0);
+
+  return { scheduledCounts, readyAheadDays };
+}
+
 async function addChallengeAction(formData: FormData): Promise<AddChallengeState> {
   "use server";
 
@@ -224,6 +245,7 @@ export default async function AdminPage() {
   }
 
   const challenges = await getUpcomingChallenges(today);
+  const { scheduledCounts, readyAheadDays } = await getScheduleOverview(today);
 
   return (
     <div className="min-h-screen w-full bg-[#0f0520] text-[var(--text)]">
@@ -243,9 +265,14 @@ export default async function AdminPage() {
           </div>
         </header>
 
+        <div className="mb-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100">
+          {readyAheadDays} day{readyAheadDays === 1 ? "" : "s"} of content ready
+        </div>
+
         <AdminChallengeFormClient
           today={today}
           action={addChallengeAction}
+          scheduledCounts={scheduledCounts}
         />
 
         <div className="mt-10">

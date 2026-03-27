@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type PublishBatchResult = {
@@ -44,14 +44,15 @@ type UploadCard = {
 export function AdminChallengeFormClient({
   today,
   action,
+  scheduledCounts,
 }: {
   today: string;
   action: (formData: FormData) => Promise<PublishBatchResult>;
+  scheduledCounts: Record<string, number>;
 }) {
   const [cards, setCards] = useState<UploadCard[]>([]);
   const [activeDate, setActiveDate] = useState(today);
   const [dayNumber, setDayNumber] = useState("");
-  const [dayNumberAuto, setDayNumberAuto] = useState("");
   const [dayNumberManual, setDayNumberManual] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -60,35 +61,32 @@ export function AdminChallengeFormClient({
   const [warningText, setWarningText] = useState<string | null>(null);
   const [successSummary, setSuccessSummary] = useState<string[] | null>(null);
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date(`${today}T00:00:00`);
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [scheduleCountsState, setScheduleCountsState] =
+    useState<Record<string, number>>(scheduledCounts);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const sb = supabase();
-      const { data: maxRow } = await sb
-        .from("challenges")
-        .select("day_number")
-        .order("day_number", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+  const sortedScheduledDates = useMemo(
+    () => Object.keys(scheduleCountsState).sort(),
+    [scheduleCountsState]
+  );
 
-      if (cancelled) return;
+  const suggestedDayNumber = useMemo(() => {
+    let suggested = 1;
+    const exactIdx = sortedScheduledDates.indexOf(activeDate);
+    if (exactIdx >= 0) {
+      suggested = exactIdx + 1;
+    } else {
+      const insertIdx = sortedScheduledDates.findIndex((d) => d > activeDate);
+      suggested = insertIdx === -1 ? sortedScheduledDates.length + 1 : insertIdx + 1;
+    }
+    return String(suggested);
+  }, [activeDate, sortedScheduledDates]);
 
-      const maxDay = (maxRow as { day_number?: number | null } | null)?.day_number;
-      const suggested = typeof maxDay === "number" ? maxDay + 1 : 1;
-
-      const next = String(suggested);
-      setDayNumberAuto(next);
-      if (!dayNumberManual) {
-        setDayNumber(next);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeDate, dayNumberManual]);
+  const effectiveDayNumber = dayNumberManual ? dayNumber : suggestedDayNumber;
 
   useEffect(() => {
     return () => {
@@ -99,6 +97,25 @@ export function AdminChallengeFormClient({
   function openPicker() {
     fileInputRef.current?.click();
   }
+
+  function toYMD(year: number, month: number, day: number) {
+    return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  const monthMeta = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: Array<{ date: string | null; day: number | null }> = [];
+
+    for (let i = 0; i < firstDay; i++) cells.push({ date: null, day: null });
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({ date: toYMD(year, month, d), day: d });
+    }
+    while (cells.length % 7 !== 0) cells.push({ date: null, day: null });
+    return { year, month, cells };
+  }, [calendarMonth]);
 
   function normalizeFiles(files: File[]) {
     const imageFiles = files.filter((f) =>
@@ -178,7 +195,7 @@ export function AdminChallengeFormClient({
       setErrorText("Active Date is required.");
       return;
     }
-    if (!Number.isFinite(Number(dayNumber)) || Number(dayNumber) < 1) {
+    if (!Number.isFinite(Number(effectiveDayNumber)) || Number(effectiveDayNumber) < 1) {
       setErrorText("Day Number must be a valid number.");
       return;
     }
@@ -229,7 +246,7 @@ export function AdminChallengeFormClient({
       const card = cards[i];
       setProgressStep(i + 1);
       const ext = card.file.type === "image/jpeg" ? "jpg" : "png";
-      const storagePath = `${activeDate}-${dayNumber}-${i + 1}-${sanitizeForFilename(card.title)}-${Date.now()}.${ext}`;
+      const storagePath = `${activeDate}-${effectiveDayNumber}-${i + 1}-${sanitizeForFilename(card.title)}-${Date.now()}.${ext}`;
 
       const { error: uploadError } = await sb.storage
         .from("challenge-images")
@@ -267,7 +284,7 @@ export function AdminChallengeFormClient({
 
     const fd = new FormData();
     fd.set("active_date", activeDate);
-    fd.set("day_number", dayNumber);
+    fd.set("day_number", effectiveDayNumber);
     fd.set(
       "cards_json",
       JSON.stringify(publishCards)
@@ -284,6 +301,10 @@ export function AdminChallengeFormClient({
     }
 
     setSuccessSummary(result.publishedTitles ?? []);
+    setScheduleCountsState((prev) => ({
+      ...prev,
+      [activeDate]: (prev[activeDate] ?? 0) + cards.length,
+    }));
     cards.forEach((c) => URL.revokeObjectURL(c.previewUrl));
     setCards([]);
   }
@@ -296,6 +317,96 @@ export function AdminChallengeFormClient({
       </div>
 
       <div className="mt-5 space-y-4">
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() =>
+                setCalendarMonth(
+                  (d) => new Date(d.getFullYear(), d.getMonth() - 1, 1)
+                )
+              }
+              className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-sm font-semibold text-white/90 hover:bg-white/10"
+              aria-label="Previous month"
+            >
+              ←
+            </button>
+            <div className="text-sm font-semibold text-white/85">
+              {calendarMonth.toLocaleDateString("en-US", {
+                month: "long",
+                year: "numeric",
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setCalendarMonth(
+                  (d) => new Date(d.getFullYear(), d.getMonth() + 1, 1)
+                )
+              }
+              className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-sm font-semibold text-white/90 hover:bg-white/10"
+              aria-label="Next month"
+            >
+              →
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-white/50">
+            {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
+              <div key={d}>{d}</div>
+            ))}
+          </div>
+          <div className="mt-1 grid grid-cols-7 gap-1">
+            {monthMeta.cells.map((cell, i) => {
+              if (!cell.date || !cell.day) {
+                return <div key={`empty-${i}`} className="h-8" />;
+              }
+              const count = scheduleCountsState[cell.date] ?? 0;
+              const isToday = cell.date === today;
+              const isSelected = cell.date === activeDate;
+              const circleClass =
+                count >= 5
+                  ? "bg-emerald-500/90 border-emerald-300/30"
+                  : count >= 1
+                    ? "bg-[linear-gradient(90deg,rgba(245,158,11,0.95)_50%,rgba(0,0,0,0)_50%)] border-amber-300/35"
+                    : "bg-transparent border-white/20";
+
+              return (
+                <button
+                  key={cell.date}
+                  type="button"
+                  onClick={() => {
+                    setActiveDate(cell.date as string);
+                    setDayNumberManual(false);
+                  }}
+                  className={`relative h-8 rounded-md text-xs transition ${
+                    isSelected ? "bg-[var(--accent)]/25" : "hover:bg-white/5"
+                  }`}
+                >
+                  <span
+                    className={`absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border ${circleClass} ${
+                      isToday ? "ring-2 ring-[var(--accent)]" : ""
+                    }`}
+                  />
+                  <span className="relative z-10 font-semibold text-white">
+                    {cell.day}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-white/60">
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/90" />
+              5 scheduled
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-[linear-gradient(90deg,rgba(245,158,11,0.95)_50%,rgba(0,0,0,0)_50%)] border border-amber-300/35" />
+              1-4 scheduled
+            </span>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 sm:grid-cols-2">
           <div>
             <label className="text-sm font-semibold text-white/80">Active Date</label>
@@ -318,7 +429,7 @@ export function AdminChallengeFormClient({
               name="day_number"
               type="number"
               required
-              value={dayNumber}
+              value={effectiveDayNumber}
               onChange={(e) => {
                 setDayNumber(e.target.value);
                 setDayNumberManual(true);
@@ -327,11 +438,11 @@ export function AdminChallengeFormClient({
               className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
             />
             <div className="mt-1 flex items-center gap-2 text-xs text-white/55">
-              <span>Suggested: {dayNumberAuto || "—"}</span>
+              <span>Suggested: {suggestedDayNumber || "—"}</span>
               <button
                 type="button"
                 onClick={() => {
-                  setDayNumber(dayNumberAuto);
+                  setDayNumber("");
                   setDayNumberManual(false);
                 }}
                 className="rounded-md border border-white/15 bg-white/5 px-2 py-0.5 font-semibold text-white/80 hover:bg-white/10"
