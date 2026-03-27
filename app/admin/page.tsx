@@ -29,6 +29,32 @@ type AddChallengeState = {
   publishedTitles?: string[];
 };
 
+type SubmissionAdminRow = {
+  id: number;
+  user_id: string;
+  title: string | null;
+  creator_name: string | null;
+  software: string | null;
+  category: string | null;
+  layer_count: number | null;
+  image_url: string | null;
+  status: "pending" | "approved" | "rejected" | null;
+  scheduled_challenge_id: string | null;
+  scheduled_active_date: string | null;
+  scheduled_position: number | null;
+  created_at: string | null;
+};
+
+type AdminUserRow = {
+  id: string;
+  username: string | null;
+  email: string | null;
+  created_at: string | null;
+  total_solved: number | null;
+  current_streak: number | null;
+  last_played_date: string | null;
+};
+
 async function getSignedInEmail() {
   const sb = createSupabaseServerClient(await cookies());
   const { data } = await sb.auth.getUser();
@@ -219,6 +245,147 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
   }
 }
 
+async function computeDayNumberForDate(targetDate: string) {
+  const sb = createSupabaseServerClient(await cookies());
+  const { data: rows } = await sb
+    .from("challenges")
+    .select("active_date, day_number")
+    .order("active_date", { ascending: true });
+
+  const list =
+    (rows as
+      | Array<{
+          active_date: string | null;
+          day_number: number | null;
+        }>
+      | null) ?? [];
+
+  const byDate = new Map<string, number | null>();
+  for (const r of list) {
+    const d = r.active_date ?? "";
+    if (!d) continue;
+    byDate.set(d, byDate.get(d) ?? r.day_number ?? null);
+  }
+
+  const dates = Array.from(byDate.keys()).sort();
+  const existing = byDate.get(targetDate);
+  if (typeof existing === "number" && Number.isFinite(existing)) {
+    return existing;
+  }
+  const insertIdx = dates.findIndex((d) => d > targetDate);
+  return insertIdx === -1 ? dates.length + 1 : insertIdx + 1;
+}
+
+async function approveSubmissionAction(formData: FormData) {
+  "use server";
+  const allowed = await assertAdminOrNull();
+  if (!allowed) return;
+  const id = Number(formData.get("submission_id"));
+  if (!Number.isFinite(id)) return;
+
+  const sb = createSupabaseServerClient(await cookies());
+  const { data: sub } = await sb
+    .from("submissions")
+    .select(
+      "id, status"
+    )
+    .eq("id", id)
+    .maybeSingle();
+  const row = sub as { id: number; status: "pending" | "approved" | "rejected" | null } | null;
+  if (!row || row.status !== "pending") return;
+
+  await sb
+    .from("submissions")
+    .update({
+      status: "approved",
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  revalidatePath("/admin");
+}
+
+async function assignApprovedSubmissionAction(formData: FormData) {
+  "use server";
+  const allowed = await assertAdminOrNull();
+  if (!allowed) return;
+
+  const submissionId = Number(formData.get("submission_id"));
+  const activeDate = String(formData.get("active_date") ?? "").trim();
+  const position = Number(formData.get("position"));
+  const today = todayYYYYMMDDUSEastern();
+  if (!Number.isFinite(submissionId) || !activeDate) return;
+  if (!Number.isFinite(position) || position < 1 || position > 5) return;
+  if (activeDate <= today) return;
+
+  const sb = createSupabaseServerClient(await cookies());
+  const { data: sub } = await sb
+    .from("submissions")
+    .select(
+      "id, title, creator_name, software, category, layer_count, image_url, status, scheduled_challenge_id"
+    )
+    .eq("id", submissionId)
+    .maybeSingle();
+  const row = sub as SubmissionAdminRow | null;
+  if (!row || row.status !== "approved" || row.scheduled_challenge_id) return;
+
+  const { data: existingAtSlot } = await sb
+    .from("challenges")
+    .select("id")
+    .eq("active_date", activeDate)
+    .eq("position", position)
+    .maybeSingle();
+  if (existingAtSlot) return;
+
+  const dayNumber = await computeDayNumberForDate(activeDate);
+  const { data: inserted, error: insertErr } = await sb
+    .from("challenges")
+    .insert({
+      title: row.title ?? "Untitled",
+      creator_name: row.creator_name ?? null,
+      software: row.software ?? "Other",
+      category: row.category ?? "Other",
+      layer_count: row.layer_count ?? 0,
+      image_url: row.image_url ?? null,
+      active_date: activeDate,
+      day_number: dayNumber,
+      position,
+      is_sponsored: false,
+      sponsor_name: null,
+    })
+    .select("id")
+    .maybeSingle();
+  if (insertErr) return;
+
+  await sb
+    .from("submissions")
+    .update({
+      scheduled_challenge_id: (inserted as { id?: string } | null)?.id ?? null,
+      scheduled_active_date: activeDate,
+      scheduled_position: position,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", submissionId);
+
+  revalidatePath("/admin");
+}
+
+async function rejectSubmissionAction(formData: FormData) {
+  "use server";
+  const allowed = await assertAdminOrNull();
+  if (!allowed) return;
+  const id = Number(formData.get("submission_id"));
+  if (!Number.isFinite(id)) return;
+  const sb = createSupabaseServerClient(await cookies());
+  await sb
+    .from("submissions")
+    .update({
+      status: "rejected",
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  revalidatePath("/admin");
+}
+
 function formatAdminDate(date: string | null) {
   if (!date) return "—";
   const parsed = new Date(`${date}T00:00:00`);
@@ -230,9 +397,15 @@ function formatAdminDate(date: string | null) {
   });
 }
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string }>;
+}) {
   const isAdmin = await assertAdminOrNull();
   const today = todayYYYYMMDDUSEastern();
+  const params = (await searchParams) ?? {};
+  const tab = params.tab === "submissions" || params.tab === "users" ? params.tab : "schedule";
 
   if (!isAdmin) {
     return (
@@ -245,6 +418,26 @@ export default async function AdminPage() {
   }
 
   const challenges = await getUpcomingChallenges(today);
+  const sb = createSupabaseServerClient(await cookies());
+  const { data: allSubs } = await sb
+    .from("submissions")
+    .select(
+      "id, user_id, title, creator_name, software, category, layer_count, image_url, status, scheduled_challenge_id, scheduled_active_date, scheduled_position, created_at"
+    )
+    .order("created_at", { ascending: false });
+  const submissions = (allSubs as SubmissionAdminRow[] | null) ?? [];
+  const pendingSubs = submissions.filter((s) => s.status === "pending");
+  const approvedPoolSubs = submissions.filter(
+    (s) => s.status === "approved" && !s.scheduled_challenge_id
+  );
+  const approvedCount = submissions.filter((s) => s.status === "approved").length;
+  const rejectedCount = submissions.filter((s) => s.status === "rejected").length;
+
+  const { data: usersRows } = await sb
+    .from("profiles")
+    .select("id, username, email, created_at, total_solved, current_streak, last_played_date")
+    .order("last_played_date", { ascending: false, nullsFirst: false });
+  const users = (usersRows as AdminUserRow[] | null) ?? [];
   const { scheduledCounts, readyAheadDays } = await getScheduleOverview(today);
 
   return (
@@ -269,111 +462,308 @@ export default async function AdminPage() {
           {readyAheadDays} day{readyAheadDays === 1 ? "" : "s"} of content ready
         </div>
 
-        <AdminChallengeFormClient
-          today={today}
-          action={addChallengeAction}
-          scheduledCounts={scheduledCounts}
-        />
-
-        <div className="mt-10">
-          <div className="text-lg font-extrabold">Upcoming challenges</div>
-          <div className="mt-1 text-sm text-white/60">
-            Ordered by `active_date` then `position`
-          </div>
-
-          <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10">
-            {challenges.length === 0 ? (
-              <div className="px-4 py-8 text-center text-white/70">
-                No upcoming challenges
-              </div>
-            ) : (
-              <table className="min-w-[1120px] w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
-                    <th className="px-4 py-3">Image</th>
-                    <th className="px-4 py-3">Active date</th>
-                    <th className="px-4 py-3">Day #</th>
-                    <th className="px-4 py-3">Position</th>
-                    <th className="px-4 py-3">Title</th>
-                    <th className="px-4 py-3">Creator</th>
-                    <th className="px-4 py-3">Software</th>
-                    <th className="px-4 py-3">Category</th>
-                    <th className="px-4 py-3">Layer count</th>
-                    <th className="px-4 py-3">Sponsored</th>
-                    <th className="px-4 py-3">Sponsor</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {challenges.map((ch, idx) => (
-                    <tr
-                      key={ch.id}
-                      className={`border-b border-white/5 last:border-0 ${
-                        idx % 2 === 0 ? "bg-white/[0.02]" : "bg-transparent"
-                      }`}
-                    >
-                      <td className="px-4 py-3">
-                        {ch.image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={ch.image_url}
-                            alt=""
-                            className="h-10 w-10 rounded-md border border-white/10 object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/20 text-xs text-white/45">
-                            —
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-white/80">
-                        {formatAdminDate(ch.active_date)}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-white/80">
-                        {ch.day_number ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-white/80">
-                        {ch.position ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 text-white/90">
-                        {ch.title ?? "Untitled"}
-                      </td>
-                      <td className="px-4 py-3 text-white/80">
-                        {ch.creator_name ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 text-white/80">
-                        {ch.software ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 text-white/80">
-                        {ch.category ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 text-white/80">
-                        {ch.layer_count ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 text-white/80">
-                        {ch.is_sponsored ? "Yes" : "No"}
-                      </td>
-                      <td className="px-4 py-3 text-white/80">
-                        {ch.is_sponsored ? ch.sponsor_name ?? "—" : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <button
-                            type="button"
-                            className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white hover:bg-white/10"
-                          >
-                            Edit
-                          </button>
-                          <DeleteButton id={ch.id} />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Link
+            href="/admin?tab=schedule"
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              tab === "schedule"
+                ? "bg-[var(--accent)] text-white"
+                : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            Schedule
+          </Link>
+          <Link
+            href="/admin?tab=submissions"
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              tab === "submissions"
+                ? "bg-[var(--accent)] text-white"
+                : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            Submissions
+          </Link>
+          <Link
+            href="/admin?tab=users"
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              tab === "users"
+                ? "bg-[var(--accent)] text-white"
+                : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            Users
+          </Link>
         </div>
+
+        {tab === "schedule" ? (
+          <>
+            <AdminChallengeFormClient
+              today={today}
+              action={addChallengeAction}
+              scheduledCounts={scheduledCounts}
+            />
+
+            <div className="mt-10">
+              <div className="text-lg font-extrabold">Upcoming challenges</div>
+              <div className="mt-1 text-sm text-white/60">
+                Ordered by `active_date` then `position`
+              </div>
+
+              <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10">
+                {challenges.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-white/70">
+                    No upcoming challenges
+                  </div>
+                ) : (
+                  <table className="min-w-[1120px] w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
+                        <th className="px-4 py-3">Image</th>
+                        <th className="px-4 py-3">Active date</th>
+                        <th className="px-4 py-3">Day #</th>
+                        <th className="px-4 py-3">Position</th>
+                        <th className="px-4 py-3">Title</th>
+                        <th className="px-4 py-3">Creator</th>
+                        <th className="px-4 py-3">Software</th>
+                        <th className="px-4 py-3">Category</th>
+                        <th className="px-4 py-3">Layer count</th>
+                        <th className="px-4 py-3">Sponsored</th>
+                        <th className="px-4 py-3">Sponsor</th>
+                        <th className="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {challenges.map((ch, idx) => (
+                        <tr
+                          key={ch.id}
+                          className={`border-b border-white/5 last:border-0 ${
+                            idx % 2 === 0 ? "bg-white/[0.02]" : "bg-transparent"
+                          }`}
+                        >
+                          <td className="px-4 py-3">
+                            {ch.image_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={ch.image_url}
+                                alt=""
+                                className="h-10 w-10 rounded-md border border-white/10 object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/20 text-xs text-white/45">
+                                —
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-mono text-white/80">
+                            {formatAdminDate(ch.active_date)}
+                          </td>
+                          <td className="px-4 py-3 font-mono text-white/80">
+                            {ch.day_number ?? "—"}
+                          </td>
+                          <td className="px-4 py-3 font-mono text-white/80">
+                            {ch.position ?? "—"}
+                          </td>
+                          <td className="px-4 py-3 text-white/90">
+                            {ch.title ?? "Untitled"}
+                          </td>
+                          <td className="px-4 py-3 text-white/80">
+                            {ch.creator_name ?? "—"}
+                          </td>
+                          <td className="px-4 py-3 text-white/80">
+                            {ch.software ?? "—"}
+                          </td>
+                          <td className="px-4 py-3 text-white/80">
+                            {ch.category ?? "—"}
+                          </td>
+                          <td className="px-4 py-3 text-white/80">
+                            {ch.layer_count ?? "—"}
+                          </td>
+                          <td className="px-4 py-3 text-white/80">
+                            {ch.is_sponsored ? "Yes" : "No"}
+                          </td>
+                          <td className="px-4 py-3 text-white/80">
+                            {ch.is_sponsored ? ch.sponsor_name ?? "—" : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="inline-flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white hover:bg-white/10"
+                              >
+                                Edit
+                              </button>
+                              <DeleteButton id={ch.id} />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </>
+        ) : tab === "submissions" ? (
+          <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)] p-5">
+            <div className="text-lg font-extrabold">Submissions</div>
+            <div className="mt-1 text-sm text-white/60">
+              {pendingSubs.length} pending, {approvedCount} approved, {rejectedCount} rejected
+            </div>
+            <div className="mt-6">
+              <div className="text-sm font-bold text-white/90">Pending Queue</div>
+              {pendingSubs.length === 0 ? (
+                <div className="mt-3 text-sm text-white/70">No pending submissions.</div>
+              ) : (
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {pendingSubs.map((s) => (
+                    <div
+                      key={s.id}
+                      className="rounded-2xl border border-white/10 bg-black/25 p-4"
+                    >
+                      {s.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={s.image_url}
+                          alt={s.title ?? "Submission"}
+                          className="h-40 w-full rounded-xl border border-white/10 object-cover"
+                        />
+                      ) : null}
+                      <div className="mt-3 text-base font-bold text-white">
+                        {s.title ?? "Untitled"}
+                      </div>
+                      <div className="mt-1 text-sm text-white/70">
+                        {s.creator_name ?? "—"} · {s.layer_count ?? 0} layers
+                      </div>
+                      <div className="mt-4 flex items-center gap-2">
+                        <form action={approveSubmissionAction}>
+                          <input type="hidden" name="submission_id" value={s.id} />
+                          <button
+                            type="submit"
+                            className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500"
+                          >
+                            Approve
+                          </button>
+                        </form>
+                        <form action={rejectSubmissionAction}>
+                          <input type="hidden" name="submission_id" value={s.id} />
+                          <button
+                            type="submit"
+                            className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-500"
+                          >
+                            Reject
+                          </button>
+                        </form>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90"
+                        >
+                          Skip
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-8">
+              <div className="text-sm font-bold text-white/90">
+                Approved Submissions Pool (Unscheduled)
+              </div>
+              {approvedPoolSubs.length === 0 ? (
+                <div className="mt-3 text-sm text-white/70">
+                  No approved unscheduled submissions.
+                </div>
+              ) : (
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {approvedPoolSubs.map((s) => (
+                    <div
+                      key={`approved-${s.id}`}
+                      className="rounded-2xl border border-white/10 bg-black/25 p-4"
+                    >
+                      {s.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={s.image_url}
+                          alt={s.title ?? "Submission"}
+                          className="h-40 w-full rounded-xl border border-white/10 object-cover"
+                        />
+                      ) : null}
+                      <div className="mt-3 text-base font-bold text-white">
+                        {s.title ?? "Untitled"}
+                      </div>
+                      <div className="mt-1 text-sm text-white/70">
+                        {s.creator_name ?? "—"} · {s.layer_count ?? 0} layers
+                      </div>
+
+                      <form action={assignApprovedSubmissionAction} className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_90px_auto] sm:items-end">
+                        <input type="hidden" name="submission_id" value={s.id} />
+                        <div>
+                          <label className="text-xs font-semibold text-white/70">Future Date</label>
+                          <input
+                            name="active_date"
+                            type="date"
+                            min={(() => {
+                              const d = new Date(`${today}T00:00:00`);
+                              d.setDate(d.getDate() + 1);
+                              return d.toISOString().slice(0, 10);
+                            })()}
+                            required
+                            className="mt-1 w-full rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-white/70">Pos (1-5)</label>
+                          <input
+                            name="position"
+                            type="number"
+                            min={1}
+                            max={5}
+                            required
+                            className="mt-1 w-full rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-bold text-white hover:bg-[var(--accent2)]"
+                        >
+                          Assign
+                        </button>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)]">
+            <table className="min-w-[900px] w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
+                  <th className="px-4 py-3">Username</th>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Join date</th>
+                  <th className="px-4 py-3">Total solved</th>
+                  <th className="px-4 py-3">Current streak</th>
+                  <th className="px-4 py-3">Last played</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-b border-white/5 last:border-0">
+                    <td className="px-4 py-3 text-white/90">{u.username ?? "—"}</td>
+                    <td className="px-4 py-3 text-white/80">{u.email ?? "—"}</td>
+                    <td className="px-4 py-3 text-white/80">{formatAdminDate(u.created_at ? u.created_at.slice(0, 10) : null)}</td>
+                    <td className="px-4 py-3 text-white/80">{u.total_solved ?? 0}</td>
+                    <td className="px-4 py-3 text-white/80">{u.current_streak ?? 0}</td>
+                    <td className="px-4 py-3 text-white/80">{u.last_played_date ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1024,6 +1024,13 @@ export function DailyGameClient({
               >
                 Settings
               </Link>
+              <Link
+                href="/submit"
+                onClick={() => setDrawerOpen(false)}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-[var(--text)] hover:bg-white/10"
+              >
+                Submit Your Work 🎨
+              </Link>
               {signedIn ? (
                 <button
                   type="button"
