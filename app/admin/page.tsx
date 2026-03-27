@@ -25,12 +25,8 @@ type ChallengeAdminRow = {
 
 type AddChallengeState = {
   error: string | null;
-  successAt?: number | null;
-};
-
-const initialAddChallengeState: AddChallengeState = {
-  error: null,
-  successAt: null,
+  publishedCount?: number;
+  publishedTitles?: string[];
 };
 
 async function getSignedInEmail() {
@@ -60,65 +56,63 @@ async function getUpcomingChallenges(today: string) {
   return data as ChallengeAdminRow[];
 }
 
-async function addChallengeAction(
-  _prevState: AddChallengeState,
-  formData: FormData
-): Promise<AddChallengeState> {
+async function addChallengeAction(formData: FormData): Promise<AddChallengeState> {
   "use server";
 
   const allowed = await assertAdminOrNull();
-  if (!allowed) return { error: "Access denied", successAt: null };
+  if (!allowed) return { error: "Access denied", publishedCount: 0, publishedTitles: [] };
 
-  const title = String(formData.get("title") ?? "").trim();
-  const creatorName = String(formData.get("creator_name") ?? "").trim();
-  const software = String(formData.get("software") ?? "").trim();
-  const category = String(formData.get("category") ?? "").trim();
   const activeDate = String(formData.get("active_date") ?? "").trim();
   const dayNumberRaw = formData.get("day_number");
   const dayNumber =
     typeof dayNumberRaw === "string" ? Number(dayNumberRaw) : Number(dayNumberRaw);
-  const layerCountRaw = formData.get("layer_count");
-  const positionRaw = formData.get("position");
+  const cardsJson = String(formData.get("cards_json") ?? "[]");
+  const imageFilesRaw = formData.getAll("images");
 
-  const layerCount = Number(layerCountRaw);
-  const position = Number(positionRaw);
-
-  const isSponsored = formData.get("is_sponsored") === "true";
-  const sponsorName = String(formData.get("sponsor_name") ?? "").trim();
-
-  console.log("[admin][addChallenge] submitted", {
-    title,
-    creatorName,
-    software,
-    category,
-    activeDate,
-    layerCountRaw,
-    positionRaw,
-    isSponsored,
-    sponsorName,
-  });
-
-  if (!title || !software || !category) {
-    return { error: "Title, Software, and Category are required.", successAt: null };
-  }
   if (!activeDate) {
-    return { error: "Active Date is required.", successAt: null };
+    return { error: "Active Date is required.", publishedCount: 0, publishedTitles: [] };
   }
   if (!Number.isFinite(dayNumber)) {
-    return { error: "Day Number must be a number.", successAt: null };
-  }
-  if (!Number.isFinite(layerCount)) {
-    return { error: "Layer Count must be a number.", successAt: null };
-  }
-  if (!Number.isFinite(position) || position < 1 || position > 5) {
-    return { error: "Position must be between 1 and 5.", successAt: null };
-  }
-  if (isSponsored && !sponsorName) {
-    return { error: "Sponsor Name is required when sponsored is checked.", successAt: null };
+    return { error: "Day Number must be a number.", publishedCount: 0, publishedTitles: [] };
   }
 
   try {
     const sb = createSupabaseServerClient(await cookies());
+    const cards = JSON.parse(cardsJson) as Array<{
+      title: string;
+      creator_name: string;
+      software: string;
+      category: string;
+      layer_count: string;
+      is_sponsored: boolean;
+      sponsor_name: string;
+    }>;
+
+    if (!Array.isArray(cards) || cards.length === 0) {
+      return {
+        error: "At least one challenge card is required.",
+        publishedCount: 0,
+        publishedTitles: [],
+      };
+    }
+    if (cards.length > 5) {
+      return {
+        error: "You can publish at most 5 challenges at once.",
+        publishedCount: 0,
+        publishedTitles: [],
+      };
+    }
+
+    const imageFiles = imageFilesRaw.filter(
+      (x): x is File => typeof x === "object" && x != null && "arrayBuffer" in x
+    );
+    if (imageFiles.length !== cards.length) {
+      return {
+        error: "Each challenge card must have a matching image.",
+        publishedCount: 0,
+        publishedTitles: [],
+      };
+    }
 
     const sanitizeForFilename = (value: string) => {
       const v = value
@@ -130,78 +124,115 @@ async function addChallengeAction(
       return v || "challenge";
     };
 
-    const imageFileRaw = formData.get("image");
-    let imageUrl: string | null = null;
+    const insertPayload: Array<{
+      title: string;
+      creator_name: string | null;
+      day_number: number;
+      software: string;
+      category: string;
+      layer_count: number;
+      active_date: string;
+      position: number;
+      is_sponsored: boolean;
+      sponsor_name: string | null;
+      image_url: string | null;
+    }> = [];
+    const publishedTitles: string[] = [];
 
-    if (
-      imageFileRaw &&
-      typeof imageFileRaw === "object" &&
-      "arrayBuffer" in imageFileRaw
-    ) {
-      const imageFile = imageFileRaw as unknown as File;
-      const contentType = imageFile.type || "image/png";
+    for (let i = 0; i < cards.length; i++) {
+      const card = cards[i];
+      const imageFile = imageFiles[i];
+      const title = String(card.title ?? "").trim();
+      const software = String(card.software ?? "").trim();
+      const category = String(card.category ?? "").trim();
+      const layerCount = Number(card.layer_count);
+      const creatorName = String(card.creator_name ?? "").trim();
+      const isSponsored = Boolean(card.is_sponsored);
+      const sponsorName = String(card.sponsor_name ?? "").trim();
 
-      const isPngOrJpg =
-        contentType === "image/png" || contentType === "image/jpeg";
-
-      if (isPngOrJpg && imageFile.size > 0) {
-        const storagePath = `${activeDate}-${Math.trunc(
-          position
-        )}-${sanitizeForFilename(title)}.png`;
-
-        console.log("[admin][addChallenge] uploading image", {
-          storagePath,
-          contentType,
-        });
-
-        const { error: uploadError } = await sb.storage
-          .from("challenge-images")
-          .upload(storagePath, imageFile, {
-            contentType,
-            upsert: true,
-          });
-
-        if (uploadError) {
-          console.error("[admin][addChallenge] image upload error", uploadError);
-          return { error: uploadError.message, successAt: null };
-        }
-
-        const { data } = sb.storage
-          .from("challenge-images")
-          .getPublicUrl(storagePath);
-
-        imageUrl = data.publicUrl ?? null;
+      if (!title || !software || !category) {
+        return {
+          error: `Card ${i + 1}: Title, Software, and Category are required.`,
+          publishedCount: 0,
+          publishedTitles: [],
+        };
       }
+      if (!Number.isFinite(layerCount)) {
+        return {
+          error: `Card ${i + 1}: Layer Count must be a number.`,
+          publishedCount: 0,
+          publishedTitles: [],
+        };
+      }
+      if (isSponsored && !sponsorName) {
+        return {
+          error: `Card ${i + 1}: Sponsor Name is required when sponsored is checked.`,
+          publishedCount: 0,
+          publishedTitles: [],
+        };
+      }
+
+      const position = i + 1;
+      const contentType = imageFile.type || "image/png";
+      if (
+        imageFile.size <= 0 ||
+        (contentType !== "image/png" && contentType !== "image/jpeg")
+      ) {
+        return {
+          error: `Card ${i + 1}: image must be PNG or JPG.`,
+          publishedCount: 0,
+          publishedTitles: [],
+        };
+      }
+
+      const storagePath = `${activeDate}-${position}-${sanitizeForFilename(title)}.png`;
+      const { error: uploadError } = await sb.storage
+        .from("challenge-images")
+        .upload(storagePath, imageFile, {
+          contentType,
+          upsert: true,
+        });
+      if (uploadError) {
+        return { error: uploadError.message, publishedCount: 0, publishedTitles: [] };
+      }
+
+      const { data } = sb.storage.from("challenge-images").getPublicUrl(storagePath);
+      insertPayload.push({
+        title,
+        creator_name: creatorName || null,
+        day_number: Math.trunc(dayNumber),
+        software,
+        category,
+        layer_count: Math.trunc(layerCount),
+        active_date: activeDate,
+        position,
+        is_sponsored: isSponsored,
+        sponsor_name: isSponsored ? sponsorName || null : null,
+        image_url: data.publicUrl ?? null,
+      });
+      publishedTitles.push(title);
     }
-
-    const insertPayload = {
-      title,
-      creator_name: creatorName || null,
-      day_number: Math.trunc(dayNumber),
-      software,
-      category,
-      layer_count: Math.trunc(layerCount),
-      active_date: activeDate,
-      position: Math.trunc(position),
-      is_sponsored: isSponsored,
-      sponsor_name: isSponsored ? (sponsorName.trim() ? sponsorName : null) : null,
-      image_url: imageUrl,
-    };
-
-    console.log("[admin][addChallenge] insert payload", insertPayload);
 
     const { error } = await sb.from("challenges").insert(insertPayload);
 
     if (error) {
       console.error("[admin][addChallenge] Supabase insert error", error);
-      return { error: error.message, successAt: null };
+      return { error: error.message, publishedCount: 0, publishedTitles: [] };
     }
 
     revalidatePath("/admin");
-    return { error: null, successAt: Date.now() };
+    return {
+      error: null,
+      publishedCount: publishedTitles.length,
+      publishedTitles,
+    };
   } catch (e) {
     console.error("[admin][addChallenge] Unexpected error", e);
-    return { error: "Unexpected error while inserting challenge.", successAt: null };
+    return {
+      error: "Unexpected error while inserting challenge batch.",
+      publishedCount: 0,
+      publishedTitles: [],
+    };
   }
 }
 
@@ -253,7 +284,6 @@ export default async function AdminPage() {
         <AdminChallengeFormClient
           today={today}
           action={addChallengeAction}
-          initialState={initialAddChallengeState}
         />
 
         <div className="mt-10">

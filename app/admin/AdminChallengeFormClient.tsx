@@ -1,12 +1,12 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type AddChallengeState = {
+type PublishBatchResult = {
   error: string | null;
-  successAt?: number | null;
+  publishedCount?: number;
+  publishedTitles?: string[];
 };
 
 const SOFTWARE_OPTIONS = [
@@ -28,48 +28,39 @@ const CATEGORY_OPTIONS = [
   "Other",
 ] as const;
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full rounded-xl bg-white px-5 py-3 text-sm font-bold text-black hover:opacity-95 disabled:opacity-50"
-    >
-      {pending ? "Adding..." : "Add Challenge"}
-    </button>
-  );
-}
+type UploadCard = {
+  id: string;
+  file: File;
+  previewUrl: string;
+  title: string;
+  creator_name: string;
+  software: (typeof SOFTWARE_OPTIONS)[number];
+  category: (typeof CATEGORY_OPTIONS)[number];
+  layer_count: string;
+  is_sponsored: boolean;
+  sponsor_name: string;
+};
 
 export function AdminChallengeFormClient({
   today,
   action,
-  initialState,
 }: {
   today: string;
-  action: (prevState: AddChallengeState, formData: FormData) => Promise<AddChallengeState>;
-  initialState: AddChallengeState;
+  action: (formData: FormData) => Promise<PublishBatchResult>;
 }) {
-  const [state, formAction] = useActionState(action, initialState);
-  const [isSponsoredChecked, setIsSponsoredChecked] = useState(false);
+  const [cards, setCards] = useState<UploadCard[]>([]);
   const [activeDate, setActiveDate] = useState(today);
   const [dayNumber, setDayNumber] = useState("");
   const [dayNumberAuto, setDayNumberAuto] = useState("");
   const [dayNumberManual, setDayNumberManual] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [hiddenSuccessAt, setHiddenSuccessAt] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [progressStep, setProgressStep] = useState(0);
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const [successSummary, setSuccessSummary] = useState<string[] | null>(null);
+  const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const togglePillClass = useMemo(
-    () =>
-      `relative inline-flex h-6 w-11 items-center rounded-full border transition ${
-        isSponsoredChecked
-          ? "border-[var(--accent)] bg-[var(--accent)]/70"
-          : "border-white/20 bg-white/10"
-      }`,
-    [isSponsoredChecked]
-  );
+  const progressTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,148 +90,170 @@ export function AdminChallengeFormClient({
     };
   }, [activeDate, dayNumberManual]);
 
-  const showToast = Boolean(state.successAt && state.successAt !== hiddenSuccessAt);
-
-  useEffect(() => {
-    if (!showToast || !state.successAt) return;
-    const t = window.setTimeout(() => setHiddenSuccessAt(state.successAt ?? null), 3000);
-    return () => window.clearTimeout(t);
-  }, [showToast, state.successAt]);
-
   useEffect(() => {
     return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
+      cards.forEach((c) => URL.revokeObjectURL(c.previewUrl));
+      if (progressTimerRef.current != null) {
+        window.clearInterval(progressTimerRef.current);
       }
     };
-  }, [previewUrl]);
+  }, [cards]);
 
   function openPicker() {
     fileInputRef.current?.click();
   }
 
-  function setInputFile(file: File) {
-    if (!fileInputRef.current) return;
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    fileInputRef.current.files = dt.files;
-    const url = URL.createObjectURL(file);
-    setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return url;
-    });
+  function normalizeFiles(files: File[]) {
+    const imageFiles = files.filter((f) =>
+      ["image/png", "image/jpeg"].includes(f.type)
+    );
+    const availableSlots = Math.max(0, 5 - cards.length);
+    const picked = imageFiles.slice(0, availableSlots);
+    if (picked.length === 0) return;
+
+    const nextCards = picked.map((file, idx) => ({
+      id: `${Date.now()}-${idx}-${Math.random().toString(16).slice(2)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      title: "",
+      creator_name: "",
+      software: SOFTWARE_OPTIONS[0],
+      category: CATEGORY_OPTIONS[0],
+      layer_count: "",
+      is_sponsored: false,
+      sponsor_name: "",
+    }));
+    setCards((prev) => [...prev, ...nextCards]);
+    setErrorText(null);
+    setSuccessSummary(null);
   }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return url;
+    const files = Array.from(e.target.files ?? []);
+    normalizeFiles(files);
+    e.target.value = "";
+  }
+
+  function updateCard(
+    id: string,
+    patch: Partial<Omit<UploadCard, "id" | "file" | "previewUrl">>
+  ) {
+    setCards((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...patch } : c))
+    );
+  }
+
+  function removeCard(id: string) {
+    setCards((prev) => {
+      const target = prev.find((c) => c.id === id);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((c) => c.id !== id);
     });
+  }
+
+  function handleCardDrop(targetId: string) {
+    if (!draggingCardId || draggingCardId === targetId) return;
+    setCards((prev) => {
+      const fromIndex = prev.findIndex((x) => x.id === draggingCardId);
+      const toIndex = prev.findIndex((x) => x.id === targetId);
+      if (fromIndex < 0 || toIndex < 0) return prev;
+      const clone = [...prev];
+      const [moved] = clone.splice(fromIndex, 1);
+      clone.splice(toIndex, 0, moved);
+      return clone;
+    });
+    setDraggingCardId(null);
   }
 
   function onDrop(e: React.DragEvent<HTMLButtonElement>) {
     e.preventDefault();
     setIsDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    if (!["image/png", "image/jpeg"].includes(file.type)) return;
-    setInputFile(file);
+    normalizeFiles(Array.from(e.dataTransfer.files ?? []));
+  }
+
+  async function onPublishAll() {
+    if (!activeDate) {
+      setErrorText("Active Date is required.");
+      return;
+    }
+    if (!Number.isFinite(Number(dayNumber)) || Number(dayNumber) < 1) {
+      setErrorText("Day Number must be a valid number.");
+      return;
+    }
+    if (cards.length === 0) {
+      setErrorText("Add at least one image (up to 5).");
+      return;
+    }
+    if (cards.some((c) => !c.title.trim() || !c.layer_count.trim())) {
+      setErrorText("Each card requires Title and Layer Count.");
+      return;
+    }
+    if (
+      cards.some(
+        (c) => c.is_sponsored && !c.sponsor_name.trim()
+      )
+    ) {
+      setErrorText("Sponsored cards require Sponsor Name.");
+      return;
+    }
+
+    setErrorText(null);
+    setSuccessSummary(null);
+    setSubmitting(true);
+    setProgressStep(0);
+
+    const max = cards.length;
+    if (progressTimerRef.current != null) window.clearInterval(progressTimerRef.current);
+    progressTimerRef.current = window.setInterval(() => {
+      setProgressStep((prev) => (prev < max ? prev + 1 : prev));
+    }, 450);
+
+    const fd = new FormData();
+    fd.set("active_date", activeDate);
+    fd.set("day_number", dayNumber);
+    fd.set(
+      "cards_json",
+      JSON.stringify(
+        cards.map((c) => ({
+          title: c.title.trim(),
+          creator_name: c.creator_name.trim(),
+          software: c.software,
+          category: c.category,
+          layer_count: c.layer_count,
+          is_sponsored: c.is_sponsored,
+          sponsor_name: c.sponsor_name.trim(),
+        }))
+      )
+    );
+    cards.forEach((c) => fd.append("images", c.file));
+
+    const result = await action(fd);
+
+    if (progressTimerRef.current != null) {
+      window.clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    setProgressStep(max);
+    setSubmitting(false);
+
+    if (result.error) {
+      setErrorText(result.error);
+      return;
+    }
+
+    setSuccessSummary(result.publishedTitles ?? []);
+    cards.forEach((c) => URL.revokeObjectURL(c.previewUrl));
+    setCards([]);
   }
 
   return (
     <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.7)] p-5 shadow-sm">
-      <div className="text-lg font-extrabold">Add new challenge</div>
+      <div className="text-lg font-extrabold">Batch Publish Challenges</div>
+      <div className="mt-1 text-sm text-white/60">
+        Upload up to 5 challenges for one active date.
+      </div>
 
-      <form action={formAction} className="mt-5 space-y-4">
-        <div className="grid grid-cols-1 gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 sm:grid-cols-2">
-          <div>
-            <label className="text-sm font-semibold text-white/80">Title</label>
-            <input
-              name="title"
-              type="text"
-              required
-              className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold text-white/80">Creator Name</label>
-            <input
-              name="creator_name"
-              type="text"
-              placeholder="e.g. reeselabudie"
-              className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
-            />
-            <div className="mt-1 text-xs text-white/55">
-              Optional, used for creator stats.
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 sm:grid-cols-2">
-          <div>
-            <label className="text-sm font-semibold text-white/80">Software</label>
-            <select
-              name="software"
-              required
-              className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
-              defaultValue={SOFTWARE_OPTIONS[0]}
-            >
-              {SOFTWARE_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold text-white/80">Category</label>
-            <select
-              name="category"
-              required
-              className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
-              defaultValue={CATEGORY_OPTIONS[0]}
-            >
-              {CATEGORY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 sm:grid-cols-2">
-          <div>
-            <label className="text-sm font-semibold text-white/80">Layer Count</label>
-            <input
-              name="layer_count"
-              type="number"
-              required
-              min={0}
-              className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold text-white/80">
-              Position (1-5)
-            </label>
-            <input
-              name="position"
-              type="number"
-              required
-              min={1}
-              max={5}
-              className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
-            />
-          </div>
-        </div>
-
+      <div className="mt-5 space-y-4">
         <div className="grid grid-cols-1 gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 sm:grid-cols-2">
           <div>
             <label className="text-sm font-semibold text-white/80">Active Date</label>
@@ -258,9 +271,7 @@ export function AdminChallengeFormClient({
           </div>
 
           <div>
-            <label className="text-sm font-semibold text-white/80">
-              Day Number
-            </label>
+            <label className="text-sm font-semibold text-white/80">Day Number</label>
             <input
               name="day_number"
               type="number"
@@ -285,55 +296,6 @@ export function AdminChallengeFormClient({
               >
                 Use suggested
               </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <label
-            htmlFor="is_sponsored"
-            className="flex cursor-pointer items-center justify-between gap-3"
-          >
-            <span className="text-sm font-semibold text-white/85">Is Sponsored</span>
-            <span className={togglePillClass}>
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                  isSponsoredChecked ? "translate-x-5" : "translate-x-1"
-                }`}
-              />
-            </span>
-          </label>
-          <input
-            id="is_sponsored"
-            name="is_sponsored"
-            type="checkbox"
-            value="true"
-            checked={isSponsoredChecked}
-            onChange={(e) => setIsSponsoredChecked(e.target.checked)}
-            className="sr-only"
-          />
-        </div>
-
-        <div
-          className={`overflow-hidden transition-all duration-300 ${
-            isSponsoredChecked ? "max-h-40 opacity-100" : "max-h-0 opacity-0"
-          }`}
-        >
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <label
-              className="text-sm font-semibold text-white/80"
-              htmlFor="sponsor_name"
-            >
-              Sponsor Name
-            </label>
-            <input
-              id="sponsor_name"
-              name="sponsor_name"
-              type="text"
-              className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
-            />
-            <div className="mt-1 text-xs text-white/55">
-              Required when sponsored is enabled.
             </div>
           </div>
         </div>
@@ -365,41 +327,199 @@ export function AdminChallengeFormClient({
           >
             <div className="text-2xl">⬆️</div>
             <div className="mt-2 text-sm font-semibold text-white/90">
-              Drag and drop image here
+              Drag and drop up to 5 images
             </div>
             <div className="mt-1 text-xs text-white/55">
               or click to browse files
             </div>
           </button>
-
-          {previewUrl ? (
-            <div className="mt-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={previewUrl}
-                alt="Preview"
-                className="h-24 w-24 rounded-lg border border-white/15 object-cover"
-              />
-            </div>
-          ) : null}
-
           <div className="mt-2 text-xs text-white/55">
-            Optional. A preview appears before submission.
+            Upload limit: 5 images total.
           </div>
         </div>
 
-        {state.error ? (
+        {cards.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {cards.map((card, idx) => (
+              <div
+                key={card.id}
+                draggable
+                onDragStart={() => setDraggingCardId(card.id)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => handleCardDrop(card.id)}
+                className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)]"
+              >
+                <div className="relative h-36 w-full bg-black/30">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={card.previewUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute left-3 top-3 rounded-full border border-white/25 bg-black/55 px-2.5 py-1 text-xs font-bold text-white">
+                    Position {idx + 1}
+                  </div>
+                </div>
+                <div className="space-y-3 p-3">
+                  <div>
+                    <label className="text-xs font-semibold text-white/70">Title</label>
+                    <input
+                      type="text"
+                      value={card.title}
+                      onChange={(e) => updateCard(card.id, { title: e.target.value })}
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-white/70">Creator Name</label>
+                    <input
+                      type="text"
+                      value={card.creator_name}
+                      onChange={(e) =>
+                        updateCard(card.id, { creator_name: e.target.value })
+                      }
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs font-semibold text-white/70">Software</label>
+                      <select
+                        value={card.software}
+                        onChange={(e) =>
+                          updateCard(card.id, {
+                            software: e.target.value as (typeof SOFTWARE_OPTIONS)[number],
+                          })
+                        }
+                        className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+                      >
+                        {SOFTWARE_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-white/70">Category</label>
+                      <select
+                        value={card.category}
+                        onChange={(e) =>
+                          updateCard(card.id, {
+                            category: e.target.value as (typeof CATEGORY_OPTIONS)[number],
+                          })
+                        }
+                        className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+                      >
+                        {CATEGORY_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-white/70">Layer Count</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={card.layer_count}
+                      onChange={(e) =>
+                        updateCard(card.id, { layer_count: e.target.value })
+                      }
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex cursor-pointer items-center justify-between gap-3">
+                      <span className="text-xs font-semibold text-white/75">Is Sponsored</span>
+                      <span
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full border transition ${
+                          card.is_sponsored
+                            ? "border-[var(--accent)] bg-[var(--accent)]/70"
+                            : "border-white/20 bg-white/10"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                            card.is_sponsored ? "translate-x-5" : "translate-x-1"
+                          }`}
+                        />
+                      </span>
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={card.is_sponsored}
+                        onChange={(e) =>
+                          updateCard(card.id, { is_sponsored: e.target.checked })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div
+                    className={`overflow-hidden transition-all duration-300 ${
+                      card.is_sponsored ? "max-h-24 opacity-100" : "max-h-0 opacity-0"
+                    }`}
+                  >
+                    <label className="text-xs font-semibold text-white/70">Sponsor Name</label>
+                    <input
+                      type="text"
+                      value={card.sponsor_name}
+                      onChange={(e) =>
+                        updateCard(card.id, { sponsor_name: e.target.value })
+                      }
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeCard(card.id)}
+                    className="w-full rounded-lg border border-red-400/35 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/20"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {errorText ? (
           <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-            {state.error}
+            {errorText}
           </p>
         ) : null}
 
-        <SubmitButton />
-      </form>
+        {submitting ? (
+          <p className="text-center text-sm font-semibold text-white/75">
+            Uploading image {Math.min(progressStep, cards.length)} of {cards.length}...
+          </p>
+        ) : null}
 
-      {showToast ? (
+        {successSummary ? (
+          <div className="rounded-xl border border-emerald-400/35 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            <div className="font-semibold">Published {successSummary.length} challenges:</div>
+            <div className="mt-1 text-emerald-100/90">
+              {successSummary.join(" · ")}
+            </div>
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          disabled={submitting || cards.length === 0}
+          onClick={() => void onPublishAll()}
+          className="w-full rounded-xl bg-[var(--accent)] px-5 py-3 text-sm font-bold text-white transition hover:bg-[var(--accent2)] disabled:opacity-50"
+        >
+          {submitting
+            ? "Publishing..."
+            : `Publish All ${cards.length} Challenge${cards.length === 1 ? "" : "s"}`}
+        </button>
+      </div>
+      {successSummary ? (
         <div className="pointer-events-none fixed bottom-6 left-1/2 z-[300] -translate-x-1/2 rounded-full border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-200 shadow-lg backdrop-blur-sm">
-          Challenge added successfully
+          Batch published successfully
         </div>
       ) : null}
     </div>
