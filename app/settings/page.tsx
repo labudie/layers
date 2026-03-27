@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { BADGE_DEFS, type BadgeId } from "@/lib/badges";
 
@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [notifEmail, setNotifEmail] = useState(false);
   const [notifDaily, setNotifDaily] = useState(false);
+  const [editingName, setEditingName] = useState(false);
   const [stats, setStats] = useState({
     current_streak: 0,
     longest_streak: 0,
@@ -26,6 +27,7 @@ export default function SettingsPage() {
     perfect_days: 0,
   });
   const [earnedBadges, setEarnedBadges] = useState<BadgeId[]>([]);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -161,225 +163,233 @@ export default function SettingsPage() {
     router.push("/");
   }
 
+  useEffect(() => {
+    if (!editingName) return;
+    nameInputRef.current?.focus();
+    nameInputRef.current?.select();
+  }, [editingName]);
+
   return (
     <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)]">
-      <div className="mx-auto w-full max-w-xl px-4 py-8 md:px-5">
-        <div className="mb-6">
+      <div className="mx-auto w-full max-w-2xl px-4 py-5 md:px-5 md:py-6">
+        <header className="mb-5 flex items-center justify-between rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.7)] px-4 py-3">
+          <div className="text-lg font-extrabold tracking-tight">Layers</div>
           <Link
             href="/"
-            className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-base font-bold text-white hover:bg-white/10"
+            aria-label="Back"
           >
-            ← Back
+            ←
           </Link>
-        </div>
-
-        <h1 className="text-3xl font-extrabold tracking-tight">Settings</h1>
-        <p className="mt-2 text-sm text-white/55">
-          Profile, account, notifications, legal, and sign out.
-        </p>
+        </header>
 
         {loading ? (
           <div className="mt-10 text-white/70">Loading…</div>
         ) : (
-          <div className="mt-8 space-y-8">
-            <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <h2 className="text-lg font-extrabold">Progress</h2>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3">
-                  <div className="text-xs uppercase tracking-wider text-white/50">
-                    Current streak
+          <div className="space-y-5">
+            <section className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)] p-5">
+              <div className="flex flex-col items-center text-center">
+                <label className="group relative cursor-pointer">
+                  <div className="h-20 w-20 overflow-hidden rounded-full border-2 border-[var(--accent)]/55 bg-black/40 p-[2px]">
+                    <div className="h-full w-full overflow-hidden rounded-full bg-black/40">
+                      {avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={avatarUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-2xl text-white/35">
+                          👤
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-1 text-lg font-bold text-orange-200">
-                    🔥 {stats.current_streak}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3">
-                  <div className="text-xs uppercase tracking-wider text-white/50">
-                    Longest streak
-                  </div>
-                  <div className="mt-1 text-lg font-bold text-white">
-                    {stats.longest_streak}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3">
-                  <div className="text-xs uppercase tracking-wider text-white/50">
-                    Total solved
-                  </div>
-                  <div className="mt-1 text-lg font-bold text-white">
-                    {stats.total_solved}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3">
-                  <div className="text-xs uppercase tracking-wider text-white/50">
-                    Perfect days
-                  </div>
-                  <div className="mt-1 text-lg font-bold text-white">
-                    {stats.perfect_days}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-5 flex items-center justify-between gap-3">
-                <h3 className="text-sm font-bold text-white/90">My Badges</h3>
-                <Link
-                  href="/badges"
-                  className="text-xs font-semibold text-[var(--accent2)] hover:underline"
-                >
-                  View all badges →
-                </Link>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {BADGE_DEFS.filter((b) => earnedBadges.includes(b.id)).length === 0 ? (
-                  <span className="text-sm text-white/55">No badges earned yet.</span>
-                ) : (
-                  BADGE_DEFS.filter((b) => earnedBadges.includes(b.id)).map((badge) => (
-                    <span
-                      key={badge.id}
-                      title={badge.name}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--accent)]/40 bg-[var(--accent)]/20 text-sm"
-                    >
-                      {badge.icon}
-                    </span>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <h2 className="text-lg font-extrabold">Profile</h2>
-              <p className="mt-1 text-sm text-white/55">
-                Display name and profile photo (stored in Supabase Storage bucket{" "}
-                <code className="text-white/80">avatars</code>).
-              </p>
-              <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start">
-                <div className="flex shrink-0 flex-col items-center gap-2">
-                  <div className="h-24 w-24 overflow-hidden rounded-full border border-white/15 bg-black/40">
-                    {avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={avatarUrl}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-3xl text-white/35">
-                        👤
-                      </div>
-                    )}
-                  </div>
-                  <label className="cursor-pointer rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/15">
-                    {uploading ? "Uploading…" : "Upload photo"}
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      className="hidden"
-                      onChange={(e) => void onAvatarChange(e)}
-                      disabled={uploading}
-                    />
-                  </label>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <label className="text-sm font-semibold text-white/80">
-                    Display name
-                  </label>
                   <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="mt-2 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none placeholder:text-white/30"
-                    placeholder="Your name"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(e) => void onAvatarChange(e)}
+                    disabled={uploading}
                   />
+                </label>
+                <div className="mt-2 text-xs font-medium text-white/55">
+                  {uploading ? "Uploading photo..." : "Tap to change photo"}
+                </div>
+
+                <div className="mt-3 flex items-center gap-2">
+                  {editingName ? (
+                    <input
+                      ref={nameInputRef}
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      onBlur={() => {
+                        setEditingName(false);
+                        void saveProfile();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          setEditingName(false);
+                          void saveProfile();
+                        }
+                      }}
+                      className="w-48 rounded-lg border border-white/15 bg-black/30 px-3 py-1.5 text-center text-base font-semibold text-white outline-none"
+                      placeholder="Display name"
+                    />
+                  ) : (
+                    <div className="text-lg font-semibold text-white">
+                      {displayName.trim() || "Player"}
+                    </div>
+                  )}
                   <button
                     type="button"
-                    onClick={() => void saveProfile()}
-                    disabled={saving}
-                    className="mt-3 rounded-xl bg-white px-4 py-2 text-sm font-bold text-black disabled:opacity-50"
+                    onClick={() => setEditingName((x) => !x)}
+                    className="text-sm font-semibold text-[var(--accent2)] hover:underline"
                   >
-                    {saving ? "Saving…" : "Save profile"}
+                    Edit
                   </button>
                 </div>
               </div>
             </section>
 
-            <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <h2 className="text-lg font-extrabold">Account</h2>
-              <p className="mt-1 text-sm text-white/55">Email address (read only)</p>
-              <p className="mt-3 rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/90">
-                {email ?? "—"}
-              </p>
-            </section>
-
-            <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <h2 className="text-lg font-extrabold">App</h2>
-              <p className="mt-1 text-sm text-white/55">
-                Notification preferences (coming soon).
-              </p>
-              <label className="mt-4 flex cursor-pointer items-center justify-between gap-3 border-b border-white/10 py-3">
-                <span className="text-sm font-medium text-white/85">
-                  Email notifications
-                </span>
-                <input
-                  type="checkbox"
-                  checked={notifEmail}
-                  onChange={(e) => setNotifEmail(e.target.checked)}
-                  className="h-5 w-5 rounded border-white/30"
-                />
-              </label>
-              <label className="flex cursor-pointer items-center justify-between gap-3 py-3">
-                <span className="text-sm font-medium text-white/85">
-                  Daily reminder
-                </span>
-                <input
-                  type="checkbox"
-                  checked={notifDaily}
-                  onChange={(e) => setNotifDaily(e.target.checked)}
-                  className="h-5 w-5 rounded border-white/30"
-                />
-              </label>
-            </section>
-
-            <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <h2 className="text-lg font-extrabold">Legal</h2>
-              <div className="mt-4 flex flex-col gap-2">
-                <Link
-                  href="/terms"
-                  className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/90 hover:bg-white/10"
-                >
-                  Terms &amp; Conditions →
-                </Link>
-                <Link
-                  href="/privacy"
-                  className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/90 hover:bg-white/10"
-                >
-                  Privacy Policy →
-                </Link>
+            <section className="-mx-1 overflow-x-auto pb-1">
+              <div className="flex min-w-max gap-2 px-1">
+                <div className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm font-semibold text-white/90">
+                  🔥 {stats.current_streak} day streak
+                </div>
+                <div className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm font-semibold text-white/90">
+                  ⚡ {stats.total_solved} solved
+                </div>
+                <div className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm font-semibold text-white/90">
+                  🏆 {stats.perfect_days} perfect days
+                </div>
+                <div className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm font-semibold text-white/90">
+                  📅 {stats.longest_streak} best streak
+                </div>
               </div>
             </section>
 
-            <section className="rounded-2xl border border-red-500/30 bg-red-950/20 p-5">
-              <h2 className="text-lg font-extrabold text-red-300">Danger zone</h2>
-              <p className="mt-1 text-sm text-white/55">
-                Sign out of your account on this device.
-              </p>
-              <button
-                type="button"
-                onClick={() => void handleSignOut()}
-                className="mt-4 w-full rounded-xl border border-red-500/50 bg-red-950/40 px-4 py-3 text-sm font-bold text-red-200 hover:bg-red-950/60"
-              >
-                Sign out
-              </button>
+            <section className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)] p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-sm font-bold text-white/90">Badges</div>
+                <Link
+                  href="/badges"
+                  className="text-sm font-semibold text-[var(--accent2)] hover:underline"
+                >
+                  View all →
+                </Link>
+              </div>
+              <div className="-mx-1 overflow-x-auto pb-1">
+                <div className="flex min-w-max gap-2 px-1">
+                  {BADGE_DEFS.map((badge) => {
+                    const earned = earnedBadges.includes(badge.id);
+                    return (
+                      <span
+                        key={badge.id}
+                        title={badge.name}
+                        className={`inline-flex h-10 w-10 items-center justify-center rounded-full border text-base ${
+                          earned
+                            ? "border-[var(--accent)]/45 bg-[var(--accent)]/20"
+                            : "border-white/12 bg-white/5 text-white/35 grayscale"
+                        }`}
+                      >
+                        {badge.icon}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
             </section>
 
-            {error ? (
-              <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-                {error}
-              </p>
-            ) : null}
-            {success ? (
-              <p className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white/90">
-                {success}
-              </p>
-            ) : null}
+            <section className="space-y-4">
+              <div>
+                <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-white/45">
+                  Account
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-white/85">Email</span>
+                    <span className="max-w-[60%] truncate text-sm text-white/55">
+                      {email ?? "—"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-white/45">
+                  Notifications
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
+                  <label className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                    <span className="text-sm text-white/85">Email notifications</span>
+                    <input
+                      type="checkbox"
+                      checked={notifEmail}
+                      onChange={(e) => setNotifEmail(e.target.checked)}
+                      className="h-5 w-5 rounded border-white/30"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-white/85">Daily reminder</span>
+                    <input
+                      type="checkbox"
+                      checked={notifDaily}
+                      onChange={(e) => setNotifDaily(e.target.checked)}
+                      className="h-5 w-5 rounded border-white/30"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-white/45">
+                  Legal
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
+                  <Link
+                    href="/terms"
+                    className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/90 hover:bg-white/5"
+                  >
+                    <span>Terms &amp; Conditions</span>
+                    <span className="text-white/40">›</span>
+                  </Link>
+                  <Link
+                    href="/privacy"
+                    className="flex items-center justify-between px-4 py-3 text-sm text-white/90 hover:bg-white/5"
+                  >
+                    <span>Privacy Policy</span>
+                    <span className="text-white/40">›</span>
+                  </Link>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-2xl border border-red-500/35 bg-red-950/20">
+                <button
+                  type="button"
+                  onClick={() => void handleSignOut()}
+                  className="w-full px-4 py-3 text-sm font-semibold text-red-200 hover:bg-red-900/25"
+                >
+                  Sign out
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {error ? (
+                  <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                    {error}
+                  </p>
+                ) : null}
+                {success ? (
+                  <p className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white/90">
+                    {saving ? "Saving..." : success}
+                  </p>
+                ) : null}
+              </div>
+            </section>
+
           </div>
         )}
       </div>
