@@ -264,7 +264,6 @@ export default async function LeaderboardPage({
                   <th className="px-4 py-3">Creator</th>
                   <th className="px-4 py-3">Submissions</th>
                   <th className="px-4 py-3">Downloads</th>
-                  <th className="px-4 py-3">Players</th>
                 </tr>
               </thead>
               <tbody>
@@ -285,9 +284,6 @@ export default async function LeaderboardPage({
                       </td>
                       <td className="px-4 py-3 text-white/80">
                         {row.total_downloads ?? 0}
-                      </td>
-                      <td className="px-4 py-3 text-white/80">
-                        {row.total_players ?? 0}
                       </td>
                     </tr>
                   );
