@@ -217,7 +217,7 @@ export function DailyGameClient({
   const infoButtonRef = useRef<HTMLButtonElement | null>(null);
   const infoPopoverRef = useRef<HTMLDivElement | null>(null);
   const guessInputRef = useRef<HTMLInputElement | null>(null);
-  const [summaryImageUrl, setSummaryImageUrl] = useState<string | null>(null);
+  const [gameImageModalUrl, setGameImageModalUrl] = useState<string | null>(null);
   const [imageFeedbackClassName, setImageFeedbackClassName] = useState("");
   const [confettiBursts, setConfettiBursts] = useState<number[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -230,6 +230,7 @@ export function DailyGameClient({
   const confettiTimeoutsRef = useRef<number[]>([]);
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const statsSyncKeyRef = useRef<string | null>(null);
+  const gameImageTouchStartYRef = useRef<number | null>(null);
   const startedChallengeIdsRef = useRef<Set<string>>(new Set());
   const completedChallengeIdsRef = useRef<Set<string>>(new Set());
   const dailyCompletedKeyRef = useRef<string | null>(null);
@@ -266,13 +267,13 @@ export function DailyGameClient({
   }, [currentChallengeIndex, challengeIdsKey]);
 
   useEffect(() => {
-    if (!summaryImageUrl) return;
+    if (!gameImageModalUrl) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSummaryImageUrl(null);
+      if (e.key === "Escape") setGameImageModalUrl(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [summaryImageUrl]);
+  }, [gameImageModalUrl]);
 
   useEffect(() => {
     if (!infoPopoverOpen) return;
@@ -1049,17 +1050,13 @@ export function DailyGameClient({
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                         {ch.image_url ? (
                           <div className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-lg border border-white/10 bg-[rgba(26,10,46,0.6)] sm:w-32">
-                            <button
-                              type="button"
-                              onClick={() => setSummaryImageUrl(ch.image_url)}
-                              className="absolute inset-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(124,58,237,0.4)]"
-                            >
+                            <Zoom>
                               <img
                                 src={ch.image_url}
                                 alt=""
-                                className="h-full w-full object-contain"
+                                className="h-full w-full cursor-zoom-in object-contain"
                               />
-                            </button>
+                            </Zoom>
 
                             <div className="absolute bottom-1 right-2 z-20 flex items-center gap-2">
                               <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[var(--accent)]">
@@ -1139,14 +1136,19 @@ export function DailyGameClient({
                       className={`challenge-image-frame flex max-h-[60vh] w-full items-center justify-center overflow-hidden rounded-none bg-[#0f0520] ${imageFeedbackClassName}`}
                     >
                       {currentChallenge.image_url ? (
-                        <Zoom>
+                        <button
+                          type="button"
+                          onClick={() => setGameImageModalUrl(currentChallenge.image_url ?? null)}
+                          className="block w-auto max-w-full cursor-zoom-in"
+                          aria-label="Expand challenge image"
+                        >
                           <img
                             src={currentChallenge.image_url}
                             alt={currentChallenge.title ?? "Challenge image"}
-                            className="block max-h-[60vh] w-auto max-w-full cursor-zoom-in object-contain"
+                            className="block max-h-[60vh] w-auto max-w-full object-contain"
                             style={{ background: "#0f0520" }}
                           />
-                        </Zoom>
+                        </button>
                       ) : (
                         <canvas
                           ref={canvasRef}
@@ -1409,28 +1411,39 @@ export function DailyGameClient({
         )}
       </div>
 
-      {summaryImageUrl ? (
+      {gameImageModalUrl ? (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f0520]/92 p-4"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Challenge image"
-          onClick={() => setSummaryImageUrl(null)}
+          onClick={() => setGameImageModalUrl(null)}
+          onTouchStart={(e) => {
+            gameImageTouchStartYRef.current = e.touches[0]?.clientY ?? null;
+          }}
+          onTouchEnd={(e) => {
+            const startY = gameImageTouchStartYRef.current;
+            const endY = e.changedTouches[0]?.clientY ?? null;
+            gameImageTouchStartYRef.current = null;
+            if (startY == null || endY == null) return;
+            if (startY - endY > 50) {
+              setGameImageModalUrl(null);
+            }
+          }}
         >
           <button
             type="button"
             aria-label="Close"
-            className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-[#0f0520]/70 text-2xl leading-none text-white hover:bg-white/10"
+            className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/70 text-2xl leading-none text-white hover:bg-white/10"
             onClick={(e) => {
               e.stopPropagation();
-              setSummaryImageUrl(null);
+              setGameImageModalUrl(null);
             }}
           >
             ×
           </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={summaryImageUrl}
+            src={gameImageModalUrl}
             alt=""
             className="max-h-[min(90dvh,100%)] max-w-full object-contain"
             onClick={(e) => e.stopPropagation()}
