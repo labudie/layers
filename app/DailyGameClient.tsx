@@ -1082,7 +1082,9 @@ export function DailyGameClient({
                             <button
                               type="button"
                               aria-label="Open result image fullscreen"
-                              onClick={() => openImageModal(ch.image_url ?? "")}
+                              onClick={() => {
+                                if (ch.image_url) openImageModal(ch.image_url);
+                              }}
                               className="h-full w-full"
                             >
                               <img
