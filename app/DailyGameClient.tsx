@@ -206,6 +206,8 @@ export function DailyGameClient({
   const [copied, setCopied] = useState(false);
   /** After a correct submit, brief hold before auto-advance (no "Next" click). */
   const [pendingAutoAdvance, setPendingAutoAdvance] = useState(false);
+  /** After a failed round (6 guesses), auto-advance after short reveal delay. */
+  const [pendingFailedAutoAdvance, setPendingFailedAutoAdvance] = useState(false);
   /** Opacity fade on title, image, attempt rows, result only — not whole page. */
   const [challengeTransitioning, setChallengeTransitioning] = useState(false);
   /** Hydration-safe: dynamic transition classes only after mount. */
@@ -677,6 +679,48 @@ export function DailyGameClient({
       }, 0);
     }, 300);
   }, []);
+
+  const advanceNow = useCallback(
+    (isLast: boolean) => {
+      if (autoAdvanceTimeoutRef.current != null) {
+        window.clearTimeout(autoAdvanceTimeoutRef.current);
+        autoAdvanceTimeoutRef.current = null;
+      }
+      setPendingAutoAdvance(false);
+      setPendingFailedAutoAdvance(false);
+      advanceAfterTransitionOut(isLast);
+    },
+    [advanceAfterTransitionOut]
+  );
+
+  useEffect(() => {
+    if (!failedWithSixGuesses || showSummary) return;
+    if (autoAdvanceTimeoutRef.current != null) {
+      window.clearTimeout(autoAdvanceTimeoutRef.current);
+      autoAdvanceTimeoutRef.current = null;
+    }
+    setPendingFailedAutoAdvance(true);
+    const isLast = currentChallengeIndex >= total - 1;
+    autoAdvanceTimeoutRef.current = window.setTimeout(() => {
+      autoAdvanceTimeoutRef.current = null;
+      setPendingFailedAutoAdvance(false);
+      advanceAfterTransitionOut(isLast);
+    }, 2000);
+
+    return () => {
+      if (autoAdvanceTimeoutRef.current != null) {
+        window.clearTimeout(autoAdvanceTimeoutRef.current);
+        autoAdvanceTimeoutRef.current = null;
+      }
+      setPendingFailedAutoAdvance(false);
+    };
+  }, [
+    failedWithSixGuesses,
+    showSummary,
+    currentChallengeIndex,
+    total,
+    advanceAfterTransitionOut,
+  ]);
 
   const submitGuess = useCallback(async () => {
     if (!roundActive || typeof guessInput !== "number" || !currentAnswer) return;
@@ -1176,19 +1220,19 @@ export function DailyGameClient({
                         <button
                           type="button"
                           disabled={challengeTransitioning}
-                          onClick={() => advanceAfterTransitionOut(false)}
-                          className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40 md:rounded-xl md:py-3 shadow-sm transition-colors hover:bg-[var(--accent2)]"
+                          onClick={() => advanceNow(false)}
+                          className="h-11 w-full rounded-xl bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40"
                         >
-                          Next challenge
+                          Next →
                         </button>
                       ) : (
                         <button
                           type="button"
                           disabled={challengeTransitioning}
-                          onClick={() => advanceAfterTransitionOut(true)}
-                          className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40 md:rounded-xl md:py-3 shadow-sm transition-colors hover:bg-[var(--accent2)]"
+                          onClick={() => advanceNow(true)}
+                          className="h-11 w-full rounded-xl bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40"
                         >
-                          View daily summary
+                          Next →
                         </button>
                       )
                     ) : (
@@ -1241,6 +1285,11 @@ export function DailyGameClient({
                         ) : null}
                       </>
                     )}
+                    {failedWithSixGuesses && pendingFailedAutoAdvance ? (
+                      <p className="text-center text-xs font-semibold text-white/60">
+                        Continuing in 2s...
+                      </p>
+                    ) : null}
                   </div>
 
                   {currentFinished && !failedWithSixGuesses ? (
