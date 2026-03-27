@@ -57,6 +57,7 @@ export function AdminChallengeFormClient({
   const [submitting, setSubmitting] = useState(false);
   const [progressStep, setProgressStep] = useState(0);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [warningText, setWarningText] = useState<string | null>(null);
   const [successSummary, setSuccessSummary] = useState<string[] | null>(null);
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -103,6 +104,11 @@ export function AdminChallengeFormClient({
     const imageFiles = files.filter((f) =>
       ["image/png", "image/jpeg"].includes(f.type)
     );
+    if (cards.length >= 5 || imageFiles.length > Math.max(0, 5 - cards.length)) {
+      setWarningText("Maximum 5 images per day");
+    } else {
+      setWarningText(null);
+    }
     const availableSlots = Math.max(0, 5 - cards.length);
     const picked = imageFiles.slice(0, availableSlots);
     if (picked.length === 0) return;
@@ -342,7 +348,8 @@ export function AdminChallengeFormClient({
             ref={fileInputRef}
             name="image"
             type="file"
-            accept="image/png,image/jpeg"
+            accept="image/*"
+            multiple
             onChange={onFileChange}
             className="hidden"
           />
@@ -363,7 +370,7 @@ export function AdminChallengeFormClient({
           >
             <div className="text-2xl">⬆️</div>
             <div className="mt-2 text-sm font-semibold text-white/90">
-              Drag and drop up to 5 images
+              Drop up to 5 images here
             </div>
             <div className="mt-1 text-xs text-white/55">
               or click to browse files
@@ -524,6 +531,11 @@ export function AdminChallengeFormClient({
         {errorText ? (
           <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
             {errorText}
+          </p>
+        ) : null}
+        {warningText ? (
+          <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            {warningText}
           </p>
         ) : null}
 
