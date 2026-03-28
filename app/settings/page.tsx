@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { BADGE_DEFS, type BadgeId } from "@/lib/badges";
+import {
+  readGameSoundEnabled,
+  writeGameSoundEnabled,
+} from "@/lib/game-sound";
+import { formatAtUsername, stripAtHandle } from "@/lib/username-display";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -27,6 +32,7 @@ export default function SettingsPage() {
     perfect_days: 0,
   });
   const [earnedBadges, setEarnedBadges] = useState<BadgeId[]>([]);
+  const [gameSoundOn, setGameSoundOn] = useState(true);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
@@ -80,13 +86,17 @@ export default function SettingsPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    setGameSoundOn(readGameSoundEnabled());
+  }, []);
+
   async function saveProfile() {
     if (!userId) return;
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      const trimmed = displayName.trim();
+      const trimmed = stripAtHandle(displayName);
       const { error: upsertError } = await supabase().from("profiles").upsert(
         {
           id: userId,
@@ -139,7 +149,7 @@ export default function SettingsPage() {
           id: userId,
           username:
             prevUsername ||
-            displayName.trim() ||
+            stripAtHandle(displayName) ||
             `player_${userId.slice(0, 8)}`,
           avatar_url: pub.publicUrl,
         },
@@ -240,11 +250,11 @@ export default function SettingsPage() {
                         }
                       }}
                       className="w-48 rounded-lg border border-white/15 bg-black/30 px-3 py-1.5 text-center text-base font-semibold text-white outline-none"
-                      placeholder="Display name"
+                      placeholder="your_username"
                     />
                   ) : (
                     <div className="text-lg font-semibold text-white">
-                      {displayName.trim() || "Player"}
+                      {formatAtUsername(displayName, "Player")}
                     </div>
                   )}
                   <button
@@ -319,6 +329,36 @@ export default function SettingsPage() {
                       {email ?? "—"}
                     </span>
                   </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-white/45">
+                  Gameplay
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
+                  <label className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-white/85">Guess sounds</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={gameSoundOn}
+                      onClick={() => {
+                        const next = !gameSoundOn;
+                        setGameSoundOn(next);
+                        writeGameSoundEnabled(next);
+                      }}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${
+                        gameSoundOn ? "bg-[#7c3aed]" : "bg-white/20"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white transition duration-200 ${
+                          gameSoundOn ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </label>
                 </div>
               </div>
 

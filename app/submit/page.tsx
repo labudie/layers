@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { formatAtUsername, stripAtHandle } from "@/lib/username-display";
 
 const SOFTWARE_OPTIONS = [
   "Photoshop",
@@ -71,14 +72,15 @@ export default function SubmitPage() {
       .maybeSingle();
     const username =
       (profile as { username?: string | null } | null)?.username?.trim() ?? "";
-    setCreatorName(username || `player_${user.id.slice(0, 8)}`);
+    const baseName = stripAtHandle(username) || `player_${user.id.slice(0, 8)}`;
+    setCreatorName(formatAtUsername(username, `player_${user.id.slice(0, 8)}`));
 
     // Keep profile email mirrored for admin users table (best effort).
     await sb.from("profiles").upsert(
       {
         id: user.id,
         email: user.email ?? null,
-        username: username || `player_${user.id.slice(0, 8)}`,
+        username: baseName,
       },
       { onConflict: "id" }
     );

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { DeleteButton } from "@/app/admin/DeleteButton";
+import { formatAtCreator } from "@/lib/username-display";
 
 type PublishBatchResult = {
   error: string | null;
@@ -41,14 +43,31 @@ type UploadCard = {
   sponsor_name: string;
 };
 
+export type UpcomingChallengeRow = {
+  id: string;
+  title: string | null;
+  creator_name: string | null;
+  software: string | null;
+  category: string | null;
+  layer_count: number | null;
+  day_number: number | null;
+  active_date: string | null;
+  position: number | null;
+  is_sponsored: boolean | null;
+  sponsor_name: string | null;
+  image_url: string | null;
+};
+
 export function AdminChallengeFormClient({
   today,
   action,
   scheduledCounts,
+  upcomingChallenges,
 }: {
   today: string;
   action: (formData: FormData) => Promise<PublishBatchResult>;
   scheduledCounts: Record<string, number>;
+  upcomingChallenges: UpcomingChallengeRow[];
 }) {
   const [cards, setCards] = useState<UploadCard[]>([]);
   const [activeDate, setActiveDate] = useState(today);
@@ -67,12 +86,22 @@ export function AdminChallengeFormClient({
   });
   const [scheduleCountsState, setScheduleCountsState] =
     useState<Record<string, number>>(scheduledCounts);
+  const [batchStartPosition, setBatchStartPosition] = useState(1);
+  const [inspectChallenge, setInspectChallenge] =
+    useState<UpcomingChallengeRow | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const batchSectionRef = useRef<HTMLDivElement | null>(null);
 
   const sortedScheduledDates = useMemo(
     () => Object.keys(scheduleCountsState).sort(),
     [scheduleCountsState]
   );
+
+  const challengesForActiveDate = useMemo(() => {
+    return upcomingChallenges.filter((c) => c.active_date === activeDate);
+  }, [upcomingChallenges, activeDate]);
+
+  const maxCardsForBatch = 5 - batchStartPosition + 1;
 
   const suggestedDayNumber = useMemo(() => {
     let suggested = 1;
@@ -121,13 +150,15 @@ export function AdminChallengeFormClient({
     const imageFiles = files.filter((f) =>
       ["image/png", "image/jpeg"].includes(f.type)
     );
-    if (cards.length >= 5 || imageFiles.length > Math.max(0, 5 - cards.length)) {
-      setWarningText("Maximum 5 images per day");
+    const availableSlots = Math.max(0, maxCardsForBatch - cards.length);
+    if (cards.length >= maxCardsForBatch || imageFiles.length > availableSlots) {
+      setWarningText(
+        `Maximum ${maxCardsForBatch} image(s) for positions ${batchStartPosition}–5`
+      );
     } else {
       setWarningText(null);
     }
-    const availableSlots = Math.max(0, 5 - cards.length);
-    const picked = imageFiles.slice(0, availableSlots);
+    const picked = imageFiles.slice(0, Math.max(0, availableSlots));
     if (picked.length === 0) return;
 
     const nextCards = picked.map((file, idx) => ({
@@ -246,7 +277,8 @@ export function AdminChallengeFormClient({
       const card = cards[i];
       setProgressStep(i + 1);
       const ext = card.file.type === "image/jpeg" ? "jpg" : "png";
-      const storagePath = `${activeDate}-${effectiveDayNumber}-${i + 1}-${sanitizeForFilename(card.title)}-${Date.now()}.${ext}`;
+      const pos = batchStartPosition + i;
+      const storagePath = `${activeDate}-${effectiveDayNumber}-${pos}-${sanitizeForFilename(card.title)}-${Date.now()}.${ext}`;
 
       const { error: uploadError } = await sb.storage
         .from("challenge-images")
@@ -285,6 +317,7 @@ export function AdminChallengeFormClient({
     const fd = new FormData();
     fd.set("active_date", activeDate);
     fd.set("day_number", effectiveDayNumber);
+    fd.set("batch_start_position", String(batchStartPosition));
     fd.set(
       "cards_json",
       JSON.stringify(publishCards)
@@ -307,6 +340,7 @@ export function AdminChallengeFormClient({
     }));
     cards.forEach((c) => URL.revokeObjectURL(c.previewUrl));
     setCards([]);
+    setBatchStartPosition(1);
   }
 
   return (
@@ -378,6 +412,8 @@ export function AdminChallengeFormClient({
                   onClick={() => {
                     setActiveDate(cell.date as string);
                     setDayNumberManual(false);
+                    setBatchStartPosition(1);
+                    setInspectChallenge(null);
                   }}
                   className={`relative h-8 rounded-md text-xs transition ${
                     isSelected ? "bg-[var(--accent)]/25" : "hover:bg-white/5"
@@ -405,9 +441,127 @@ export function AdminChallengeFormClient({
               1-4 scheduled
             </span>
           </div>
+
+          <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-4">
+            <div className="text-xs font-bold uppercase tracking-wider text-white/50">
+              Day detail · {activeDate}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {([1, 2, 3, 4, 5] as const).map((pos) => {
+                const ch = challengesForActiveDate.find((c) => c.position === pos);
+                if (ch) {
+                  return (
+                    <button
+                      key={pos}
+                      type="button"
+                      onClick={() => setInspectChallenge(ch)}
+                      className="flex min-h-[5.5rem] flex-col rounded-lg border border-white/15 bg-white/5 p-2 text-left text-xs transition hover:bg-white/10"
+                    >
+                      <span className="font-mono text-[10px] text-white/45">
+                        #{pos}
+                      </span>
+                      <span className="mt-1 line-clamp-3 font-semibold text-white/90">
+                        {ch.title ?? "Untitled"}
+                      </span>
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    key={pos}
+                    type="button"
+                    onClick={() => {
+                      setBatchStartPosition(pos);
+                      setInspectChallenge(null);
+                      setDayNumberManual(false);
+                      batchSectionRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                      window.setTimeout(() => {
+                        fileInputRef.current?.focus();
+                        openPicker();
+                      }, 400);
+                    }}
+                    className="flex min-h-[5.5rem] flex-col items-center justify-center rounded-lg border border-dashed border-white/25 bg-black/25 p-2 text-xs font-semibold text-white/70 transition hover:border-[var(--accent)]/50 hover:bg-[var(--accent)]/10 hover:text-white"
+                  >
+                    <span className="font-mono text-[10px] text-white/45">
+                      #{pos}
+                    </span>
+                    <span className="mt-1 text-lg leading-none">+</span>
+                    <span className="mt-0.5 text-[10px]">Add</span>
+                  </button>
+                );
+              })}
+            </div>
+            {inspectChallenge ? (
+              <div className="mt-4 rounded-xl border border-white/15 bg-[rgba(26,10,46,0.85)] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="text-[10px] font-mono uppercase text-white/45">
+                      Position {inspectChallenge.position ?? "—"} ·{" "}
+                      {inspectChallenge.active_date ?? "—"}
+                    </div>
+                    <div className="mt-1 text-base font-bold text-white">
+                      {inspectChallenge.title ?? "Untitled"}
+                    </div>
+                    <div className="mt-2 space-y-1 text-sm text-white/75">
+                      <div>
+                        Creator: {formatAtCreator(inspectChallenge.creator_name)}
+                      </div>
+                      <div>
+                        {inspectChallenge.software ?? "—"} ·{" "}
+                        {inspectChallenge.category ?? "—"} ·{" "}
+                        {inspectChallenge.layer_count ?? "—"} layers
+                      </div>
+                      {inspectChallenge.is_sponsored ? (
+                        <div className="text-amber-200">
+                          Sponsored · {inspectChallenge.sponsor_name ?? "—"}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                  {inspectChallenge.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={inspectChallenge.image_url}
+                      alt=""
+                      className="h-20 w-20 shrink-0 rounded-lg border border-white/10 object-cover"
+                    />
+                  ) : null}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <DeleteButton id={inspectChallenge.id} />
+                  <button
+                    type="button"
+                    onClick={() => setInspectChallenge(null)}
+                    className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 hover:bg-white/10"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 sm:grid-cols-2">
+        <div
+          ref={batchSectionRef}
+          className="grid grid-cols-1 gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 sm:grid-cols-2"
+        >
+          <div className="sm:col-span-2 text-xs text-white/55">
+            Batch fills positions{" "}
+            <span className="font-mono font-semibold text-white/85">
+              {batchStartPosition}
+            </span>
+            –
+            <span className="font-mono font-semibold text-white/85">
+              {Math.min(5, batchStartPosition + Math.max(0, cards.length - 1))}
+            </span>
+            {cards.length === 0
+              ? " (add images below)"
+              : ` (${cards.length} image${cards.length === 1 ? "" : "s"})`}
+          </div>
           <div>
             <label className="text-sm font-semibold text-white/80">Active Date</label>
             <input
@@ -418,6 +572,8 @@ export function AdminChallengeFormClient({
               onChange={(e) => {
                 setActiveDate(e.target.value);
                 setDayNumberManual(false);
+                setBatchStartPosition(1);
+                setInspectChallenge(null);
               }}
               className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
             />
@@ -511,7 +667,7 @@ export function AdminChallengeFormClient({
                     className="h-full w-full object-cover"
                   />
                   <div className="absolute left-3 top-3 rounded-full border border-white/25 bg-black/55 px-2.5 py-1 text-xs font-bold text-white">
-                    Position {idx + 1}
+                    Position {batchStartPosition + idx}
                   </div>
                 </div>
                 <div className="space-y-3 p-3">

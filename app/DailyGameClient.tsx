@@ -15,6 +15,12 @@ import { usePostHog } from "posthog-js/react";
 import type { Challenge } from "./page";
 import { supabase } from "@/lib/supabase";
 import type { BadgeId } from "@/lib/badges";
+import {
+  playAscendingCelebration,
+  playToneHz,
+  readGameSoundEnabled,
+} from "@/lib/game-sound";
+import { formatAtCreator, stripAtHandle } from "@/lib/username-display";
 
 type GuessRow = {
   value: number;
@@ -156,6 +162,26 @@ function emojiForVerdict(v: GuessRow["verdict"]) {
   return "🟥";
 }
 
+function safeVibrate(pattern: number | number[]) {
+  if (
+    typeof navigator === "undefined" ||
+    typeof navigator.vibrate !== "function"
+  ) {
+    return;
+  }
+  navigator.vibrate(pattern);
+}
+
+function applyGuessFeedback(verdict: GuessRow["verdict"]) {
+  if (verdict === "wrong") safeVibrate(50);
+  else if (verdict === "correct") safeVibrate([50, 30, 50]);
+  else if (verdict === "close") safeVibrate(30);
+  if (!readGameSoundEnabled()) return;
+  if (verdict === "wrong") playToneHz(200, 0.1);
+  else if (verdict === "correct") playToneHz(600, 0.2);
+  else if (verdict === "close") playToneHz(400, 0.15);
+}
+
 function isChallengeFinished(
   answer: number | null | undefined,
   guesses: GuessRow[]
@@ -240,6 +266,7 @@ export function DailyGameClient({
   const panStartRef = useRef<{ x: number; y: number } | null>(null);
   const panStartOffsetRef = useRef({ x: 0, y: 0 });
   const lastTapRef = useRef<{ ts: number; x: number; y: number } | null>(null);
+  const perfectDayFeedbackFiredRef = useRef(false);
 
   const challengesRef = useRef(challenges);
   useEffect(() => {
@@ -602,11 +629,17 @@ export function DailyGameClient({
       }
 
       const username = row.username?.trim() ?? "";
-      if (username) {
+      const handleBase = stripAtHandle(username);
+      const creatorNameVariants = Array.from(
+        new Set(
+          [handleBase, handleBase ? `@${handleBase}` : ""].filter(Boolean)
+        )
+      );
+      if (creatorNameVariants.length > 0) {
         const { count: creatorCount } = await sb
           .from("challenges")
           .select("id", { count: "exact", head: true })
-          .eq("creator_name", username);
+          .in("creator_name", creatorNameVariants);
         if ((creatorCount ?? 0) > 0) {
           currentBadges.add("creator");
         }
@@ -614,7 +647,7 @@ export function DailyGameClient({
         const { data: createdChallenges } = await sb
           .from("challenges")
           .select("id")
-          .eq("creator_name", username);
+          .in("creator_name", creatorNameVariants);
         const createdIds = (createdChallenges ?? []).map(
           (x: { id: string }) => x.id
         );
@@ -664,6 +697,23 @@ export function DailyGameClient({
     dailyCompletedKeyRef.current = key;
     posthog?.capture("daily_completed", { total_solved: solvedCount });
   }, [showSummary, challengeIdsKey, challenges.length, guessesByIndex, posthog]);
+
+  useEffect(() => {
+    if (!showSummary) {
+      perfectDayFeedbackFiredRef.current = false;
+      return;
+    }
+    if (challenges.length !== 5) return;
+    const solvedCount = guessesByIndex.reduce(
+      (acc, g) => acc + (g.some((x) => x.verdict === "correct") ? 1 : 0),
+      0
+    );
+    if (solvedCount !== 5) return;
+    if (perfectDayFeedbackFiredRef.current) return;
+    perfectDayFeedbackFiredRef.current = true;
+    safeVibrate([100, 50, 100, 50, 200]);
+    playAscendingCelebration();
+  }, [showSummary, challenges.length, guessesByIndex]);
 
   useEffect(() => {
     const tick = () => {
@@ -781,6 +831,8 @@ export function DailyGameClient({
     });
 
     if (error) return;
+
+    applyGuessFeedback(verdict);
 
     posthog?.capture("guess_submitted", {
       guess_number: attemptNumber,
@@ -1132,6 +1184,9 @@ export function DailyGameClient({
                           <div className="mt-1 font-semibold text-white">
                             {ch.title ?? "Untitled"}
                           </div>
+                          <div className="mt-1 text-sm text-white/60">
+                            Creator {formatAtCreator(ch.creator_name)}
+                          </div>
                           <div className="mt-2 text-sm text-white/70">
                             Answer:{" "}
                             <span className="font-bold text-white">
@@ -1247,7 +1302,7 @@ export function DailyGameClient({
                             <span className="font-semibold text-white">
                               Creator:
                             </span>{" "}
-                            —
+                            {formatAtCreator(currentChallenge.creator_name)}
                           </p>
                           <p className="mt-2 text-white/85">
                             <span className="font-semibold text-white">

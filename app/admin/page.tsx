@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import { AdminChallengeFormClient } from "@/app/admin/AdminChallengeFormClient";
+import { AdminSubmissionImage } from "@/app/admin/AdminSubmissionImage";
 import { DeleteButton } from "@/app/admin/DeleteButton";
+import { formatAtCreator, formatAtUsername } from "@/lib/username-display";
 
 const ADMIN_EMAIL = "rjlabudie@gmail.com";
 
@@ -135,6 +137,13 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
       image_url: string;
     }>;
 
+    const startRaw = formData.get("batch_start_position");
+    const startParsed = Number(String(startRaw ?? "1").trim() || "1");
+    const batchStart =
+      Number.isFinite(startParsed) && startParsed >= 1 && startParsed <= 5
+        ? Math.trunc(startParsed)
+        : 1;
+
     if (!Array.isArray(cards) || cards.length === 0) {
       return {
         error: "At least one challenge card is required.",
@@ -145,6 +154,13 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
     if (cards.length > 5) {
       return {
         error: "You can publish at most 5 challenges at once.",
+        publishedCount: 0,
+        publishedTitles: [],
+      };
+    }
+    if (batchStart + cards.length - 1 > 5) {
+      return {
+        error: `Starting at position ${batchStart}, you can add at most ${5 - batchStart + 1} challenge(s) (positions 1–5).`,
         publishedCount: 0,
         publishedTitles: [],
       };
@@ -205,7 +221,7 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
         };
       }
 
-      const position = i + 1;
+      const position = batchStart + i;
       insertPayload.push({
         title,
         creator_name: creatorName || null,
@@ -512,6 +528,7 @@ export default async function AdminPage({
               today={today}
               action={addChallengeAction}
               scheduledCounts={scheduledCounts}
+              upcomingChallenges={challenges}
             />
 
             <div className="mt-10">
@@ -578,7 +595,7 @@ export default async function AdminPage({
                             {ch.title ?? "Untitled"}
                           </td>
                           <td className="px-4 py-3 text-white/80">
-                            {ch.creator_name ?? "—"}
+                            {formatAtCreator(ch.creator_name)}
                           </td>
                           <td className="px-4 py-3 text-white/80">
                             {ch.software ?? "—"}
@@ -632,8 +649,7 @@ export default async function AdminPage({
                       className="rounded-2xl border border-white/10 bg-black/25 p-4"
                     >
                       {s.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
+                        <AdminSubmissionImage
                           src={s.image_url}
                           alt={s.title ?? "Submission"}
                           className="h-40 w-full rounded-xl border border-white/10 object-cover"
@@ -643,7 +659,8 @@ export default async function AdminPage({
                         {s.title ?? "Untitled"}
                       </div>
                       <div className="mt-1 text-sm text-white/70">
-                        {s.creator_name ?? "—"} · {s.layer_count ?? 0} layers
+                        {formatAtCreator(s.creator_name)} · {s.layer_count ?? 0}{" "}
+                        layers
                       </div>
                       <div className="mt-4 flex items-center gap-2">
                         <form action={approveSubmissionAction}>
@@ -693,8 +710,7 @@ export default async function AdminPage({
                       className="rounded-2xl border border-white/10 bg-black/25 p-4"
                     >
                       {s.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
+                        <AdminSubmissionImage
                           src={s.image_url}
                           alt={s.title ?? "Submission"}
                           className="h-40 w-full rounded-xl border border-white/10 object-cover"
@@ -704,7 +720,8 @@ export default async function AdminPage({
                         {s.title ?? "Untitled"}
                       </div>
                       <div className="mt-1 text-sm text-white/70">
-                        {s.creator_name ?? "—"} · {s.layer_count ?? 0} layers
+                        {formatAtCreator(s.creator_name)} · {s.layer_count ?? 0}{" "}
+                        layers
                       </div>
 
                       <form action={assignApprovedSubmissionAction} className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_90px_auto] sm:items-end">
@@ -767,7 +784,7 @@ export default async function AdminPage({
                           {s.title ?? "Untitled"}
                         </div>
                         <div className="text-xs text-white/60">
-                          {s.creator_name ?? "—"} ·{" "}
+                          {formatAtCreator(s.creator_name)} ·{" "}
                           {s.scheduled_active_date ?? "—"} · position{" "}
                           {s.scheduled_position ?? "—"}
                         </div>
@@ -797,7 +814,12 @@ export default async function AdminPage({
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id} className="border-b border-white/5 last:border-0">
-                    <td className="px-4 py-3 text-white/90">{u.username ?? "—"}</td>
+                    <td className="px-4 py-3 text-white/90">
+                      {formatAtUsername(
+                        u.username,
+                        `player_${u.id.slice(0, 8)}`
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-white/80">{u.email ?? "—"}</td>
                     <td className="px-4 py-3 text-white/80">{formatAdminDate(u.created_at ? u.created_at.slice(0, 10) : null)}</td>
                     <td className="px-4 py-3 text-white/80">{u.total_solved ?? 0}</td>

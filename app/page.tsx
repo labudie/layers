@@ -10,6 +10,7 @@ export type Challenge = {
   id: string;
   position: number;
   title: string | null;
+  creator_name: string | null;
   day_number: number | null;
   software: string | null;
   category: string | null;
@@ -32,7 +33,7 @@ export default async function Home() {
     supabase
       .from("challenges")
       .select(
-        "id, position, title, day_number, software, category, layer_count, image_url, is_sponsored, sponsor_name, active_date"
+        "id, position, title, creator_name, day_number, software, category, layer_count, image_url, is_sponsored, sponsor_name, active_date"
       )
       .gte("active_date", start)
       .lte("active_date", end)

@@ -5,6 +5,7 @@ import {
   utcActiveDateWindow,
 } from "@/lib/challenge-active-date-window";
 import { createSupabaseServerClient } from "@/lib/supabase";
+import { formatAtCreator, formatAtUsername } from "@/lib/username-display";
 
 type ResultRow = {
   user_id: string;
@@ -172,10 +173,10 @@ export default async function LeaderboardPage({
                 <tbody>
                   {rows.map((row, i) => {
                     const username = usernameMap.get(row.user_id);
-                    const display =
-                      username && username.trim()
-                        ? username.trim()
-                        : shortUsername(row.user_id);
+                    const display = formatAtUsername(
+                      username ?? "",
+                      shortUsername(row.user_id)
+                    );
 
                     return (
                       <tr
@@ -223,10 +224,10 @@ export default async function LeaderboardPage({
                 </thead>
                 <tbody>
                   {(allTimeProfiles as ProfileRow[]).map((row, i) => {
-                    const display =
-                      row.username && row.username.trim()
-                        ? row.username.trim()
-                        : shortUsername(row.id);
+                    const display = formatAtUsername(
+                      row.username ?? "",
+                      shortUsername(row.id)
+                    );
                     return (
                       <tr
                         key={`${row.id}-${i}`}
@@ -277,7 +278,7 @@ export default async function LeaderboardPage({
                         {i + 1}
                       </td>
                       <td className="px-4 py-3 font-mono text-sm font-medium text-white/90">
-                        {row.creator_name ?? "—"}
+                        {formatAtCreator(row.creator_name)}
                       </td>
                       <td className="px-4 py-3 text-white/80">
                         {row.total_submissions ?? 0}
