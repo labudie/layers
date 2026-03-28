@@ -419,12 +419,20 @@ export default async function AdminPage({
 
   const challenges = await getUpcomingChallenges(today);
   const sb = createSupabaseServerClient(await cookies());
-  const { data: allSubs } = await sb
+  const { data: authForLog } = await sb.auth.getUser();
+  const { data: allSubs, error: submissionsFetchError } = await sb
     .from("submissions")
     .select(
       "id, user_id, title, creator_name, software, category, layer_count, image_url, status, scheduled_challenge_id, scheduled_active_date, scheduled_position, created_at"
     )
     .order("created_at", { ascending: false });
+  console.log("[admin][submissions fetch]", {
+    rowCount: allSubs?.length ?? 0,
+    error: submissionsFetchError,
+    authUserId: authForLog.user?.id ?? null,
+    authEmail: authForLog.user?.email ?? null,
+    sampleIds: (allSubs ?? []).slice(0, 5).map((r) => r.id),
+  });
   const submissions = (allSubs as SubmissionAdminRow[] | null) ?? [];
   const pendingSubs = submissions.filter((s) => s.status === "pending");
   const approvedPoolSubs = submissions.filter(
