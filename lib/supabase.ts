@@ -19,22 +19,30 @@ export function createSupabaseBrowserClient() {
   return supabase();
 }
 
-type CookieStore = {
-  get(name: string): { value: string } | undefined;
-  set(opts: { name: string; value: string } & CookieOptions): void;
+/**
+ * Same shape as Next.js `cookies()` — use `getAll` + `set` so @supabase/ssr can
+ * read every auth cookie chunk. The deprecated get/set/remove adapter only probes
+ * `.0`–`.4` chunks and silently drops larger sessions (anonymous on the server).
+ */
+export type SupabaseServerCookieStore = {
+  getAll(): Array<{ name: string; value: string }>;
+  set(name: string, value: string, options: CookieOptions): void;
 };
 
-export function createSupabaseServerClient(cookieStore: CookieStore) {
+export function createSupabaseServerClient(cookieStore: SupabaseServerCookieStore) {
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
+      getAll() {
+        return cookieStore.getAll();
       },
-      set(name: string, value: string, options: CookieOptions) {
-        cookieStore.set({ name, value, ...options });
-      },
-      remove(name: string, options: CookieOptions) {
-        cookieStore.set({ name, value: "", ...options });
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // Server Components: cookies may be read-only; middleware refreshes session.
+        }
       },
     },
   });
