@@ -19,35 +19,184 @@ export function writeGameSoundEnabled(on: boolean) {
   }
 }
 
-export function playToneHz(freq: number, durationSec: number, volume = 0.12) {
-  if (typeof window === "undefined") return;
-  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!Ctx) return;
-  const ctx = new Ctx();
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = "sine";
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(volume, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(
-    Math.max(0.0001, volume * 0.01),
-    ctx.currentTime + durationSec
-  );
-  osc.connect(gain);
-  gain.connect(ctx.destination);
+// --- Shared AudioContext (one per page lifetime) ---
+
+let sharedAudioContext: AudioContext | null = null;
+
+function getSharedAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const AC =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext;
+  if (!AC) return null;
+  if (!sharedAudioContext || sharedAudioContext.state === "closed") {
+    sharedAudioContext = new AC();
+  }
+  return sharedAudioContext;
+}
+
+/** Cached stereo impulse per sample rate (for ConvolverNode reverb). */
+const reverbImpulseCache = new Map<number, AudioBuffer>();
+
+function getReverbImpulseBuffer(ctx: AudioContext): AudioBuffer {
+  const rate = ctx.sampleRate;
+  let buf = reverbImpulseCache.get(rate);
+  if (!buf) {
+    const durationSec = 0.32;
+    const decay = 3.2;
+    const len = Math.floor(rate * durationSec);
+    buf = ctx.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        d[i] =
+          (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay) * 0.42;
+      }
+    }
+    reverbImpulseCache.set(rate, buf);
+  }
+  return buf;
+}
+
+const reverbConvolverByCtx = new WeakMap<AudioContext, ConvolverNode>();
+
+function getSharedReverbConvolver(ctx: AudioContext): ConvolverNode {
+  let conv = reverbConvolverByCtx.get(ctx);
+  if (!conv) {
+    conv = ctx.createConvolver();
+    conv.buffer = getReverbImpulseBuffer(ctx);
+    reverbConvolverByCtx.set(ctx, conv);
+  }
+  return conv;
+}
+
+function withAudio(
+  fn: (ctx: AudioContext, now: number) => void
+): void {
+  const ctx = getSharedAudioContext();
+  if (!ctx) return;
   void ctx.resume().then(() => {
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + durationSec);
-    window.setTimeout(() => void ctx.close(), Math.ceil((durationSec + 0.05) * 1000));
+    fn(ctx, ctx.currentTime);
   });
 }
 
-export function playAscendingCelebration() {
+/** Slight reverb: dry + wet convolver in parallel. */
+function playToneWithLightReverb(
+  ctx: AudioContext,
+  t0: number,
+  freq: number,
+  durationSec: number,
+  peakGain: number,
+  oscType: OscillatorType
+) {
+  const osc = ctx.createOscillator();
+  osc.type = oscType;
+  osc.frequency.setValueAtTime(freq, t0);
+
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.exponentialRampToValueAtTime(peakGain, t0 + 0.018);
+  env.gain.exponentialRampToValueAtTime(0.0001, t0 + durationSec);
+
+  osc.connect(env);
+
+  const dry = ctx.createGain();
+  dry.gain.value = 0.72;
+  const wet = ctx.createGain();
+  wet.gain.value = 0.38;
+  const conv = getSharedReverbConvolver(ctx);
+  const master = ctx.createGain();
+  master.gain.value = 0.92;
+
+  env.connect(dry);
+  env.connect(conv);
+  conv.connect(wet);
+  dry.connect(master);
+  wet.connect(master);
+  master.connect(ctx.destination);
+
+  osc.start(t0);
+  osc.stop(t0 + durationSec + 0.12);
+}
+
+function playChime(
+  ctx: AudioContext,
+  t0: number,
+  freq: number,
+  durationSec: number,
+  peakGain: number,
+  oscType: OscillatorType = "sine"
+) {
+  const osc = ctx.createOscillator();
+  osc.type = oscType;
+  osc.frequency.setValueAtTime(freq, t0);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(peakGain, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + durationSec);
+  osc.connect(g);
+  g.connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + durationSec + 0.03);
+}
+
+/** Wrong: descending "wah wah" with light reverb. */
+export function playWrongGuessSound() {
   if (!readGameSoundEnabled()) return;
-  const seq = [440, 554, 659, 784];
-  let t = 0;
-  for (let i = 0; i < seq.length; i++) {
-    window.setTimeout(() => playToneHz(seq[i]!, 0.12, 0.1), t);
-    t += 140;
-  }
+  withAudio((ctx, now) => {
+    playToneWithLightReverb(ctx, now, 400, 0.15, 0.14, "triangle");
+    playToneWithLightReverb(ctx, now + 0.15, 200, 0.15, 0.12, "triangle");
+  });
+}
+
+/** Correct: rapid ascending slot dings + sustained high. */
+export function playCorrectGuessSound() {
+  if (!readGameSoundEnabled()) return;
+  withAudio((ctx, now) => {
+    const freqs = [400, 600, 800, 1000];
+    const step = 0.08;
+    freqs.forEach((f, i) => {
+      playChime(ctx, now + i * step, f, 0.082, 0.13);
+    });
+    const sustainStart = now + freqs.length * step;
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(1200, sustainStart);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, sustainStart);
+    g.gain.exponentialRampToValueAtTime(0.1, sustainStart + 0.025);
+    g.gain.exponentialRampToValueAtTime(0.0001, sustainStart + 0.48);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start(sustainStart);
+    osc.stop(sustainStart + 0.55);
+  });
+}
+
+/** Close: quick near-miss two-tone. */
+export function playCloseGuessSound() {
+  if (!readGameSoundEnabled()) return;
+  withAudio((ctx, now) => {
+    playChime(ctx, now, 300, 0.07, 0.12, "sine");
+    playChime(ctx, now + 0.055, 450, 0.08, 0.14, "sine");
+  });
+}
+
+/** Perfect day / jackpot: run-up + three high chimes. */
+export function playJackpotCompletionSound() {
+  if (!readGameSoundEnabled()) return;
+  withAudio((ctx, now) => {
+    const run = [300, 400, 500, 600, 800, 1000];
+    const spacing = 0.048;
+    const noteDur = 0.056;
+    run.forEach((f, i) => {
+      playChime(ctx, now + i * spacing, f, noteDur, 0.12);
+    });
+    const tail = now + run.length * spacing + 0.02;
+    const highs = [1100, 1400, 1100];
+    highs.forEach((f, j) => {
+      playChime(ctx, tail + j * 0.11, f, 0.14, 0.15);
+    });
+  });
 }

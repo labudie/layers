@@ -16,8 +16,10 @@ import type { Challenge } from "./page";
 import { supabase } from "@/lib/supabase";
 import type { BadgeId } from "@/lib/badges";
 import {
-  playAscendingCelebration,
-  playToneHz,
+  playCloseGuessSound,
+  playCorrectGuessSound,
+  playJackpotCompletionSound,
+  playWrongGuessSound,
   readGameSoundEnabled,
 } from "@/lib/game-sound";
 import { AtCreatorDisplay } from "@/lib/AtHandle";
@@ -178,9 +180,9 @@ function applyGuessFeedback(verdict: GuessRow["verdict"]) {
   else if (verdict === "correct") safeVibrate([50, 30, 50]);
   else if (verdict === "close") safeVibrate(30);
   if (!readGameSoundEnabled()) return;
-  if (verdict === "wrong") playToneHz(200, 0.1);
-  else if (verdict === "correct") playToneHz(600, 0.2);
-  else if (verdict === "close") playToneHz(400, 0.15);
+  if (verdict === "wrong") playWrongGuessSound();
+  else if (verdict === "correct") playCorrectGuessSound();
+  else if (verdict === "close") playCloseGuessSound();
 }
 
 function isChallengeFinished(
@@ -712,8 +714,8 @@ export function DailyGameClient({
     if (solvedCount !== 5) return;
     if (perfectDayFeedbackFiredRef.current) return;
     perfectDayFeedbackFiredRef.current = true;
-    safeVibrate([100, 50, 100, 50, 200]);
-    playAscendingCelebration();
+    safeVibrate([50, 30, 50, 30, 50, 30, 200]);
+    playJackpotCompletionSound();
   }, [showSummary, challenges.length, guessesByIndex]);
 
   useEffect(() => {
