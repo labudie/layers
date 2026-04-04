@@ -9,7 +9,8 @@ import {
   readGameSoundEnabled,
   writeGameSoundEnabled,
 } from "@/lib/game-sound";
-import { formatAtUsername, stripAtHandle } from "@/lib/username-display";
+import { AtUsernameDisplay } from "@/lib/AtHandle";
+import { stripAtHandle } from "@/lib/username-display";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -249,12 +250,12 @@ export default function SettingsPage() {
                           void saveProfile();
                         }
                       }}
-                      className="w-48 rounded-lg border border-white/15 bg-black/30 px-3 py-1.5 text-center text-base font-semibold text-white outline-none"
+                      className="at-handle w-48 rounded-lg border border-white/15 bg-black/30 px-3 py-1.5 text-center text-base text-white outline-none"
                       placeholder="your_username"
                     />
                   ) : (
                     <div className="text-lg font-semibold text-white">
-                      {formatAtUsername(displayName, "Player")}
+                      <AtUsernameDisplay raw={displayName} fallback="Player" />
                     </div>
                   )}
                   <button

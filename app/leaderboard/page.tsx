@@ -5,7 +5,10 @@ import {
   utcActiveDateWindow,
 } from "@/lib/challenge-active-date-window";
 import { createSupabaseServerClient } from "@/lib/supabase";
-import { formatAtCreator, formatAtUsername } from "@/lib/username-display";
+import {
+  AtCreatorDisplay,
+  AtUsernameDisplay,
+} from "@/lib/AtHandle";
 
 type ResultRow = {
   user_id: string;
@@ -173,10 +176,6 @@ export default async function LeaderboardPage({
                 <tbody>
                   {rows.map((row, i) => {
                     const username = usernameMap.get(row.user_id);
-                    const display = formatAtUsername(
-                      username ?? "",
-                      shortUsername(row.user_id)
-                    );
 
                     return (
                       <tr
@@ -186,8 +185,11 @@ export default async function LeaderboardPage({
                         <td className="px-4 py-3 font-mono font-semibold text-white/90">
                           {i + 1}
                         </td>
-                        <td className="px-4 py-3 font-mono text-sm font-medium text-white/90">
-                          {display}
+                        <td className="px-4 py-3 text-sm text-white/90">
+                          <AtUsernameDisplay
+                            raw={username ?? ""}
+                            fallback={shortUsername(row.user_id)}
+                          />
                         </td>
                         <td className="px-4 py-3 text-white/80">
                           {row.attempts_used ?? "—"}
@@ -224,10 +226,6 @@ export default async function LeaderboardPage({
                 </thead>
                 <tbody>
                   {(allTimeProfiles as ProfileRow[]).map((row, i) => {
-                    const display = formatAtUsername(
-                      row.username ?? "",
-                      shortUsername(row.id)
-                    );
                     return (
                       <tr
                         key={`${row.id}-${i}`}
@@ -236,8 +234,11 @@ export default async function LeaderboardPage({
                         <td className="px-4 py-3 font-mono font-semibold text-white/90">
                           {i + 1}
                         </td>
-                        <td className="px-4 py-3 font-mono text-sm font-medium text-white/90">
-                          {display}
+                        <td className="px-4 py-3 text-sm text-white/90">
+                          <AtUsernameDisplay
+                            raw={row.username ?? ""}
+                            fallback={shortUsername(row.id)}
+                          />
                         </td>
                         <td className="px-4 py-3 text-white/80">
                           {row.total_solved ?? 0}
@@ -277,8 +278,8 @@ export default async function LeaderboardPage({
                       <td className="px-4 py-3 font-mono font-semibold text-white/90">
                         {i + 1}
                       </td>
-                      <td className="px-4 py-3 font-mono text-sm font-medium text-white/90">
-                        {formatAtCreator(row.creator_name)}
+                      <td className="px-4 py-3 text-sm text-white/90">
+                        <AtCreatorDisplay raw={row.creator_name} />
                       </td>
                       <td className="px-4 py-3 text-white/80">
                         {row.total_submissions ?? 0}

@@ -20,7 +20,8 @@ import {
   playToneHz,
   readGameSoundEnabled,
 } from "@/lib/game-sound";
-import { formatAtCreator, stripAtHandle } from "@/lib/username-display";
+import { AtCreatorDisplay } from "@/lib/AtHandle";
+import { stripAtHandle } from "@/lib/username-display";
 
 type GuessRow = {
   value: number;
@@ -1185,7 +1186,7 @@ export function DailyGameClient({
                             {ch.title ?? "Untitled"}
                           </div>
                           <div className="mt-1 text-sm text-white/60">
-                            Creator {formatAtCreator(ch.creator_name)}
+                            Creator <AtCreatorDisplay raw={ch.creator_name} />
                           </div>
                           <div className="mt-2 text-sm text-white/70">
                             Answer:{" "}
@@ -1302,7 +1303,7 @@ export function DailyGameClient({
                             <span className="font-semibold text-white">
                               Creator:
                             </span>{" "}
-                            {formatAtCreator(currentChallenge.creator_name)}
+                            <AtCreatorDisplay raw={currentChallenge.creator_name} />
                           </p>
                           <p className="mt-2 text-white/85">
                             <span className="font-semibold text-white">

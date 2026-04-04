@@ -6,7 +6,10 @@ import { createSupabaseServerClient } from "@/lib/supabase";
 import { AdminChallengeFormClient } from "@/app/admin/AdminChallengeFormClient";
 import { AdminSubmissionImage } from "@/app/admin/AdminSubmissionImage";
 import { DeleteButton } from "@/app/admin/DeleteButton";
-import { formatAtCreator, formatAtUsername } from "@/lib/username-display";
+import {
+  AtCreatorDisplay,
+  AtUsernameDisplay,
+} from "@/lib/AtHandle";
 
 const ADMIN_EMAIL = "rjlabudie@gmail.com";
 
@@ -595,7 +598,7 @@ export default async function AdminPage({
                             {ch.title ?? "Untitled"}
                           </td>
                           <td className="px-4 py-3 text-white/80">
-                            {formatAtCreator(ch.creator_name)}
+                            <AtCreatorDisplay raw={ch.creator_name} />
                           </td>
                           <td className="px-4 py-3 text-white/80">
                             {ch.software ?? "—"}
@@ -659,8 +662,8 @@ export default async function AdminPage({
                         {s.title ?? "Untitled"}
                       </div>
                       <div className="mt-1 text-sm text-white/70">
-                        {formatAtCreator(s.creator_name)} · {s.layer_count ?? 0}{" "}
-                        layers
+                        <AtCreatorDisplay raw={s.creator_name} /> ·{" "}
+                        {s.layer_count ?? 0} layers
                       </div>
                       <div className="mt-4 flex items-center gap-2">
                         <form action={approveSubmissionAction}>
@@ -720,8 +723,8 @@ export default async function AdminPage({
                         {s.title ?? "Untitled"}
                       </div>
                       <div className="mt-1 text-sm text-white/70">
-                        {formatAtCreator(s.creator_name)} · {s.layer_count ?? 0}{" "}
-                        layers
+                        <AtCreatorDisplay raw={s.creator_name} /> ·{" "}
+                        {s.layer_count ?? 0} layers
                       </div>
 
                       <form action={assignApprovedSubmissionAction} className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_90px_auto] sm:items-end">
@@ -784,7 +787,7 @@ export default async function AdminPage({
                           {s.title ?? "Untitled"}
                         </div>
                         <div className="text-xs text-white/60">
-                          {formatAtCreator(s.creator_name)} ·{" "}
+                          <AtCreatorDisplay raw={s.creator_name} /> ·{" "}
                           {s.scheduled_active_date ?? "—"} · position{" "}
                           {s.scheduled_position ?? "—"}
                         </div>
@@ -815,10 +818,10 @@ export default async function AdminPage({
                 {users.map((u) => (
                   <tr key={u.id} className="border-b border-white/5 last:border-0">
                     <td className="px-4 py-3 text-white/90">
-                      {formatAtUsername(
-                        u.username,
-                        `player_${u.id.slice(0, 8)}`
-                      )}
+                      <AtUsernameDisplay
+                        raw={u.username}
+                        fallback={`player_${u.id.slice(0, 8)}`}
+                      />
                     </td>
                     <td className="px-4 py-3 text-white/80">{u.email ?? "—"}</td>
                     <td className="px-4 py-3 text-white/80">{formatAdminDate(u.created_at ? u.created_at.slice(0, 10) : null)}</td>

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { DeleteButton } from "@/app/admin/DeleteButton";
-import { formatAtCreator } from "@/lib/username-display";
+import { AtCreatorDisplay } from "@/lib/AtHandle";
 
 type PublishBatchResult = {
   error: string | null;
@@ -507,7 +507,8 @@ export function AdminChallengeFormClient({
                     </div>
                     <div className="mt-2 space-y-1 text-sm text-white/75">
                       <div>
-                        Creator: {formatAtCreator(inspectChallenge.creator_name)}
+                        Creator:{" "}
+                        <AtCreatorDisplay raw={inspectChallenge.creator_name} />
                       </div>
                       <div>
                         {inspectChallenge.software ?? "—"} ·{" "}
@@ -688,7 +689,7 @@ export function AdminChallengeFormClient({
                       onChange={(e) =>
                         updateCard(card.id, { creator_name: e.target.value })
                       }
-                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+                      className="at-handle mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2">

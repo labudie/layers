@@ -131,3 +131,28 @@ body {
       scale(0.4);
   }
 }
+
+/* @username / @creator credits — system UI stack, semibold, slightly smaller than parent */
+.at-handle {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+input.at-handle,
+textarea.at-handle {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  font-weight: 600;
+  /* Inputs: match ~0.9em vs typical 16px control text */
+  font-size: 0.875rem;
+}

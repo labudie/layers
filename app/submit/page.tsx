@@ -209,7 +209,7 @@ export default function SubmitPage() {
                 type="text"
                 value={creatorName}
                 onChange={(e) => setCreatorName(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
+                className="at-handle mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
               />
             </div>
 
