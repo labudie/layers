@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import {
+  isoLowerBoundForLast14EasternSignups,
+  last14EasternDaysEnding,
+  toEasternYmd,
+} from "@/lib/admin-eastern-dates";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import { AdminChallengeFormClient } from "@/app/admin/AdminChallengeFormClient";
@@ -59,6 +64,205 @@ type AdminUserRow = {
   current_streak: number | null;
   last_played_date: string | null;
 };
+
+type AdminAnalytics = {
+  totalUsers: number;
+  activeToday: number;
+  activeWeek: number;
+  totalGuesses: number;
+  streakGte3: number;
+  streakGte7: number;
+  streakGte30: number;
+  avgStreak: number;
+  totalChallenges: number;
+  daysAhead: number;
+  totalImageDownloads: number;
+  topDownloadTitle: string | null;
+  topDownloadCount: number;
+  topPlayers: Array<{
+    id: string;
+    username: string | null;
+    total_solved: number;
+  }>;
+  signupsByDay: Array<{ date: string; count: number }>;
+};
+
+async function loadAdminAnalytics(
+  sb: ReturnType<typeof createSupabaseServerClient>,
+  today: string,
+): Promise<AdminAnalytics> {
+  const weekAgoIso = new Date(Date.now() - 7 * 86400000).toISOString();
+  const twoDaysAgoIso = new Date(Date.now() - 2 * 86400000).toISOString();
+  const signupSinceIso = isoLowerBoundForLast14EasternSignups(today);
+  const dayLabels = last14EasternDaysEnding(today);
+
+  const [
+    totalUsersRes,
+    totalGuessesRes,
+    challengesRes,
+    streak3Res,
+    streak7Res,
+    streak30Res,
+    topPlayersRes,
+    todayResultsRes,
+    weekResultsRes,
+  ] = await Promise.all([
+    sb.from("profiles").select("*", { count: "exact", head: true }),
+    sb.from("guesses").select("*", { count: "exact", head: true }),
+    sb.from("challenges").select("id, title, active_date"),
+    sb
+      .from("profiles")
+      .select("*", { count: "exact", head: true })
+      .gte("current_streak", 3),
+    sb
+      .from("profiles")
+      .select("*", { count: "exact", head: true })
+      .gte("current_streak", 7),
+    sb
+      .from("profiles")
+      .select("*", { count: "exact", head: true })
+      .gte("current_streak", 30),
+    sb
+      .from("profiles")
+      .select("id, username, total_solved")
+      .order("total_solved", { ascending: false })
+      .limit(5),
+    sb
+      .from("results")
+      .select("user_id, created_at")
+      .gte("created_at", twoDaysAgoIso)
+      .limit(8000),
+    sb
+      .from("results")
+      .select("user_id")
+      .gte("created_at", weekAgoIso)
+      .limit(12000),
+  ]);
+
+  const signupRows: Array<{ created_at: string | null }> = [];
+  const signupPage = 1000;
+  for (let offset = 0; ; offset += signupPage) {
+    const { data: page } = await sb
+      .from("profiles")
+      .select("created_at")
+      .gte("created_at", signupSinceIso)
+      .order("created_at", { ascending: true })
+      .range(offset, offset + signupPage - 1);
+    if (!page?.length) break;
+    signupRows.push(...(page as Array<{ created_at: string | null }>));
+    if (page.length < signupPage) break;
+  }
+
+  const totalUsers = totalUsersRes.count ?? 0;
+  const totalGuesses = totalGuessesRes.count ?? 0;
+  const challenges = (challengesRes.data ?? []) as Array<{
+    id: string;
+    title: string | null;
+    active_date: string | null;
+  }>;
+  const totalChallenges = challenges.length;
+  const daysAhead = new Set(
+    challenges
+      .map((c) => c.active_date)
+      .filter((d): d is string => typeof d === "string" && d > today),
+  ).size;
+
+  const streakRows: Array<{ current_streak: number | null }> = [];
+  for (let offset = 0; ; offset += signupPage) {
+    const { data: page } = await sb
+      .from("profiles")
+      .select("current_streak")
+      .order("id", { ascending: true })
+      .range(offset, offset + signupPage - 1);
+    if (!page?.length) break;
+    streakRows.push(...(page as Array<{ current_streak: number | null }>));
+    if (page.length < signupPage) break;
+  }
+  const streakVals = streakRows.map((r) =>
+    Math.max(0, Math.floor(Number(r.current_streak) || 0)),
+  );
+  const avgStreak = streakVals.length
+    ? streakVals.reduce((a, b) => a + b, 0) / streakVals.length
+    : 0;
+
+  const topPlayers = ((topPlayersRes.data ?? []) as AdminAnalytics["topPlayers"]).map((p) => ({
+    id: p.id,
+    username: p.username,
+    total_solved: Math.max(0, Math.floor(Number(p.total_solved) || 0)),
+  }));
+
+  const activeTodaySet = new Set<string>();
+  for (const row of todayResultsRes.data ?? []) {
+    const uid = (row as { user_id?: string }).user_id;
+    const created = (row as { created_at?: string }).created_at;
+    if (!uid || !created) continue;
+    if (toEasternYmd(created) === today) activeTodaySet.add(uid);
+  }
+
+  const activeWeekSet = new Set<string>();
+  for (const row of weekResultsRes.data ?? []) {
+    const uid = (row as { user_id?: string }).user_id;
+    if (uid) activeWeekSet.add(uid);
+  }
+
+  const signupCounts = new Map<string, number>();
+  for (const d of dayLabels) signupCounts.set(d, 0);
+  for (const row of signupRows) {
+    const created = row.created_at;
+    const ymd = toEasternYmd(created ?? undefined);
+    if (!ymd || !signupCounts.has(ymd)) continue;
+    signupCounts.set(ymd, (signupCounts.get(ymd) ?? 0) + 1);
+  }
+  const signupsByDay = dayLabels.map((date) => ({
+    date,
+    count: signupCounts.get(date) ?? 0,
+  }));
+
+  const idToTitle = new Map<string, string | null>();
+  for (const c of challenges) idToTitle.set(c.id, c.title);
+
+  let totalImageDownloads = 0;
+  let topDownloadTitle: string | null = null;
+  let topDownloadCount = 0;
+  const challengeIds = challenges.map((c) => c.id).filter(Boolean);
+  const chunkSize = 400;
+  for (let i = 0; i < challengeIds.length; i += chunkSize) {
+    const chunk = challengeIds.slice(i, i + chunkSize);
+    const { data: dlChunk } = await sb.rpc("get_download_counts_for_challenges", {
+      p_challenge_ids: chunk,
+    });
+    const rows = (dlChunk ?? []) as Array<{
+      challenge_id: string;
+      download_count: number | string;
+    }>;
+    for (const r of rows) {
+      const n = Number(r.download_count) || 0;
+      totalImageDownloads += n;
+      if (n > topDownloadCount) {
+        topDownloadCount = n;
+        topDownloadTitle = idToTitle.get(r.challenge_id) ?? null;
+      }
+    }
+  }
+
+  return {
+    totalUsers,
+    activeToday: activeTodaySet.size,
+    activeWeek: activeWeekSet.size,
+    totalGuesses,
+    streakGte3: streak3Res.count ?? 0,
+    streakGte7: streak7Res.count ?? 0,
+    streakGte30: streak30Res.count ?? 0,
+    avgStreak,
+    totalChallenges,
+    daysAhead,
+    totalImageDownloads,
+    topDownloadTitle,
+    topDownloadCount,
+    topPlayers,
+    signupsByDay,
+  };
+}
 
 async function getSignedInEmail() {
   const sb = createSupabaseServerClient(await cookies());
@@ -424,7 +628,12 @@ export default async function AdminPage({
   const isAdmin = await assertAdminOrNull();
   const today = todayYYYYMMDDUSEastern();
   const params = (await searchParams) ?? {};
-  const tab = params.tab === "submissions" || params.tab === "users" ? params.tab : "schedule";
+  const tab =
+    params.tab === "submissions" ||
+    params.tab === "users" ||
+    params.tab === "analytics"
+      ? params.tab
+      : "schedule";
 
   if (!isAdmin) {
     return (
@@ -436,23 +645,29 @@ export default async function AdminPage({
     );
   }
 
-  const challenges = await getUpcomingChallenges(today);
+  const { scheduledCounts, readyAheadDays } = await getScheduleOverview(today);
+  const challenges =
+    tab === "schedule" ? await getUpcomingChallenges(today) : [];
   const sb = createSupabaseServerClient(await cookies());
-  const { data: authForLog } = await sb.auth.getUser();
-  const { data: allSubs, error: submissionsFetchError } = await sb
-    .from("submissions")
-    .select(
-      "id, user_id, title, creator_name, software, category, layer_count, image_url, status, scheduled_challenge_id, scheduled_active_date, scheduled_position, created_at"
-    )
-    .order("created_at", { ascending: false });
-  console.log("[admin][submissions fetch]", {
-    rowCount: allSubs?.length ?? 0,
-    error: submissionsFetchError,
-    authUserId: authForLog.user?.id ?? null,
-    authEmail: authForLog.user?.email ?? null,
-    sampleIds: (allSubs ?? []).slice(0, 5).map((r) => r.id),
-  });
-  const submissions = (allSubs as SubmissionAdminRow[] | null) ?? [];
+
+  let submissions: SubmissionAdminRow[] = [];
+  if (tab === "submissions") {
+    const { data: authForLog } = await sb.auth.getUser();
+    const { data: allSubs, error: submissionsFetchError } = await sb
+      .from("submissions")
+      .select(
+        "id, user_id, title, creator_name, software, category, layer_count, image_url, status, scheduled_challenge_id, scheduled_active_date, scheduled_position, created_at"
+      )
+      .order("created_at", { ascending: false });
+    console.log("[admin][submissions fetch]", {
+      rowCount: allSubs?.length ?? 0,
+      error: submissionsFetchError,
+      authUserId: authForLog.user?.id ?? null,
+      authEmail: authForLog.user?.email ?? null,
+      sampleIds: (allSubs ?? []).slice(0, 5).map((r) => r.id),
+    });
+    submissions = (allSubs as SubmissionAdminRow[] | null) ?? [];
+  }
   const pendingSubs = submissions.filter((s) => s.status === "pending");
   const approvedPoolSubs = submissions.filter(
     (s) => s.status === "approved" && !s.scheduled_challenge_id
@@ -463,16 +678,28 @@ export default async function AdminPage({
   const approvedCount = submissions.filter((s) => s.status === "approved").length;
   const rejectedCount = submissions.filter((s) => s.status === "rejected").length;
 
-  const { data: usersRows } = await sb
-    .from("profiles")
-    .select("id, username, email, created_at, total_solved, current_streak, last_played_date")
-    .order("last_played_date", { ascending: false, nullsFirst: false });
-  const users = (usersRows as AdminUserRow[] | null) ?? [];
-  const { scheduledCounts, readyAheadDays } = await getScheduleOverview(today);
+  let users: AdminUserRow[] = [];
+  if (tab === "users") {
+    const { data: usersRows } = await sb
+      .from("profiles")
+      .select("id, username, email, created_at, total_solved, current_streak, last_played_date")
+      .order("last_played_date", { ascending: false, nullsFirst: false });
+    users = (usersRows as AdminUserRow[] | null) ?? [];
+  }
+
+  let analytics: AdminAnalytics | null = null;
+  if (tab === "analytics") {
+    try {
+      analytics = await loadAdminAnalytics(sb, today);
+    } catch (err) {
+      console.error("[admin][analytics]", err);
+      analytics = null;
+    }
+  }
 
   return (
     <div className="min-h-screen w-full bg-[#0f0520] text-[var(--text)]">
-      <div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-5 md:py-8">
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-5 md:py-8">
         <header className="mb-6 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.75)] px-4 py-3 shadow-sm backdrop-blur-sm">
           <div className="text-xl font-extrabold tracking-tight">Layers</div>
           <div className="flex items-center gap-2">
@@ -522,6 +749,16 @@ export default async function AdminPage({
             }`}
           >
             Users
+          </Link>
+          <Link
+            href="/admin?tab=analytics"
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              tab === "analytics"
+                ? "bg-[var(--accent)] text-white"
+                : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            Analytics
           </Link>
         </div>
 
@@ -801,6 +1038,216 @@ export default async function AdminPage({
               )}
             </div>
           </div>
+        ) : tab === "analytics" ? (
+          !analytics ? (
+            <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)] px-4 py-8 text-center text-sm text-white/70">
+              Could not load analytics.
+            </div>
+          ) : (
+            <div className="space-y-10">
+              <div>
+                <div className="text-lg font-extrabold text-white">Analytics</div>
+                <p className="mt-1 text-sm text-white/55">
+                  &quot;Today&quot; and signup buckets use US Eastern ({today}). Data refreshes on each page load.
+                </p>
+              </div>
+
+              <section>
+                <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
+                  User metrics
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                      Total registered users
+                    </div>
+                    <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                      {analytics.totalUsers.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                      Active today
+                    </div>
+                    <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                      {analytics.activeToday.toLocaleString()}
+                    </div>
+                    <div className="mt-1 text-xs text-white/45">Distinct users with a result row (Eastern day)</div>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                      Active last 7 days
+                    </div>
+                    <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                      {analytics.activeWeek.toLocaleString()}
+                    </div>
+                    <div className="mt-1 text-xs text-white/45">Rolling window, distinct users</div>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                      Total guesses
+                    </div>
+                    <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                      {analytics.totalGuesses.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
+                  Retention
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                      Streak ≥ 3 days
+                    </div>
+                    <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                      {analytics.streakGte3.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                      Streak ≥ 7 days
+                    </div>
+                    <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                      {analytics.streakGte7.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                      Streak ≥ 30 days
+                    </div>
+                    <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                      {analytics.streakGte30.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                      Avg. current streak
+                    </div>
+                    <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                      {analytics.avgStreak.toFixed(1)}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
+                  Content
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                      Challenges published
+                    </div>
+                    <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                      {analytics.totalChallenges.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                      Days scheduled ahead
+                    </div>
+                    <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                      {analytics.daysAhead.toLocaleString()}
+                    </div>
+                    <div className="mt-1 text-xs text-white/45">Distinct future `active_date` values</div>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                      Total image downloads
+                    </div>
+                    <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                      {analytics.totalImageDownloads.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                      Most downloaded challenge
+                    </div>
+                    <div className="mt-2 text-base font-extrabold leading-snug text-white">
+                      {analytics.topDownloadCount > 0
+                        ? analytics.topDownloadTitle ?? "Untitled"
+                        : "—"}
+                    </div>
+                    <div className="mt-1 text-sm tabular-nums text-[var(--accent)]/90">
+                      {analytics.topDownloadCount.toLocaleString()} downloads
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
+                  Leaderboard snapshot
+                </div>
+                <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)]">
+                  <table className="min-w-[480px] w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
+                        <th className="px-4 py-3">#</th>
+                        <th className="px-4 py-3">Username</th>
+                        <th className="px-4 py-3 text-right">Total solved</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analytics.topPlayers.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-4 py-6 text-center text-white/60">
+                            No players yet
+                          </td>
+                        </tr>
+                      ) : (
+                        analytics.topPlayers.map((p, i) => (
+                          <tr key={p.id} className="border-b border-white/5 last:border-0">
+                            <td className="px-4 py-3 font-mono text-white/60">{i + 1}</td>
+                            <td className="px-4 py-3 text-white/90">
+                              <AtUsernameDisplay
+                                raw={p.username}
+                                fallback={`player_${p.id.slice(0, 8)}`}
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold tabular-nums text-white">
+                              {p.total_solved.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section>
+                <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
+                  New signups (14 days)
+                </div>
+                <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)]">
+                  <table className="min-w-[360px] w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
+                        <th className="px-4 py-3">Day (US Eastern)</th>
+                        <th className="px-4 py-3 text-right">New users</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analytics.signupsByDay.map((row) => (
+                        <tr key={row.date} className="border-b border-white/5 last:border-0">
+                          <td className="px-4 py-2.5 font-mono text-white/85">{row.date}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-white/90">
+                            {row.count.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          )
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)]">
             <table className="min-w-[900px] w-full text-left text-sm">
