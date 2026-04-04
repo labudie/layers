@@ -6,9 +6,9 @@ import {
 } from "@/lib/challenge-active-date-window";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import {
-  AtCreatorDisplay,
-  AtUsernameDisplay,
-} from "@/lib/AtHandle";
+  CreatorProfileLink,
+  ProfileUsernameLink,
+} from "@/lib/profile-handle-link";
 
 type ResultRow = {
   user_id: string;
@@ -186,9 +186,9 @@ export default async function LeaderboardPage({
                           {i + 1}
                         </td>
                         <td className="px-4 py-3 text-sm text-white/90">
-                          <AtUsernameDisplay
-                            raw={username ?? ""}
-                            fallback={shortUsername(row.user_id)}
+                          <ProfileUsernameLink
+                            username={username ?? undefined}
+                            fallbackDisplay={shortUsername(row.user_id)}
                           />
                         </td>
                         <td className="px-4 py-3 text-white/80">
@@ -235,9 +235,9 @@ export default async function LeaderboardPage({
                           {i + 1}
                         </td>
                         <td className="px-4 py-3 text-sm text-white/90">
-                          <AtUsernameDisplay
-                            raw={row.username ?? ""}
-                            fallback={shortUsername(row.id)}
+                          <ProfileUsernameLink
+                            username={row.username ?? undefined}
+                            fallbackDisplay={shortUsername(row.id)}
                           />
                         </td>
                         <td className="px-4 py-3 text-white/80">
@@ -279,7 +279,7 @@ export default async function LeaderboardPage({
                         {i + 1}
                       </td>
                       <td className="px-4 py-3 text-sm text-white/90">
-                        <AtCreatorDisplay raw={row.creator_name} />
+                        <CreatorProfileLink raw={row.creator_name} />
                       </td>
                       <td className="px-4 py-3 text-white/80">
                         {row.total_submissions ?? 0}

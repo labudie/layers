@@ -49,11 +49,23 @@ export default async function Home() {
   const userEmail = authData.user?.email ?? null;
   const userId = authData.user?.id ?? null;
 
+  let profileUsername: string | null = null;
+  if (userId) {
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", userId)
+      .maybeSingle();
+    profileUsername =
+      (prof as { username?: string | null } | null)?.username?.trim() ?? null;
+  }
+
   return (
     <DailyGameClient
       challenges={challenges}
       userEmail={userEmail}
       userId={userId}
+      profileUsername={profileUsername}
     />
   );
 }

@@ -22,7 +22,7 @@ import {
   playWrongGuessSound,
   readGameSoundEnabled,
 } from "@/lib/game-sound";
-import { AtCreatorDisplay } from "@/lib/AtHandle";
+import { CreatorProfileLink } from "@/lib/profile-handle-link";
 import { stripAtHandle } from "@/lib/username-display";
 
 type GuessRow = {
@@ -209,10 +209,12 @@ export function DailyGameClient({
   challenges,
   userEmail,
   userId,
+  profileUsername,
 }: {
   challenges: Challenge[];
   userEmail: string | null;
   userId: string | null;
+  profileUsername?: string | null;
 }) {
   const total = challenges.length;
   const dayNumber = challenges[0]?.day_number ?? null;
@@ -1079,6 +1081,15 @@ export function DailyGameClient({
               >
                 Settings
               </Link>
+              {signedIn && stripAtHandle(profileUsername ?? "") ? (
+                <Link
+                  href={`/profile/${encodeURIComponent(stripAtHandle(profileUsername ?? ""))}`}
+                  onClick={() => setDrawerOpen(false)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-[var(--text)] hover:bg-white/10"
+                >
+                  View Profile
+                </Link>
+              ) : null}
               <Link
                 href="/submit"
                 onClick={() => setDrawerOpen(false)}
@@ -1202,7 +1213,8 @@ export function DailyGameClient({
                             {ch.title ?? "Untitled"}
                           </div>
                           <div className="mt-1 text-sm text-white/60">
-                            Creator <AtCreatorDisplay raw={ch.creator_name} />
+                            Creator{" "}
+                            <CreatorProfileLink raw={ch.creator_name} />
                           </div>
                           <div className="mt-2 text-sm text-white/70">
                             Answer:{" "}
@@ -1319,7 +1331,7 @@ export function DailyGameClient({
                             <span className="font-semibold text-white">
                               Creator:
                             </span>{" "}
-                            <AtCreatorDisplay raw={currentChallenge.creator_name} />
+                            <CreatorProfileLink raw={currentChallenge.creator_name} />
                           </p>
                           <p className="mt-2 text-white/85">
                             <span className="font-semibold text-white">
