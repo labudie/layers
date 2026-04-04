@@ -11,7 +11,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const showNav =
     pathname !== "/login" &&
-    !pathname.startsWith("/admin") &&
+    !pathname.startsWith("/studio") &&
     !pathname.startsWith("/onboarding");
 
   useEffect(() => {

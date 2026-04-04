@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   isoLowerBoundForLast14EasternSignups,
   last14EasternDaysEnding,
@@ -8,15 +9,15 @@ import {
 } from "@/lib/admin-eastern-dates";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 import { createSupabaseServerClient } from "@/lib/supabase";
-import { AdminChallengeFormClient } from "@/app/admin/AdminChallengeFormClient";
-import { AdminSubmissionImage } from "@/app/admin/AdminSubmissionImage";
-import { DeleteButton } from "@/app/admin/DeleteButton";
+import { AdminChallengeFormClient } from "@/app/studio/AdminChallengeFormClient";
+import { AdminSubmissionImage } from "@/app/studio/AdminSubmissionImage";
+import { DeleteButton } from "@/app/studio/DeleteButton";
 import {
   AtCreatorDisplay,
   AtUsernameDisplay,
 } from "@/lib/AtHandle";
 
-const ADMIN_EMAIL = "rjlabudie@gmail.com";
+const ADMIN_EMAIL = "rjlabudie@gmail.com".toLowerCase();
 
 type ChallengeAdminRow = {
   id: string;
@@ -264,14 +265,39 @@ async function loadAdminAnalytics(
   };
 }
 
-async function getSignedInEmail() {
+/** Uses the same server Supabase client + session cookies as the rest of the page. */
+async function assertAdminOrNull(): Promise<boolean> {
   const sb = createSupabaseServerClient(await cookies());
-  const { data } = await sb.auth.getUser();
-  return data.user?.email ?? null;
-}
+  const {
+    data: { user },
+  } = await sb.auth.getUser();
+  if (!user) return false;
 
-async function assertAdminOrNull() {
-  const email = await getSignedInEmail();
+  let email = (user.email ?? "").trim().toLowerCase();
+  if (!email && typeof user.user_metadata?.email === "string") {
+    email = user.user_metadata.email.trim().toLowerCase();
+  }
+  if (!email && Array.isArray(user.identities)) {
+    for (const ident of user.identities as Array<{
+      identity_data?: { email?: string };
+    }>) {
+      const ie = ident?.identity_data?.email;
+      if (typeof ie === "string" && ie.trim()) {
+        email = ie.trim().toLowerCase();
+        break;
+      }
+    }
+  }
+  if (!email && user.id) {
+    const { data: prof } = await sb
+      .from("profiles")
+      .select("email")
+      .eq("id", user.id)
+      .maybeSingle();
+    const pe = (prof as { email?: string | null } | null)?.email;
+    if (typeof pe === "string" && pe.trim()) email = pe.trim().toLowerCase();
+  }
+
   return email === ADMIN_EMAIL;
 }
 
@@ -452,7 +478,7 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
       return { error: error.message, publishedCount: 0, publishedTitles: [] };
     }
 
-    revalidatePath("/admin");
+    revalidatePath("/studio");
     return {
       error: null,
       publishedCount: publishedTitles.length,
@@ -524,7 +550,7 @@ async function approveSubmissionAction(formData: FormData) {
       reviewed_at: new Date().toISOString(),
     })
     .eq("id", id);
-  revalidatePath("/admin");
+  revalidatePath("/studio");
 }
 
 async function assignApprovedSubmissionAction(formData: FormData) {
@@ -589,7 +615,7 @@ async function assignApprovedSubmissionAction(formData: FormData) {
     })
     .eq("id", submissionId);
 
-  revalidatePath("/admin");
+  revalidatePath("/studio");
 }
 
 async function rejectSubmissionAction(formData: FormData) {
@@ -606,7 +632,7 @@ async function rejectSubmissionAction(formData: FormData) {
       reviewed_at: new Date().toISOString(),
     })
     .eq("id", id);
-  revalidatePath("/admin");
+  revalidatePath("/studio");
 }
 
 function formatAdminDate(date: string | null) {
@@ -636,13 +662,7 @@ export default async function AdminPage({
       : "schedule";
 
   if (!isAdmin) {
-    return (
-      <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)] flex items-center justify-center px-6">
-        <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-6 text-center">
-          Access denied
-        </div>
-      </div>
-    );
+    redirect("/");
   }
 
   const { scheduledCounts, readyAheadDays } = await getScheduleOverview(today);
@@ -721,7 +741,7 @@ export default async function AdminPage({
 
         <div className="mb-4 flex flex-wrap gap-2">
           <Link
-            href="/admin?tab=schedule"
+            href="/studio?tab=schedule"
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
               tab === "schedule"
                 ? "bg-[var(--accent)] text-white"
@@ -731,7 +751,7 @@ export default async function AdminPage({
             Schedule
           </Link>
           <Link
-            href="/admin?tab=submissions"
+            href="/studio?tab=submissions"
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
               tab === "submissions"
                 ? "bg-[var(--accent)] text-white"
@@ -741,7 +761,7 @@ export default async function AdminPage({
             Submissions
           </Link>
           <Link
-            href="/admin?tab=users"
+            href="/studio?tab=users"
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
               tab === "users"
                 ? "bg-[var(--accent)] text-white"
@@ -751,7 +771,7 @@ export default async function AdminPage({
             Users
           </Link>
           <Link
-            href="/admin?tab=analytics"
+            href="/studio?tab=analytics"
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
               tab === "analytics"
                 ? "bg-[var(--accent)] text-white"

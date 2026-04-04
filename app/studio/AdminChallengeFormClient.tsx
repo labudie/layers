@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { DeleteButton } from "@/app/admin/DeleteButton";
+import { DeleteButton } from "@/app/studio/DeleteButton";
 import { AtCreatorDisplay } from "@/lib/AtHandle";
 
 type PublishBatchResult = {
