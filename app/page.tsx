@@ -43,9 +43,11 @@ export default async function Home() {
 
   const raw = error ? [] : ((data ?? []) as ChallengeRow[]);
   const narrowed = narrowToLatestActiveDate(raw);
-  const challenges: Challenge[] = narrowed.map(
-    ({ active_date: _a, ...rest }) => rest
-  );
+  const challenges: Challenge[] = narrowed.map((row) => {
+    const { active_date: _day, ...rest } = row;
+    void _day;
+    return rest;
+  });
   const userEmail = authData.user?.email ?? null;
   const userId = authData.user?.id ?? null;
 

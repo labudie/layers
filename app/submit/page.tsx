@@ -4,7 +4,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { formatAtUsername, stripAtHandle } from "@/lib/username-display";
+import { formatAtUsername } from "@/lib/username-display";
+import { needsUsernameOnboarding } from "@/lib/profile-onboarding";
+import {
+  isValidUsernameNormalized,
+  normalizeCreatorNameForStorage,
+  sanitizeCreatorNameLiveInput,
+  USERNAME_SPACE_ERROR,
+} from "@/lib/username-input";
 
 const SOFTWARE_OPTIONS = [
   "Photoshop",
@@ -51,6 +58,7 @@ export default function SubmitPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [creatorSpaceError, setCreatorSpaceError] = useState(false);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -71,19 +79,30 @@ export default function SubmitPage() {
       .eq("id", user.id)
       .maybeSingle();
     const username =
-      (profile as { username?: string | null } | null)?.username?.trim() ?? "";
-    const baseName = stripAtHandle(username) || `player_${user.id.slice(0, 8)}`;
-    setCreatorName(formatAtUsername(username, `player_${user.id.slice(0, 8)}`));
+      (profile as { username?: string | null } | null)?.username ?? null;
+    if (needsUsernameOnboarding(username)) {
+      router.replace("/onboarding");
+      return;
+    }
+    const uname = username?.trim() ?? "";
+    setCreatorName(formatAtUsername(uname, `player_${user.id.slice(0, 8)}`));
 
-    // Keep profile email mirrored for admin users table (best effort).
-    await sb.from("profiles").upsert(
-      {
+    const { data: existsRow } = await sb
+      .from("profiles")
+      .select("id")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (!existsRow) {
+      await sb.from("profiles").insert({
         id: user.id,
         email: user.email ?? null,
-        username: baseName,
-      },
-      { onConflict: "id" }
-    );
+      });
+    } else {
+      await sb
+        .from("profiles")
+        .update({ email: user.email ?? null })
+        .eq("id", user.id);
+    }
 
     const { data: rows } = await sb
       .from("submissions")
@@ -119,6 +138,12 @@ export default function SubmitPage() {
     e.preventDefault();
     if (!userId) return;
     if (!title.trim()) return setError("Title is required.");
+    const creatorStored = normalizeCreatorNameForStorage(creatorName);
+    if (!isValidUsernameNormalized(creatorStored)) {
+      return setError(
+        "Creator name must be 2–32 characters (letters, numbers, underscores and hyphens only).",
+      );
+    }
     if (!Number.isFinite(Number(layerCount))) return setError("Layer count is required.");
     if (!imageFile) return setError("Image is required.");
     if (!confirmOriginal) {
@@ -156,7 +181,7 @@ export default function SubmitPage() {
       const { error: insertErr } = await sb.from("submissions").insert({
         user_id: userId,
         title: title.trim(),
-        creator_name: creatorName.trim() || null,
+        creator_name: `@${creatorStored}`,
         software,
         category,
         layer_count: Math.trunc(Number(layerCount)),
@@ -207,10 +232,24 @@ export default function SubmitPage() {
               <label className="text-sm font-semibold text-white/80">Creator Name</label>
               <input
                 type="text"
+                autoComplete="nickname"
+                autoCapitalize="none"
                 value={creatorName}
-                onChange={(e) => setCreatorName(e.target.value)}
+                onChange={(e) => {
+                  const { value, hadSpace } = sanitizeCreatorNameLiveInput(
+                    e.target.value,
+                  );
+                  setCreatorName(value);
+                  setCreatorSpaceError(hadSpace);
+                }}
                 className="at-handle mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
               />
+              <p className="mt-1.5 text-xs text-white/45">
+                Only letters, numbers, underscores and hyphens allowed
+              </p>
+              {creatorSpaceError ? (
+                <p className="mt-1 text-sm text-amber-200">{USERNAME_SPACE_ERROR}</p>
+              ) : null}
             </div>
 
             <div>

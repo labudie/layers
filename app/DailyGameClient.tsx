@@ -10,7 +10,6 @@ import {
   type CSSProperties,
 } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { usePostHog } from "posthog-js/react";
 import type { Challenge } from "./page";
 import {
@@ -232,7 +231,6 @@ export function DailyGameClient({
     [challenges]
   );
 
-  const router = useRouter();
   const [countdownText, setCountdownText] = useState<string | null>(null);
   const [guessInput, setGuessInput] = useState<number | "">("");
   const [guessesByIndex, setGuessesByIndex] = useState<GuessRow[][]>(() =>
@@ -259,7 +257,6 @@ export function DailyGameClient({
   const [modalOffset, setModalOffset] = useState({ x: 0, y: 0 });
   const [imageFeedbackClassName, setImageFeedbackClassName] = useState("");
   const [confettiBursts, setConfettiBursts] = useState<number[]>([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [downloadBusyId, setDownloadBusyId] = useState<string | null>(null);
   const [tutorialStep, setTutorialStep] = useState<1 | 2 | 3 | null>(null);
 
@@ -268,7 +265,6 @@ export function DailyGameClient({
   const revealTimeoutRef = useRef<number | null>(null);
   const imageFeedbackTimeoutRef = useRef<number | null>(null);
   const confettiTimeoutsRef = useRef<number[]>([]);
-  const drawerRef = useRef<HTMLDivElement | null>(null);
   const statsSyncKeyRef = useRef<string | null>(null);
   const startedChallengeIdsRef = useRef<Set<string>>(new Set());
   const completedChallengeIdsRef = useRef<Set<string>>(new Set());
@@ -317,24 +313,6 @@ export function DailyGameClient({
     if (showSummary) return;
     setTutorialStep((prev) => (prev === null ? 1 : prev));
   }, [signedIn, userId, lastPlayedDate, total, showSummary]);
-
-  useEffect(() => {
-    if (!drawerOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDrawerOpen(false);
-    };
-    const onPointerDown = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (drawerRef.current?.contains(t)) return;
-      setDrawerOpen(false);
-    };
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("pointerdown", onPointerDown);
-    };
-  }, [drawerOpen]);
 
   useEffect(() => {
     setInfoPopoverOpen(false);
@@ -703,19 +681,20 @@ export function DailyGameClient({
         }
       }
 
-      await sb.from("profiles").upsert(
-        {
-          id: userId,
-          username: username || `player_${userId.slice(0, 8)}`,
-          current_streak: nextStreak,
-          longest_streak: nextLongest,
-          total_solved: nextTotalSolved,
-          perfect_days: nextPerfectDays,
-          last_played_date: today,
-          badges: Array.from(currentBadges),
-        },
-        { onConflict: "id" }
-      );
+      const handleStored = stripAtHandle(username);
+      const profilePayload: Record<string, unknown> = {
+        id: userId,
+        current_streak: nextStreak,
+        longest_streak: nextLongest,
+        total_solved: nextTotalSolved,
+        perfect_days: nextPerfectDays,
+        last_played_date: today,
+        badges: Array.from(currentBadges),
+      };
+      if (handleStored) {
+        profilePayload.username = handleStored;
+      }
+      await sb.from("profiles").upsert(profilePayload, { onConflict: "id" });
 
       if (!cancelled) {
         statsSyncKeyRef.current = uniqueKey;
@@ -948,11 +927,6 @@ export function DailyGameClient({
     posthog,
   ]);
 
-  async function signOut() {
-    await supabase().auth.signOut();
-    router.refresh();
-  }
-
   async function downloadChallengeImage(ch: Challenge) {
     if (!ch.image_url) return;
     if (downloadBusyId === ch.id) return;
@@ -1042,20 +1016,9 @@ export function DailyGameClient({
   }, []);
 
   return (
-    <div className="flex h-dvh w-full flex-col overflow-hidden bg-[var(--background)] text-[var(--text)]">
-      <header className="flex shrink-0 items-center justify-between px-4 pt-4 md:px-5">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="text-xl font-extrabold tracking-tight">Layers</div>
-        </div>
-
-        <button
-          type="button"
-          aria-label="Open menu"
-          onClick={() => setDrawerOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-[rgba(26,10,46,0.7)] text-xl font-semibold text-[var(--text)] shadow-sm transition hover:bg-[var(--surface)]"
-        >
-          ☰
-        </button>
+    <div className="flex h-[calc(100dvh-var(--app-bottom-nav-height,0px))] min-h-0 w-full flex-col overflow-hidden bg-[var(--background)] text-[var(--text)]">
+      <header className="flex shrink-0 items-center px-4 pt-4 md:px-5">
+        <div className="text-xl font-extrabold tracking-tight">Layers</div>
       </header>
 
       <div className="flex shrink-0 items-center justify-center px-4 pt-2 md:px-5">
@@ -1064,96 +1027,6 @@ export function DailyGameClient({
           <span className="font-mono text-base font-bold text-[var(--text)]">
             {countdownText ?? "--:--:--"}
           </span>
-        </div>
-      </div>
-
-      <div
-        className={`fixed inset-0 z-[120] transition-opacity duration-200 ${
-          drawerOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
-        }`}
-      >
-        <button
-          type="button"
-          aria-label="Close menu"
-          className="absolute inset-0 bg-[#0f0520]/85 backdrop-blur-sm"
-          onClick={() => setDrawerOpen(false)}
-        />
-        <div
-          ref={drawerRef}
-          className={`absolute right-0 top-0 h-full w-[min(18rem,86vw)] bg-[rgba(26,10,46,0.98)] shadow-2xl transition-transform duration-300 ${
-            drawerOpen ? "translate-x-0" : "translate-x-full"
-          }`}
-        >
-            <div className="flex items-center justify-between px-4 py-4">
-              <div className="text-sm font-semibold text-[var(--text)]">Menu</div>
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-xl font-semibold text-[var(--text)]"
-                aria-label="Close menu"
-              >
-                ×
-              </button>
-            </div>
-            <nav className="flex flex-col gap-2 px-4 pb-6">
-              <Link
-                href="/"
-                onClick={() => setDrawerOpen(false)}
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-[var(--text)] hover:bg-white/10"
-              >
-                Home
-              </Link>
-              <Link
-                href="/leaderboard"
-                onClick={() => setDrawerOpen(false)}
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-[var(--text)] hover:bg-white/10"
-              >
-                Leaderboard
-              </Link>
-              <Link
-                href="/settings"
-                onClick={() => setDrawerOpen(false)}
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-[var(--text)] hover:bg-white/10"
-              >
-                Settings
-              </Link>
-              {signedIn && stripAtHandle(profileUsername ?? "") ? (
-                <Link
-                  href={`/profile/${encodeURIComponent(stripAtHandle(profileUsername ?? ""))}`}
-                  onClick={() => setDrawerOpen(false)}
-                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-[var(--text)] hover:bg-white/10"
-                >
-                  View Profile
-                </Link>
-              ) : null}
-              <Link
-                href="/submit"
-                onClick={() => setDrawerOpen(false)}
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-[var(--text)] hover:bg-white/10"
-              >
-                Submit Your Work 🎨
-              </Link>
-              {signedIn ? (
-                <button
-                  type="button"
-                  onClick={() => void (async () => {
-                    setDrawerOpen(false);
-                    await signOut();
-                  })()}
-                  className="mt-1 rounded-xl border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.1)] px-4 py-3 text-sm font-semibold text-red-200 hover:bg-[rgba(239,68,68,0.2)]"
-                >
-                  Sign out
-                </button>
-              ) : (
-                <Link
-                  href="/login"
-                  onClick={() => setDrawerOpen(false)}
-                  className="mt-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-[var(--text)] hover:bg-white/10"
-                >
-                  Sign in
-                </Link>
-              )}
-            </nav>
         </div>
       </div>
 

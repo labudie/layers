@@ -10,7 +10,12 @@ import {
   writeGameSoundEnabled,
 } from "@/lib/game-sound";
 import { AtUsernameDisplay } from "@/lib/AtHandle";
-import { stripAtHandle } from "@/lib/username-display";
+import {
+  isValidUsernameNormalized,
+  normalizeUsernameForStorage,
+  sanitizeUsernameLiveInput,
+  USERNAME_SPACE_ERROR,
+} from "@/lib/username-input";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -34,6 +39,7 @@ export default function SettingsPage() {
   });
   const [earnedBadges, setEarnedBadges] = useState<BadgeId[]>([]);
   const [gameSoundOn, setGameSoundOn] = useState(true);
+  const [usernameFieldError, setUsernameFieldError] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
@@ -97,11 +103,15 @@ export default function SettingsPage() {
     setError(null);
     setSuccess(null);
     try {
-      const trimmed = stripAtHandle(displayName);
+      const normalized = normalizeUsernameForStorage(displayName);
+      if (!isValidUsernameNormalized(normalized)) {
+        setError("Username must be 2–32 characters (letters, numbers, _ and - only).");
+        return;
+      }
       const { error: upsertError } = await supabase().from("profiles").upsert(
         {
           id: userId,
-          username: trimmed,
+          username: normalized,
           avatar_url: avatarUrl,
         },
         { onConflict: "id" }
@@ -110,6 +120,7 @@ export default function SettingsPage() {
         setError(upsertError.message);
         return;
       }
+      setDisplayName(normalized);
       setSuccess("Profile saved.");
       window.setTimeout(() => setSuccess(null), 2000);
     } finally {
@@ -145,13 +156,17 @@ export default function SettingsPage() {
         .maybeSingle();
       const prevUsername =
         (existing as { username?: string | null } | null)?.username ?? "";
+      const normalized = normalizeUsernameForStorage(
+        prevUsername || displayName,
+      );
+      if (!isValidUsernameNormalized(normalized)) {
+        setError("Set a valid username (2–32 characters) before uploading a photo.");
+        return;
+      }
       const { error: upsertError } = await sb.from("profiles").upsert(
         {
           id: userId,
-          username:
-            prevUsername ||
-            stripAtHandle(displayName) ||
-            `player_${userId.slice(0, 8)}`,
+          username: normalized,
           avatar_url: pub.publicUrl,
         },
         { onConflict: "id" }
@@ -233,13 +248,24 @@ export default function SettingsPage() {
                   {uploading ? "Uploading photo..." : "Tap to change photo"}
                 </div>
 
-                <div className="mt-3 flex items-center gap-2">
+                <div className="mt-3 flex flex-col items-center gap-1">
+                  <div className="flex items-center gap-2">
                   {editingName ? (
                     <input
                       ref={nameInputRef}
                       type="text"
+                      autoComplete="username"
+                      autoCapitalize="none"
                       value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
+                      onChange={(e) => {
+                        const { value, hadSpace } = sanitizeUsernameLiveInput(
+                          e.target.value,
+                        );
+                        setDisplayName(value);
+                        setUsernameFieldError(
+                          hadSpace ? USERNAME_SPACE_ERROR : null,
+                        );
+                      }}
                       onBlur={() => {
                         setEditingName(false);
                         void saveProfile();
@@ -265,6 +291,17 @@ export default function SettingsPage() {
                   >
                     Edit
                   </button>
+                  </div>
+                  {editingName ? (
+                    <p className="max-w-xs text-center text-xs text-white/45">
+                      Only letters, numbers, underscores and hyphens allowed
+                    </p>
+                  ) : null}
+                  {usernameFieldError ? (
+                    <p className="max-w-xs text-center text-xs text-amber-200">
+                      {usernameFieldError}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </section>

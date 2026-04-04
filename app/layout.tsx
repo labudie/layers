@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { PHProvider } from "@/app/providers";
 import PostHogPageView from "@/app/posthog-pageview";
+import { AppShell } from "@/app/AppShell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,13 +31,13 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col overflow-x-hidden">
+      <body className="flex min-h-dvh flex-col overflow-x-hidden">
         <PHProvider>
-          <Suspense fallback={null}>
-            <PostHogPageView />
-          </Suspense>
-          <div className="flex min-h-full flex-1 flex-col pb-[env(safe-area-inset-bottom,0px)]">
-            {children}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <Suspense fallback={null}>
+              <PostHogPageView />
+            </Suspense>
+            <AppShell>{children}</AppShell>
           </div>
         </PHProvider>
       </body>

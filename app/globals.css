@@ -6,6 +6,7 @@
 }
 
 :root {
+  --app-bottom-nav-height: 0px;
   --background: #0f0520; /* deep dark purple */
   --surface: #1a0a2e; /* slightly lighter purple */
   --accent: #7c3aed; /* vivid purple */
