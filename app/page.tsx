@@ -50,14 +50,19 @@ export default async function Home() {
   const userId = authData.user?.id ?? null;
 
   let profileUsername: string | null = null;
+  let lastPlayedDate: string | null = null;
   if (userId) {
     const { data: prof } = await supabase
       .from("profiles")
-      .select("username")
+      .select("username, last_played_date")
       .eq("id", userId)
       .maybeSingle();
-    profileUsername =
-      (prof as { username?: string | null } | null)?.username?.trim() ?? null;
+    const row = prof as {
+      username?: string | null;
+      last_played_date?: string | null;
+    } | null;
+    profileUsername = row?.username?.trim() ?? null;
+    lastPlayedDate = row?.last_played_date ?? null;
   }
 
   return (
@@ -66,6 +71,7 @@ export default async function Home() {
       userEmail={userEmail}
       userId={userId}
       profileUsername={profileUsername}
+      lastPlayedDate={lastPlayedDate}
     />
   );
 }

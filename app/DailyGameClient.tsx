@@ -13,6 +13,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePostHog } from "posthog-js/react";
 import type { Challenge } from "./page";
+import {
+  FirstPlayTutorial,
+  TUTORIAL_SEEN_KEY,
+} from "@/app/FirstPlayTutorial";
 import { supabase } from "@/lib/supabase";
 import type { BadgeId } from "@/lib/badges";
 import {
@@ -210,11 +214,13 @@ export function DailyGameClient({
   userEmail,
   userId,
   profileUsername,
+  lastPlayedDate,
 }: {
   challenges: Challenge[];
   userEmail: string | null;
   userId: string | null;
   profileUsername?: string | null;
+  lastPlayedDate?: string | null;
 }) {
   const total = challenges.length;
   const dayNumber = challenges[0]?.day_number ?? null;
@@ -247,6 +253,7 @@ export function DailyGameClient({
   const infoButtonRef = useRef<HTMLButtonElement | null>(null);
   const infoPopoverRef = useRef<HTMLDivElement | null>(null);
   const guessInputRef = useRef<HTMLInputElement | null>(null);
+  const tutorialImageRef = useRef<HTMLDivElement | null>(null);
   const [modalImageUrl, setModalImageUrl] = useState<string | null>(null);
   const [modalScale, setModalScale] = useState(1);
   const [modalOffset, setModalOffset] = useState({ x: 0, y: 0 });
@@ -254,6 +261,7 @@ export function DailyGameClient({
   const [confettiBursts, setConfettiBursts] = useState<number[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [downloadBusyId, setDownloadBusyId] = useState<string | null>(null);
+  const [tutorialStep, setTutorialStep] = useState<1 | 2 | 3 | null>(null);
 
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
@@ -281,6 +289,34 @@ export function DailyGameClient({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const dismissTutorial = useCallback(() => {
+    try {
+      localStorage.setItem(TUTORIAL_SEEN_KEY, "true");
+    } catch {
+      /* ignore */
+    }
+    setTutorialStep(null);
+  }, []);
+
+  useEffect(() => {
+    if (showSummary) setTutorialStep(null);
+  }, [showSummary]);
+
+  useEffect(() => {
+    if (!signedIn || !userId) return;
+    try {
+      if (localStorage.getItem(TUTORIAL_SEEN_KEY) === "true") return;
+    } catch {
+      return;
+    }
+    const hasPlayed =
+      lastPlayedDate != null && String(lastPlayedDate).trim() !== "";
+    if (hasPlayed) return;
+    if (total < 1) return;
+    if (showSummary) return;
+    setTutorialStep((prev) => (prev === null ? 1 : prev));
+  }, [signedIn, userId, lastPlayedDate, total, showSummary]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -1257,6 +1293,7 @@ export function DailyGameClient({
               {currentChallenge && (
                 <>
                   <div
+                    ref={tutorialImageRef}
                     className={`relative mx-[calc(50%-50vw)] w-[100vw] ${challengeVisualFadeClassName}`}
                   >
                     <div
@@ -1692,6 +1729,16 @@ export function DailyGameClient({
           })}
         </div>
       ))}
+      <FirstPlayTutorial
+        step={tutorialStep}
+        imageRef={tutorialImageRef}
+        guessInputRef={guessInputRef}
+        onNext={() =>
+          setTutorialStep((s) => (s === 1 ? 2 : s === 2 ? 3 : s))
+        }
+        onSkip={dismissTutorial}
+        onComplete={dismissTutorial}
+      />
     </div>
   );
 }
