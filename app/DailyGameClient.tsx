@@ -1170,9 +1170,23 @@ export function DailyGameClient({
                                   e.preventDefault();
                                   void downloadChallengeImage(ch);
                                 }}
-                                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/40 text-lg text-white/90 backdrop-blur-sm transition hover:bg-black/55 disabled:opacity-40"
+                                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white/90 backdrop-blur-sm transition hover:bg-black/55 disabled:opacity-40"
                               >
-                                ↓
+                                <svg
+                                  width={16}
+                                  height={16}
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden
+                                >
+                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                  <polyline points="7 10 12 15 17 10" />
+                                  <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
                               </button>
                             </div>
                           </div>
