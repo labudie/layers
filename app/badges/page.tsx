@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import { BADGE_DEFS, type BadgeId } from "@/lib/badges";
@@ -24,17 +25,18 @@ export default async function BadgesPage() {
     []) as BadgeId[]);
 
   return (
-    <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)]">
-      <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-5">
-        <div className="mb-6">
-          <Link
-            href="/settings"
-            className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
-          >
-            ← Back to Settings
-          </Link>
-        </div>
-
+    <AppSiteChrome
+      title="Badges"
+      drawerFooterExtra={
+        <Link
+          href="/settings"
+          className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
+        >
+          ← Back to Settings
+        </Link>
+      }
+    >
+      <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-5">
         <h1 className="text-3xl font-extrabold tracking-tight">Badges</h1>
         <p className="mt-2 text-sm text-white/60">
           Collect badges by playing daily, keeping streaks, and sharing great work.
@@ -63,6 +65,6 @@ export default async function BadgesPage() {
           })}
         </div>
       </div>
-    </div>
+    </AppSiteChrome>
   );
 }

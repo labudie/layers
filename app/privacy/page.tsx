@@ -1,17 +1,22 @@
 import Link from "next/link";
+import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen w-full bg-[#0f0520] text-[var(--text)]">
-      <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-6">
+    <AppSiteChrome
+      title="Privacy"
+      className="bg-[#0f0520]"
+      drawerFooterExtra={
         <Link
           href="/settings"
-          className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+          className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
         >
-          ← Back
+          ← Back to Settings
         </Link>
-
-        <div className="mt-6 rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)] p-5 md:p-6">
+      }
+    >
+      <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6">
+        <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)] p-5 md:p-6">
           <h1 className="text-2xl font-extrabold tracking-tight">Privacy Policy</h1>
           <p className="mt-2 text-sm text-white/60">
             Last updated: March 2026
@@ -95,6 +100,6 @@ export default function PrivacyPage() {
           </div>
         </div>
       </div>
-    </div>
+    </AppSiteChrome>
   );
 }

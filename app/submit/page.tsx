@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { formatAtUsername } from "@/lib/username-display";
@@ -209,18 +210,18 @@ export default function SubmitPage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)]">
-      <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-5">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="text-xl font-extrabold tracking-tight">Layers</div>
-          <Link
-            href="/"
-            className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
-          >
-            ← Back
-          </Link>
-        </div>
-
+    <AppSiteChrome
+      title="Submit"
+      drawerFooterExtra={
+        <Link
+          href="/"
+          className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
+        >
+          ← Home
+        </Link>
+      }
+    >
+      <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-5">
         <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)] p-5">
           <h1 className="text-2xl font-extrabold">Submit Your Work</h1>
           <p className="mt-1 text-sm text-white/60">
@@ -432,6 +433,6 @@ export default function SubmitPage() {
           )}
         </div>
       </div>
-    </div>
+    </AppSiteChrome>
   );
 }

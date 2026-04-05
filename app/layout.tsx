@@ -52,6 +52,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body className="flex min-h-dvh flex-col overflow-x-hidden">
+        {/* Per-page chrome: `AppSiteChrome` (hamburger left, title center). Home uses it via `DailyGameClient`. */}
         <PHProvider>
           <div className="flex min-h-0 flex-1 flex-col">
             <Suspense fallback={null}>

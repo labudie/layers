@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import { BADGE_DEFS, type BadgeId } from "@/lib/badges";
 import { stripAtHandle } from "@/lib/username-display";
@@ -44,21 +45,24 @@ export default async function PublicProfilePage({
   const { username: rawParam } = await params;
   const decoded = decodeURIComponent(rawParam);
   const handle = stripAtHandle(decoded);
+  const drawerBackHome = (
+    <Link
+      href="/"
+      className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
+    >
+      ← Home
+    </Link>
+  );
+
   if (!handle.length) {
     return (
-      <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)]">
+      <AppSiteChrome title="Profile" drawerFooterExtra={drawerBackHome}>
         <div className="mx-auto max-w-lg px-4 py-10">
-          <Link
-            href="/"
-            className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
-          >
-            ← Back
-          </Link>
-          <p className="mt-10 text-center text-lg font-semibold text-white/75">
+          <p className="mt-6 text-center text-lg font-semibold text-white/75">
             Profile not found
           </p>
         </div>
-      </div>
+      </AppSiteChrome>
     );
   }
 
@@ -74,19 +78,13 @@ export default async function PublicProfilePage({
 
   if (profileError || !profileData) {
     return (
-      <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)]">
+      <AppSiteChrome title="Profile" drawerFooterExtra={drawerBackHome}>
         <div className="mx-auto max-w-lg px-4 py-10">
-          <Link
-            href="/"
-            className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
-          >
-            ← Back
-          </Link>
-          <p className="mt-10 text-center text-lg font-semibold text-white/75">
+          <p className="mt-6 text-center text-lg font-semibold text-white/75">
             Profile not found
           </p>
         </div>
-      </div>
+      </AppSiteChrome>
     );
   }
 
@@ -105,7 +103,7 @@ export default async function PublicProfilePage({
     .map((s) => s.scheduled_challenge_id)
     .filter((id): id is string => Boolean(id));
 
-  let countMap = new Map<string, number>();
+  const countMap = new Map<string, number>();
   if (challengeIds.length > 0) {
     const { data: countRows } = await supabase.rpc(
       "get_download_counts_for_challenges",
@@ -135,17 +133,11 @@ export default async function PublicProfilePage({
   const displayHandle = profile.username ?? handle;
 
   return (
-    <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)]">
+    <AppSiteChrome
+      title={`@${stripAtHandle(displayHandle)}`}
+      drawerFooterExtra={drawerBackHome}
+    >
       <div className="mx-auto w-full max-w-2xl px-4 py-6 md:px-5">
-        <header className="mb-6 flex items-center justify-between">
-          <Link
-            href="/"
-            className="inline-flex items-center rounded-xl border border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.12)] px-4 py-2 text-sm font-semibold text-white hover:bg-[rgba(124,58,237,0.2)]"
-          >
-            ← Back
-          </Link>
-        </header>
-
         <section className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)] p-6">
           <div className="flex flex-col items-center text-center">
             <div className="h-24 w-24 overflow-hidden rounded-full border-[3px] border-[var(--accent)] bg-black/40 p-[3px] shadow-[0_0_24px_rgba(124,58,237,0.25)]">
@@ -233,6 +225,6 @@ export default async function PublicProfilePage({
           <ProfileWorkGrid items={workItems} />
         </section>
       </div>
-    </div>
+    </AppSiteChrome>
   );
 }

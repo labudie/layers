@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { supabase } from "@/lib/supabase";
 
 type Profile = {
@@ -95,17 +96,18 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)]">
-      <div className="mx-auto w-full max-w-xl px-4 py-8 md:px-5">
-        <div className="mb-6">
-          <Link
-            href="/"
-            className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
-          >
-            ← Back
-          </Link>
-        </div>
-
+    <AppSiteChrome
+      title="Profile"
+      drawerFooterExtra={
+        <Link
+          href="/"
+          className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
+        >
+          ← Home
+        </Link>
+      }
+    >
+      <div className="mx-auto w-full max-w-xl px-4 py-6 md:px-5">
         <h1 className="text-3xl font-extrabold tracking-tight">Profile</h1>
         <p className="mt-2 text-sm text-white/60">
           Set your display name for the leaderboard.
@@ -151,7 +153,7 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
-    </div>
+    </AppSiteChrome>
   );
 }
 

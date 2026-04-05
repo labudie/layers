@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -60,11 +61,13 @@ type SubmissionAdminRow = {
 type AdminUserRow = {
   id: string;
   username: string | null;
-  email: string | null;
-  joined_at: string | null;
-  total_solved: number | null;
+  avatar_url: string | null;
   current_streak: number | null;
+  longest_streak: number | null;
+  total_solved: number | null;
+  perfect_days: number | null;
   last_played_date: string | null;
+  created_at: string | null;
 };
 
 type AdminAnalytics = {
@@ -767,21 +770,16 @@ export default async function AdminPage({
   const approvedCount = submissions.filter((s) => s.status === "approved").length;
   const rejectedCount = submissions.filter((s) => s.status === "rejected").length;
 
-  const users: AdminUserRow[] = [];
+  let users: AdminUserRow[] = [];
   if (tab === "users") {
-    const pageSize = 500;
-    for (let offset = 0; ; offset += pageSize) {
-      const { data: page, error: usersRpcError } = await sb.rpc(
-        "admin_list_user_profiles",
-        { p_limit: pageSize, p_offset: offset },
-      );
-      if (usersRpcError) {
-        console.error("[admin][users rpc]", usersRpcError);
-        break;
-      }
-      const rows = (page ?? []) as AdminUserRow[];
-      users.push(...rows);
-      if (rows.length < pageSize) break;
+    const { data: profileRows, error: usersError } = await sb
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (usersError) {
+      console.error("[admin][users]", usersError);
+    } else {
+      users = (profileRows ?? []) as AdminUserRow[];
     }
   }
 
@@ -798,23 +796,24 @@ export default async function AdminPage({
   const minScheduleDate = nextEasternYmd(today);
 
   return (
-    <div className="min-h-screen w-full bg-[#0f0520] text-[var(--text)]">
-      <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-5 md:py-8">
-        <header className="mb-6 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.75)] px-4 py-3 shadow-sm backdrop-blur-sm">
-          <div className="text-xl font-extrabold tracking-tight">Layers</div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-full border border-[var(--accent)]/35 bg-[var(--accent)]/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white">
-              Admin
-            </span>
-            <Link
-              href="/"
-              className="rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10"
-            >
-              ← Back
-            </Link>
-          </div>
-        </header>
-
+    <AppSiteChrome
+      title="Layers"
+      className="bg-[#0f0520]"
+      right={
+        <span className="rounded-full border border-[var(--accent)]/35 bg-[var(--accent)]/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white">
+          Admin
+        </span>
+      }
+      drawerFooterExtra={
+        <Link
+          href="/"
+          className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
+        >
+          ← Home
+        </Link>
+      }
+    >
+      <div className="mx-auto w-full max-w-6xl px-4 py-4 md:px-5 md:py-6">
         <div className="mb-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100">
           {readyAheadDays} day{readyAheadDays === 1 ? "" : "s"} of content ready
         </div>
@@ -1402,14 +1401,16 @@ export default async function AdminPage({
           )
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)]">
-            <table className="min-w-[900px] w-full text-left text-sm">
+            <table className="min-w-[1040px] w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
                   <th className="px-4 py-3">Username</th>
-                  <th className="px-4 py-3">Email</th>
-                  <th className="px-4 py-3">Join date</th>
+                  <th className="px-4 py-3">Avatar</th>
+                  <th className="px-4 py-3">Joined</th>
                   <th className="px-4 py-3">Total solved</th>
                   <th className="px-4 py-3">Current streak</th>
+                  <th className="px-4 py-3">Longest streak</th>
+                  <th className="px-4 py-3">Perfect days</th>
                   <th className="px-4 py-3">Last played</th>
                 </tr>
               </thead>
@@ -1422,12 +1423,25 @@ export default async function AdminPage({
                         fallback={`player_${u.id.slice(0, 8)}`}
                       />
                     </td>
-                    <td className="px-4 py-3 text-white/80">{u.email ?? "—"}</td>
                     <td className="px-4 py-3 text-white/80">
-                      {formatAdminDate(u.joined_at ? u.joined_at.slice(0, 10) : null)}
+                      {u.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={u.avatar_url}
+                          alt=""
+                          className="h-8 w-8 rounded-full border border-white/15 object-cover"
+                        />
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-white/80">
+                      {formatAdminDate(u.created_at ? u.created_at.slice(0, 10) : null)}
                     </td>
                     <td className="px-4 py-3 text-white/80">{u.total_solved ?? 0}</td>
                     <td className="px-4 py-3 text-white/80">{u.current_streak ?? 0}</td>
+                    <td className="px-4 py-3 text-white/80">{u.longest_streak ?? 0}</td>
+                    <td className="px-4 py-3 text-white/80">{u.perfect_days ?? 0}</td>
                     <td className="px-4 py-3 text-white/80">{u.last_played_date ?? "—"}</td>
                   </tr>
                 ))}
@@ -1436,7 +1450,7 @@ export default async function AdminPage({
           </div>
         )}
       </div>
-    </div>
+    </AppSiteChrome>
   );
 }
 

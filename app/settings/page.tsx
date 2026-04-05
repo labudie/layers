@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { BADGE_DEFS, type BadgeId } from "@/lib/badges";
@@ -200,19 +201,18 @@ export default function SettingsPage() {
   }, [editingName]);
 
   return (
-    <div className="min-h-screen w-full bg-[var(--background)] text-[var(--text)]">
+    <AppSiteChrome
+      title="Settings"
+      drawerFooterExtra={
+        <Link
+          href="/"
+          className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
+        >
+          ← Home
+        </Link>
+      }
+    >
       <div className="mx-auto w-full max-w-2xl px-4 py-5 md:px-5 md:py-6">
-        <header className="mb-5 flex items-center justify-between rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.7)] px-4 py-3">
-          <div className="text-lg font-extrabold tracking-tight">Layers</div>
-          <Link
-            href="/"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-base font-bold text-white hover:bg-white/10"
-            aria-label="Back"
-          >
-            ←
-          </Link>
-        </header>
-
         {loading ? (
           <div className="mt-10 text-white/70">Loading…</div>
         ) : (
@@ -517,6 +517,6 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
-    </div>
+    </AppSiteChrome>
   );
 }
