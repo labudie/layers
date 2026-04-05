@@ -210,6 +210,38 @@ function canvasSeedForChallenge(ch: Challenge): number {
   );
 }
 
+function creatorUsernameKey(raw: string | null | undefined) {
+  return stripAtHandle(raw ?? "").trim().toLowerCase();
+}
+
+function CreatorResultAvatar({
+  creatorName,
+  avatarByUsername,
+}: {
+  creatorName: string | null;
+  avatarByUsername: Map<string, string | null>;
+}) {
+  const key = creatorUsernameKey(creatorName);
+  const avatarUrl = key ? avatarByUsername.get(key) : undefined;
+  const handle = stripAtHandle(creatorName ?? "");
+  const initial = (handle.slice(0, 1) || "?").toUpperCase();
+  return (
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[var(--accent)]">
+      {avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="text-sm font-extrabold text-[var(--text)]">
+          {initial}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function DailyGameClient({
   challenges,
   userEmail,
@@ -252,7 +284,7 @@ export function DailyGameClient({
   const [pendingAutoAdvance, setPendingAutoAdvance] = useState(false);
   /** After a failed round (6 guesses), auto-advance after short reveal delay. */
   const [pendingFailedAutoAdvance, setPendingFailedAutoAdvance] = useState(false);
-  /** Opacity fade on title, image, attempt rows, result only — not whole page. */
+  /** Opacity fade on title, attempt rows, input — main challenge image uses its own load fade. */
   const [challengeTransitioning, setChallengeTransitioning] = useState(false);
   /** Hydration-safe: dynamic transition classes only after mount. */
   const [mounted, setMounted] = useState(false);
@@ -270,6 +302,12 @@ export function DailyGameClient({
   const [tutorialStep, setTutorialStep] = useState<1 | 2 | 3 | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement | null>(null);
+  const [creatorAvatars, setCreatorAvatars] = useState<
+    Map<string, string | null>
+  >(() => new Map());
+  const [challengeMainImageLoaded, setChallengeMainImageLoaded] =
+    useState(true);
+  const prevChallengeImageIdRef = useRef<string | null | undefined>(undefined);
 
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
@@ -291,6 +329,55 @@ export function DailyGameClient({
   const challengesRef = useRef(challenges);
   useEffect(() => {
     challengesRef.current = challenges;
+  }, [challengeIdsKey]);
+
+  useEffect(() => {
+    const list = challengesRef.current;
+    if (!list.length) {
+      setCreatorAvatars(new Map());
+      return;
+    }
+    const keys = new Set<string>();
+    for (const ch of list) {
+      const k = creatorUsernameKey(ch.creator_name);
+      if (k) keys.add(k);
+    }
+    if (keys.size === 0) {
+      setCreatorAvatars(new Map());
+      return;
+    }
+    let cancelled = false;
+    const arr = Array.from(keys);
+    void (async () => {
+      const sb = supabase();
+      const map = new Map<string, string | null>();
+      const chunk = 100;
+      for (let i = 0; i < arr.length; i += chunk) {
+        const slice = arr.slice(i, i + chunk);
+        const { data, error } = await sb
+          .from("profiles")
+          .select("username, avatar_url")
+          .in("username", slice);
+        if (cancelled) return;
+        if (error) {
+          console.error("[DailyGameClient] creator avatars", error);
+          continue;
+        }
+        for (const row of data ?? []) {
+          const r = row as { username?: string | null; avatar_url?: string | null };
+          const u = r.username?.trim().toLowerCase();
+          if (u) map.set(u, r.avatar_url?.trim() || null);
+        }
+      }
+      if (!cancelled) setCreatorAvatars(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [challengeIdsKey]);
+
+  useEffect(() => {
+    prevChallengeImageIdRef.current = undefined;
   }, [challengeIdsKey]);
 
   useEffect(() => {
@@ -425,6 +512,40 @@ export function DailyGameClient({
   }, [challengeIdsKey]);
 
   const currentChallenge = challenges[currentChallengeIndex] ?? null;
+  const displayChallengeImageUrl = useMemo(
+    () => currentChallenge?.image_url ?? null,
+    [currentChallenge?.image_url],
+  );
+
+  useEffect(() => {
+    const id = currentChallenge?.id;
+    if (prevChallengeImageIdRef.current === undefined) {
+      prevChallengeImageIdRef.current = id;
+      setChallengeMainImageLoaded(Boolean(displayChallengeImageUrl));
+      return;
+    }
+    if (id !== prevChallengeImageIdRef.current) {
+      prevChallengeImageIdRef.current = id;
+      if (displayChallengeImageUrl) setChallengeMainImageLoaded(false);
+      else setChallengeMainImageLoaded(true);
+    }
+  }, [currentChallenge?.id, displayChallengeImageUrl]);
+
+  useEffect(() => {
+    if (!displayChallengeImageUrl) return;
+    const probe = new Image();
+    probe.src = displayChallengeImageUrl;
+    if (probe.complete) setChallengeMainImageLoaded(true);
+  }, [currentChallenge?.id, displayChallengeImageUrl]);
+
+  useEffect(() => {
+    const next = challenges[currentChallengeIndex + 1];
+    const u = next?.image_url;
+    if (!u) return;
+    const im = new Image();
+    im.src = u;
+  }, [challenges, currentChallengeIndex]);
+
   const currentGuesses = guessesByIndex[currentChallengeIndex] ?? [];
   const currentAnswer = currentChallenge?.layer_count ?? null;
   const challengeMeta = currentChallenge as
@@ -947,7 +1068,7 @@ export function DailyGameClient({
     posthog,
   ]);
 
-  async function downloadChallengeImage(ch: Challenge) {
+  const downloadChallengeImage = useCallback(async (ch: Challenge) => {
     if (!ch.image_url) return;
     if (downloadBusyId === ch.id) return;
     setDownloadBusyId(ch.id);
@@ -979,9 +1100,9 @@ export function DailyGameClient({
     } finally {
       setDownloadBusyId(null);
     }
-  }
+  }, [downloadBusyId]);
 
-  async function shareDaily() {
+  const shareDaily = useCallback(async () => {
     if (!challenges.length) return;
     posthog?.capture("share_clicked");
     const dn = dayNumber ?? "—";
@@ -997,7 +1118,7 @@ export function DailyGameClient({
     } catch {
       // ignore
     }
-  }
+  }, [challenges, dayNumber, guessesByIndex, posthog]);
 
   const isLastChallenge = currentChallengeIndex >= total - 1;
 
@@ -1275,16 +1396,17 @@ export function DailyGameClient({
                               <img
                                 src={ch.image_url}
                                 alt=""
+                                loading={i === 0 ? "eager" : "lazy"}
+                                decoding="async"
                                 className="h-full w-full cursor-zoom-in object-contain"
                               />
                             </button>
 
                             <div className="absolute bottom-1 right-2 z-20 flex items-center gap-2">
-                              <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[var(--accent)]">
-                                <span className="text-sm font-extrabold text-[var(--text)]">
-                                  L
-                                </span>
-                              </div>
+                              <CreatorResultAvatar
+                                creatorName={ch.creator_name}
+                                avatarByUsername={creatorAvatars}
+                              />
 
                               <button
                                 type="button"
@@ -1370,21 +1492,28 @@ export function DailyGameClient({
                 <>
                   <div
                     ref={tutorialImageRef}
-                    className={`relative mx-[calc(50%-50vw)] w-[100vw] ${challengeVisualFadeClassName}`}
+                    className="relative mx-[calc(50%-50vw)] w-[100vw]"
                   >
                     <div
                       className={`challenge-image-frame flex max-h-[60vh] w-full items-center justify-center overflow-hidden rounded-none bg-[#0f0520] ${imageFeedbackClassName}`}
                       onClick={() => {
-                        if (currentChallenge.image_url) {
-                          openImageModal(currentChallenge.image_url);
+                        if (displayChallengeImageUrl) {
+                          openImageModal(displayChallengeImageUrl);
                         }
                       }}
                     >
                       {currentChallenge.image_url ? (
                         <img
-                          src={currentChallenge.image_url}
+                          src={displayChallengeImageUrl ?? ""}
                           alt={currentChallenge.title ?? "Challenge image"}
-                          className="block max-h-[60vh] w-auto max-w-full cursor-zoom-in object-contain"
+                          loading="eager"
+                          decoding="async"
+                          onLoad={() => setChallengeMainImageLoaded(true)}
+                          className={`block max-h-[60vh] w-auto max-w-full cursor-zoom-in object-contain transition-opacity duration-200 ease-out ${
+                            challengeMainImageLoaded
+                              ? "opacity-100"
+                              : "opacity-0"
+                          }`}
                           style={{ background: "#0f0520" }}
                         />
                       ) : (
