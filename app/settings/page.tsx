@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
+import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { BADGE_DEFS, type BadgeId } from "@/lib/badges";
@@ -43,52 +44,59 @@ export default function SettingsPage() {
   const [usernameFieldError, setUsernameFieldError] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const sb = supabase();
-    const {
-      data: { user },
-    } = await sb.auth.getUser();
-    if (!user) {
-      router.replace("/login");
-      return;
-    }
-    setUserId(user.id);
-    setEmail(user.email ?? null);
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true;
+      if (!silent) setLoading(true);
+      setError(null);
+      try {
+        const sb = supabase();
+        const {
+          data: { user },
+        } = await sb.auth.getUser();
+        if (!user) {
+          router.replace("/login");
+          return;
+        }
+        setUserId(user.id);
+        setEmail(user.email ?? null);
 
-    const { data: profile, error: profileError } = await sb
-      .from("profiles")
-      .select(
-        "username, avatar_url, current_streak, longest_streak, total_solved, perfect_days, badges"
-      )
-      .eq("id", user.id)
-      .maybeSingle();
+        const { data: profile, error: profileError } = await sb
+          .from("profiles")
+          .select(
+            "username, avatar_url, current_streak, longest_streak, total_solved, perfect_days, badges",
+          )
+          .eq("id", user.id)
+          .maybeSingle();
 
-    if (profileError) {
-      setError(profileError.message);
-    } else {
-      const row = profile as {
-        username?: string | null;
-        avatar_url?: string | null;
-        current_streak?: number | null;
-        longest_streak?: number | null;
-        total_solved?: number | null;
-        perfect_days?: number | null;
-        badges?: string[] | null;
-      } | null;
-      setDisplayName(row?.username ?? "");
-      setAvatarUrl(row?.avatar_url ?? null);
-      setStats({
-        current_streak: row?.current_streak ?? 0,
-        longest_streak: row?.longest_streak ?? 0,
-        total_solved: row?.total_solved ?? 0,
-        perfect_days: row?.perfect_days ?? 0,
-      });
-      setEarnedBadges(((row?.badges ?? []) as BadgeId[]).slice(0, 12));
-    }
-    setLoading(false);
-  }, [router]);
+        if (profileError) {
+          setError(profileError.message);
+        } else {
+          const row = profile as {
+            username?: string | null;
+            avatar_url?: string | null;
+            current_streak?: number | null;
+            longest_streak?: number | null;
+            total_solved?: number | null;
+            perfect_days?: number | null;
+            badges?: string[] | null;
+          } | null;
+          setDisplayName(row?.username ?? "");
+          setAvatarUrl(row?.avatar_url ?? null);
+          setStats({
+            current_streak: row?.current_streak ?? 0,
+            longest_streak: row?.longest_streak ?? 0,
+            total_solved: row?.total_solved ?? 0,
+            perfect_days: row?.perfect_days ?? 0,
+          });
+          setEarnedBadges(((row?.badges ?? []) as BadgeId[]).slice(0, 12));
+        }
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [router],
+  );
 
   useEffect(() => {
     void load();
@@ -212,6 +220,13 @@ export default function SettingsPage() {
         </Link>
       }
     >
+      <PullToRefresh
+        className="flex min-h-0 flex-1 flex-col"
+        disabled={loading}
+        onRefresh={async () => {
+          await load({ silent: true });
+        }}
+      >
       <div className="mx-auto w-full max-w-2xl px-4 py-5 md:px-5 md:py-6">
         {loading ? (
           <div className="mt-10 text-white/70">Loading…</div>
@@ -517,6 +532,7 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+      </PullToRefresh>
     </AppSiteChrome>
   );
 }

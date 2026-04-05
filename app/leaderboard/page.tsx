@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
+import { LeaderboardPullToRefresh } from "@/app/components/LeaderboardPullToRefresh";
 import { LeaderboardTabBar } from "@/app/components/LeaderboardTabBar";
 import type { LeaderboardTabId } from "@/app/components/LeaderboardTabBar";
 import { LeaderboardTabPanel } from "@/app/components/LeaderboardTabPanel";
@@ -130,6 +131,7 @@ export default async function LeaderboardPage({
         </Link>
       }
     >
+      <LeaderboardPullToRefresh>
       <div className="mx-auto w-full max-w-2xl px-4 py-6 md:px-5">
         <h1 className="text-3xl font-extrabold tracking-tight">Leaderboard</h1>
         <p className="mt-2 text-sm text-white/60">
@@ -281,6 +283,7 @@ export default async function LeaderboardPage({
         )}
         </LeaderboardTabPanel>
       </div>
+      </LeaderboardPullToRefresh>
     </AppSiteChrome>
   );
 }

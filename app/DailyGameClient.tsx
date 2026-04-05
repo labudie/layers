@@ -12,7 +12,9 @@ import {
 import Link from "next/link";
 import { usePostHog } from "posthog-js/react";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
+import { PullToRefresh } from "@/app/components/PullToRefresh";
 import type { Challenge } from "./page";
+import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 import {
   FirstPlayTutorial,
   TUTORIAL_SEEN_KEY,
@@ -281,7 +283,7 @@ function CreatorResultAvatar({
 }
 
 export function DailyGameClient({
-  challenges,
+  challenges: challengesFromServer,
   userEmail,
   userId,
   profileUsername: _profileUsername,
@@ -304,10 +306,39 @@ export function DailyGameClient({
   void _profileStreak;
   void _profileTotalSolved;
 
+  const [challengesPulled, setChallengesPulled] = useState<Challenge[] | null>(
+    null,
+  );
+  const serverChallengeIdsKey = useMemo(
+    () => challengesFromServer.map((c) => c.id).join(","),
+    [challengesFromServer],
+  );
+  useEffect(() => {
+    setChallengesPulled(null);
+  }, [serverChallengeIdsKey]);
+
+  const challenges = challengesPulled ?? challengesFromServer;
+
   const total = challenges.length;
   const dayNumber = challenges[0]?.day_number ?? null;
   const signedIn = Boolean(userEmail);
   const posthog = usePostHog();
+
+  const refreshTodayChallenges = useCallback(async () => {
+    const todayEastern = todayYYYYMMDDUSEastern();
+    const { data, error } = await supabase()
+      .from("challenges")
+      .select(
+        "id, position, title, creator_name, day_number, software, category, layer_count, image_url, is_sponsored, sponsor_name",
+      )
+      .eq("active_date", todayEastern)
+      .order("position", { ascending: true });
+    if (error) {
+      console.error("[DailyGameClient] pull refresh challenges", error);
+      return;
+    }
+    setChallengesPulled((data ?? []) as Challenge[]);
+  }, []);
 
   const challengeIdsKey = useMemo(
     () => challenges.map((c) => c.id).join(","),
@@ -1315,14 +1346,14 @@ export function DailyGameClient({
       className="h-dvh min-h-0 overflow-hidden"
     >
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <div
+        <PullToRefresh
+          disabled={Boolean(modalImageUrl)}
           className={`mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 md:px-5 ${
-            total === 0 || showSummary ? "min-h-0 overflow-y-auto" : "overflow-hidden"
-          } ${
             showDailyHome || showNoChallengesHome
               ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#06020f_100%)]"
               : ""
           }`}
+          onRefresh={refreshTodayChallenges}
         >
         {showNoChallengesHome ? (
           <div className="flex flex-1 flex-col items-center px-2 py-10 text-center">
@@ -1897,7 +1928,7 @@ export function DailyGameClient({
             </div>
           </>
         )}
-      </div>
+        </PullToRefresh>
 
       {modalImageUrl ? (
         <div
