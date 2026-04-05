@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import {
   isoLowerBoundForLast14EasternSignups,
   last14EasternDaysEnding,
+  nextEasternYmd,
   toEasternYmd,
 } from "@/lib/admin-eastern-dates";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
@@ -60,7 +61,7 @@ type AdminUserRow = {
   id: string;
   username: string | null;
   email: string | null;
-  created_at: string | null;
+  joined_at: string | null;
   total_solved: number | null;
   current_streak: number | null;
   last_played_date: string | null;
@@ -526,7 +527,7 @@ async function computeDayNumberForDate(targetDate: string) {
   return insertIdx === -1 ? dates.length + 1 : insertIdx + 1;
 }
 
-async function approveSubmissionAction(formData: FormData) {
+async function approveSubmissionSaveForLaterAction(formData: FormData) {
   "use server";
   const allowed = await assertAdminOrNull();
   if (!allowed) return;
@@ -536,9 +537,7 @@ async function approveSubmissionAction(formData: FormData) {
   const sb = createSupabaseServerClient(await cookies());
   const { data: sub } = await sb
     .from("submissions")
-    .select(
-      "id, status"
-    )
+    .select("id, status")
     .eq("id", id)
     .maybeSingle();
   const row = sub as { id: number; status: "pending" | "approved" | "rejected" | null } | null;
@@ -549,8 +548,77 @@ async function approveSubmissionAction(formData: FormData) {
     .update({
       status: "approved",
       reviewed_at: new Date().toISOString(),
+      scheduled_challenge_id: null,
+      scheduled_active_date: null,
+      scheduled_position: null,
     })
     .eq("id", id);
+  revalidatePath("/studio");
+}
+
+async function approveAndScheduleSubmissionAction(formData: FormData) {
+  "use server";
+  const allowed = await assertAdminOrNull();
+  if (!allowed) return;
+
+  const submissionId = Number(formData.get("submission_id"));
+  const activeDate = String(formData.get("active_date") ?? "").trim();
+  const position = Number(formData.get("position"));
+  const today = todayYYYYMMDDUSEastern();
+  if (!Number.isFinite(submissionId) || !activeDate) return;
+  if (!Number.isFinite(position) || position < 1 || position > 5) return;
+  if (activeDate <= today) return;
+
+  const sb = createSupabaseServerClient(await cookies());
+  const { data: sub } = await sb
+    .from("submissions")
+    .select(
+      "id, title, creator_name, software, category, layer_count, image_url, status, scheduled_challenge_id"
+    )
+    .eq("id", submissionId)
+    .maybeSingle();
+  const row = sub as SubmissionAdminRow | null;
+  if (!row || row.status !== "pending" || row.scheduled_challenge_id) return;
+
+  const { data: existingAtSlot } = await sb
+    .from("challenges")
+    .select("id")
+    .eq("active_date", activeDate)
+    .eq("position", position)
+    .maybeSingle();
+  if (existingAtSlot) return;
+
+  const dayNumber = await computeDayNumberForDate(activeDate);
+  const { data: inserted, error: insertErr } = await sb
+    .from("challenges")
+    .insert({
+      title: row.title ?? "Untitled",
+      creator_name: row.creator_name ?? null,
+      software: row.software ?? "Other",
+      category: row.category ?? "Other",
+      layer_count: row.layer_count ?? 0,
+      image_url: row.image_url ?? null,
+      active_date: activeDate,
+      day_number: dayNumber,
+      position,
+      is_sponsored: false,
+      sponsor_name: null,
+    })
+    .select("id")
+    .maybeSingle();
+  if (insertErr) return;
+
+  await sb
+    .from("submissions")
+    .update({
+      status: "approved",
+      scheduled_challenge_id: (inserted as { id?: string } | null)?.id ?? null,
+      scheduled_active_date: activeDate,
+      scheduled_position: position,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", submissionId);
+
   revalidatePath("/studio");
 }
 
@@ -699,13 +767,22 @@ export default async function AdminPage({
   const approvedCount = submissions.filter((s) => s.status === "approved").length;
   const rejectedCount = submissions.filter((s) => s.status === "rejected").length;
 
-  let users: AdminUserRow[] = [];
+  const users: AdminUserRow[] = [];
   if (tab === "users") {
-    const { data: usersRows } = await sb
-      .from("profiles")
-      .select("id, username, email, created_at, total_solved, current_streak, last_played_date")
-      .order("last_played_date", { ascending: false, nullsFirst: false });
-    users = (usersRows as AdminUserRow[] | null) ?? [];
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data: page, error: usersRpcError } = await sb.rpc(
+        "admin_list_user_profiles",
+        { p_limit: pageSize, p_offset: offset },
+      );
+      if (usersRpcError) {
+        console.error("[admin][users rpc]", usersRpcError);
+        break;
+      }
+      const rows = (page ?? []) as AdminUserRow[];
+      users.push(...rows);
+      if (rows.length < pageSize) break;
+    }
   }
 
   let analytics: AdminAnalytics | null = null;
@@ -717,6 +794,8 @@ export default async function AdminPage({
       analytics = null;
     }
   }
+
+  const minScheduleDate = nextEasternYmd(today);
 
   return (
     <div className="min-h-screen w-full bg-[#0f0520] text-[var(--text)]">
@@ -923,14 +1002,14 @@ export default async function AdminPage({
                         <AtCreatorDisplay raw={s.creator_name} /> ·{" "}
                         {s.layer_count ?? 0} layers
                       </div>
-                      <div className="mt-4 flex items-center gap-2">
-                        <form action={approveSubmissionAction}>
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        <form action={approveSubmissionSaveForLaterAction}>
                           <input type="hidden" name="submission_id" value={s.id} />
                           <button
                             type="submit"
                             className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500"
                           >
-                            Approve
+                            Approve &amp; Save for Later
                           </button>
                         </form>
                         <form action={rejectSubmissionAction}>
@@ -942,13 +1021,52 @@ export default async function AdminPage({
                             Reject
                           </button>
                         </form>
-                        <button
-                          type="button"
-                          className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90"
-                        >
-                          Skip
-                        </button>
                       </div>
+                      <form
+                        action={approveAndScheduleSubmissionAction}
+                        className="mt-4 space-y-3 rounded-xl border border-white/10 bg-black/30 p-3"
+                      >
+                        <div className="text-xs font-bold uppercase tracking-wider text-white/50">
+                          Approve &amp; schedule
+                        </div>
+                        <input type="hidden" name="submission_id" value={s.id} />
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div>
+                            <label className="text-xs font-semibold text-white/70">Date</label>
+                            <input
+                              name="active_date"
+                              type="date"
+                              min={minScheduleDate}
+                              required
+                              className="mt-1 w-full rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-white/70">Position</label>
+                            <select
+                              name="position"
+                              required
+                              defaultValue=""
+                              className="mt-1 w-full rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none"
+                            >
+                              <option value="" disabled>
+                                Select…
+                              </option>
+                              {[1, 2, 3, 4, 5].map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <button
+                          type="submit"
+                          className="w-full rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-bold text-white hover:bg-[var(--accent2)] sm:w-auto"
+                        >
+                          Approve &amp; Schedule
+                        </button>
+                      </form>
                     </div>
                   ))}
                 </div>
@@ -985,40 +1103,53 @@ export default async function AdminPage({
                         {s.layer_count ?? 0} layers
                       </div>
 
-                      <form action={assignApprovedSubmissionAction} className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_90px_auto] sm:items-end">
-                        <input type="hidden" name="submission_id" value={s.id} />
-                        <div>
-                          <label className="text-xs font-semibold text-white/70">Future Date</label>
-                          <input
-                            name="active_date"
-                            type="date"
-                            min={(() => {
-                              const d = new Date(`${today}T00:00:00`);
-                              d.setDate(d.getDate() + 1);
-                              return d.toISOString().slice(0, 10);
-                            })()}
-                            required
-                            className="mt-1 w-full rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-white/70">Pos (1-5)</label>
-                          <input
-                            name="position"
-                            type="number"
-                            min={1}
-                            max={5}
-                            required
-                            className="mt-1 w-full rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none"
-                          />
-                        </div>
-                        <button
-                          type="submit"
-                          className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-bold text-white hover:bg-[var(--accent2)]"
+                      <details className="mt-4 rounded-xl border border-white/10 bg-black/30 open:border-[var(--accent)]/40">
+                        <summary className="cursor-pointer list-none px-3 py-2 text-xs font-bold text-white/90 [&::-webkit-details-marker]:hidden">
+                          <span className="underline decoration-white/30 underline-offset-2">
+                            Schedule
+                          </span>
+                        </summary>
+                        <form
+                          action={assignApprovedSubmissionAction}
+                          className="grid grid-cols-1 gap-3 border-t border-white/10 p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
                         >
-                          Assign
-                        </button>
-                      </form>
+                          <input type="hidden" name="submission_id" value={s.id} />
+                          <div>
+                            <label className="text-xs font-semibold text-white/70">Date</label>
+                            <input
+                              name="active_date"
+                              type="date"
+                              min={minScheduleDate}
+                              required
+                              className="mt-1 w-full rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-white/70">Position</label>
+                            <select
+                              name="position"
+                              required
+                              defaultValue=""
+                              className="mt-1 w-full rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none"
+                            >
+                              <option value="" disabled>
+                                Select…
+                              </option>
+                              {[1, 2, 3, 4, 5].map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <button
+                            type="submit"
+                            className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-bold text-white hover:bg-[var(--accent2)]"
+                          >
+                            Schedule
+                          </button>
+                        </form>
+                      </details>
                     </div>
                   ))}
                 </div>
@@ -1292,7 +1423,9 @@ export default async function AdminPage({
                       />
                     </td>
                     <td className="px-4 py-3 text-white/80">{u.email ?? "—"}</td>
-                    <td className="px-4 py-3 text-white/80">{formatAdminDate(u.created_at ? u.created_at.slice(0, 10) : null)}</td>
+                    <td className="px-4 py-3 text-white/80">
+                      {formatAdminDate(u.joined_at ? u.joined_at.slice(0, 10) : null)}
+                    </td>
                     <td className="px-4 py-3 text-white/80">{u.total_solved ?? 0}</td>
                     <td className="px-4 py-3 text-white/80">{u.current_streak ?? 0}</td>
                     <td className="px-4 py-3 text-white/80">{u.last_played_date ?? "—"}</td>

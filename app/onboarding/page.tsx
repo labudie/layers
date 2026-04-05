@@ -124,17 +124,17 @@ export default function OnboardingPage() {
       setSaving(false);
       return;
     }
-    const { error } = await sb
-      .from("profiles")
-      .update({ username: candidate })
-      .eq("id", userId);
+    const { error } = await sb.from("profiles").upsert(
+      { id: userId, username: candidate },
+      { onConflict: "id" },
+    );
     if (error) {
       setLoadError(error.message);
       setSaving(false);
       return;
     }
     router.refresh();
-    router.replace("/");
+    await router.replace("/");
   }
 
   return (

@@ -52,3 +52,15 @@ export function isoLowerBoundForLast14EasternSignups(todayYmd: string): string {
   const ms = easternNoonUtcMs(oldest) - 48 * 3600 * 1000;
   return new Date(ms).toISOString();
 }
+
+/** Next US Eastern calendar day after `ymd` (YYYY-MM-DD), for `min` on date inputs. */
+export function nextEasternYmd(ymd: string): string {
+  const noon = easternNoonUtcMs(ymd);
+  let t = noon + 25 * 3600 * 1000;
+  for (let i = 0; i < 48; i++) {
+    const y = toEasternYmd(new Date(t).toISOString());
+    if (y && y > ymd) return y;
+    t += 3600 * 1000;
+  }
+  return ymd;
+}
