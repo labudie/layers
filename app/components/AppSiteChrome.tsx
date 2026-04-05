@@ -8,6 +8,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import { supabase } from "@/lib/supabase";
@@ -27,7 +28,7 @@ export type AppSiteChromeProps = {
 };
 
 const drawerNavClass =
-  "flex items-center gap-3 rounded-xl px-4 py-3.5 text-[15px] font-semibold text-white/90 transition-colors hover:bg-white/[0.08] active:bg-white/[0.06]";
+  "drawer-nav-stagger tap-press flex items-center gap-3 rounded-xl px-4 py-3.5 text-[15px] font-semibold text-white/90 transition-[background-color,color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-white/[0.08] hover:brightness-105 active:bg-white/[0.06]";
 const drawerIconClass =
   "flex h-9 w-9 shrink-0 items-center justify-center text-lg opacity-90";
 
@@ -126,7 +127,7 @@ export function AppSiteChrome({
       className={`flex min-h-dvh w-full flex-col bg-[var(--background)] text-[var(--text)] ${className}`.trim()}
     >
       <div
-        className={`fixed inset-0 z-[130] transition-[opacity,visibility] duration-200 ease-out ${
+        className={`fixed inset-0 z-[130] transition-[opacity,visibility] duration-[250ms] [transition-timing-function:var(--smooth)] ${
           drawerOpen
             ? "visible opacity-100"
             : "pointer-events-none invisible opacity-0"
@@ -136,12 +137,13 @@ export function AppSiteChrome({
         <button
           type="button"
           aria-label="Close menu"
-          className="absolute inset-0 bg-[#0f0520]/65 backdrop-blur-[3px]"
+          className="absolute inset-0 bg-[#0f0520]/65 backdrop-blur-[3px] transition-opacity duration-[250ms] [transition-timing-function:var(--smooth)]"
           onClick={() => setDrawerOpen(false)}
         />
         <nav
           ref={drawerRef}
-          className={`absolute left-0 top-0 flex h-full w-[min(20rem,88vw)] max-w-[320px] flex-col border-r border-white/10 bg-[#0a0518] shadow-[8px_0_40px_rgba(0,0,0,0.45)] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          data-drawer-open={drawerOpen ? "true" : "false"}
+          className={`absolute left-0 top-0 flex h-full w-[min(20rem,88vw)] max-w-[320px] flex-col border-r border-white/10 bg-[#0a0518] shadow-[8px_0_40px_rgba(0,0,0,0.45)] transition-transform duration-[250ms] [transition-timing-function:var(--smooth)] ${
             drawerOpen ? "translate-x-0" : "-translate-x-full"
           }`}
           aria-label="Main menu"
@@ -198,56 +200,36 @@ export function AppSiteChrome({
             <div className="mx-2 border-t border-white/10" />
 
             <div className="mt-2 flex flex-col gap-0.5">
-              <Link
-                href="/"
-                className={drawerNavClass}
-                onClick={() => setDrawerOpen(false)}
-              >
-                <span className={drawerIconClass} aria-hidden>
-                  🏠
-                </span>
-                Home
-              </Link>
-              <Link
-                href="/leaderboard"
-                className={drawerNavClass}
-                onClick={() => setDrawerOpen(false)}
-              >
-                <span className={drawerIconClass} aria-hidden>
-                  🏆
-                </span>
-                Leaderboard
-              </Link>
-              <Link
-                href="/submit"
-                className={drawerNavClass}
-                onClick={() => setDrawerOpen(false)}
-              >
-                <span className={drawerIconClass} aria-hidden>
-                  🎨
-                </span>
-                Submit Your Work
-              </Link>
-              <Link
-                href={profileHref}
-                className={drawerNavClass}
-                onClick={() => setDrawerOpen(false)}
-              >
-                <span className={drawerIconClass} aria-hidden>
-                  👤
-                </span>
-                Profile
-              </Link>
-              <Link
-                href="/settings"
-                className={drawerNavClass}
-                onClick={() => setDrawerOpen(false)}
-              >
-                <span className={drawerIconClass} aria-hidden>
-                  ⚙️
-                </span>
-                Settings
-              </Link>
+              {(
+                [
+                  { href: "/", label: "Home", icon: "🏠" },
+                  { href: "/leaderboard", label: "Leaderboard", icon: "🏆" },
+                  { href: "/submit", label: "Submit Your Work", icon: "🎨" },
+                  {
+                    href: profileHref,
+                    label: "Profile",
+                    icon: "👤",
+                  },
+                  { href: "/settings", label: "Settings", icon: "⚙️" },
+                ] as const
+              ).map((item, index) => (
+                <Link
+                  key={item.href === profileHref ? `profile-${profileHref}` : item.href}
+                  href={item.href}
+                  className={drawerNavClass}
+                  style={
+                    {
+                      "--drawer-delay": `${index * 30}ms`,
+                    } as CSSProperties
+                  }
+                  onClick={() => setDrawerOpen(false)}
+                >
+                  <span className={drawerIconClass} aria-hidden>
+                    {item.icon}
+                  </span>
+                  {item.label}
+                </Link>
+              ))}
             </div>
 
             {drawerFooterExtra ? (
@@ -262,6 +244,7 @@ export function AppSiteChrome({
             {signedIn ? (
               <button
                 type="button"
+                style={{ "--drawer-delay": "150ms" } as CSSProperties}
                 className={`${drawerNavClass} mt-2 text-red-300 hover:bg-red-500/15 hover:text-red-200`}
                 onClick={() => void signOut()}
               >
@@ -273,6 +256,7 @@ export function AppSiteChrome({
             ) : (
               <Link
                 href="/login"
+                style={{ "--drawer-delay": "150ms" } as CSSProperties}
                 className={`${drawerNavClass} mt-2 text-[var(--accent2)]`}
                 onClick={() => setDrawerOpen(false)}
               >
@@ -292,7 +276,7 @@ export function AppSiteChrome({
           aria-label="Open menu"
           aria-expanded={drawerOpen}
           onClick={() => setDrawerOpen(true)}
-          className="flex h-10 w-10 shrink-0 items-center justify-center justify-self-start rounded-full border border-white/10 bg-[rgba(26,10,46,0.75)] text-lg font-semibold text-white shadow-sm transition hover:bg-white/10"
+          className="tap-press flex h-10 w-10 shrink-0 items-center justify-center justify-self-start rounded-full border border-white/10 bg-[rgba(26,10,46,0.75)] text-lg font-semibold text-white shadow-sm transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-white/10 hover:brightness-105"
         >
           ☰
         </button>

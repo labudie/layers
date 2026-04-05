@@ -1,6 +1,10 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
+import { LeaderboardTabBar } from "@/app/components/LeaderboardTabBar";
+import type { LeaderboardTabId } from "@/app/components/LeaderboardTabBar";
+import { LeaderboardTabPanel } from "@/app/components/LeaderboardTabPanel";
 import {
   narrowToLatestActiveDate,
   utcActiveDateWindow,
@@ -39,21 +43,13 @@ function shortUsername(userId: string) {
   return id.length <= 8 ? id : id.slice(0, 8);
 }
 
-type TabId = "daily" | "all-time" | "creators";
-
-const TABS: { id: TabId; label: string }[] = [
-  { id: "daily", label: "Daily" },
-  { id: "all-time", label: "All Time" },
-  { id: "creators", label: "Creators" },
-];
-
 export default async function LeaderboardPage({
   searchParams,
 }: {
   searchParams?: Promise<{ tab?: string }>;
 }) {
   const params = (await searchParams) ?? {};
-  const tab: TabId =
+  const tab: LeaderboardTabId =
     params.tab === "all-time" || params.tab === "creators"
       ? params.tab
       : "daily";
@@ -140,25 +136,9 @@ export default async function LeaderboardPage({
           Today&apos;s results (active date: {leaderboardDay})
         </p>
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          {TABS.map((t) => {
-            const active = tab === t.id;
-            return (
-              <Link
-                key={t.id}
-                href={`/leaderboard?tab=${t.id}`}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                  active
-                    ? "bg-[var(--accent)] text-white"
-                    : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
-                }`}
-              >
-                {t.label}
-              </Link>
-            );
-          })}
-        </div>
+        <LeaderboardTabBar current={tab} />
 
+        <LeaderboardTabPanel key={tab} tab={tab}>
         {tab === "daily" ? (
           empty ? (
             <p className="mt-10 text-center text-lg font-semibold text-white/75">
@@ -175,14 +155,15 @@ export default async function LeaderboardPage({
                     <th className="px-4 py-3">Solved</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="leaderboard-stagger">
                   {rows.map((row, i) => {
                     const username = usernameMap.get(row.user_id);
 
                     return (
                       <tr
                         key={`${row.user_id}-${row.created_at ?? ""}-${i}`}
-                        className="border-b border-white/5 last:border-0"
+                        className="lb-stagger-row border-b border-white/5 last:border-0"
+                        style={{ "--lb-i": i } as CSSProperties}
                       >
                         <td className="px-4 py-3 font-mono font-semibold text-white/90">
                           {i + 1}
@@ -226,12 +207,13 @@ export default async function LeaderboardPage({
                     <th className="px-4 py-3">Longest Streak</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="leaderboard-stagger">
                   {(allTimeProfiles as ProfileRow[]).map((row, i) => {
                     return (
                       <tr
                         key={`${row.id}-${i}`}
-                        className="border-b border-white/5 last:border-0"
+                        className="lb-stagger-row border-b border-white/5 last:border-0"
+                        style={{ "--lb-i": i } as CSSProperties}
                       >
                         <td className="px-4 py-3 font-mono font-semibold text-white/90">
                           {i + 1}
@@ -270,12 +252,13 @@ export default async function LeaderboardPage({
                   <th className="px-4 py-3">Downloads</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="leaderboard-stagger">
                 {(creatorRows as CreatorRow[]).map((row, i) => {
                   return (
                     <tr
                       key={`${row.creator_name ?? "creator"}-${i}`}
-                      className="border-b border-white/5 last:border-0"
+                      className="lb-stagger-row border-b border-white/5 last:border-0"
+                      style={{ "--lb-i": i } as CSSProperties}
                     >
                       <td className="px-4 py-3 font-mono font-semibold text-white/90">
                         {i + 1}
@@ -296,6 +279,7 @@ export default async function LeaderboardPage({
             </table>
           </div>
         )}
+        </LeaderboardTabPanel>
       </div>
     </AppSiteChrome>
   );

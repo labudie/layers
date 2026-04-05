@@ -386,12 +386,12 @@ export default function SettingsPage() {
                         setGameSoundOn(next);
                         writeGameSoundEnabled(next);
                       }}
-                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${
+                      className={`settings-toggle-track relative inline-flex h-7 w-12 items-center rounded-full ${
                         gameSoundOn ? "bg-[#7c3aed]" : "bg-white/20"
                       }`}
                     >
                       <span
-                        className={`inline-block h-5 w-5 transform rounded-full bg-white transition duration-200 ${
+                        className={`settings-toggle-thumb inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ${
                           gameSoundOn ? "translate-x-6" : "translate-x-1"
                         }`}
                       />
@@ -412,12 +412,12 @@ export default function SettingsPage() {
                       role="switch"
                       aria-checked={notifEmail}
                       onClick={() => setNotifEmail((v) => !v)}
-                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${
+                      className={`settings-toggle-track relative inline-flex h-7 w-12 items-center rounded-full ${
                         notifEmail ? "bg-[#7c3aed]" : "bg-white/20"
                       }`}
                     >
                       <span
-                        className={`inline-block h-5 w-5 transform rounded-full bg-white transition duration-200 ${
+                        className={`settings-toggle-thumb inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ${
                           notifEmail ? "translate-x-6" : "translate-x-1"
                         }`}
                       />
@@ -430,12 +430,12 @@ export default function SettingsPage() {
                       role="switch"
                       aria-checked={notifDaily}
                       onClick={() => setNotifDaily((v) => !v)}
-                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${
+                      className={`settings-toggle-track relative inline-flex h-7 w-12 items-center rounded-full ${
                         notifDaily ? "bg-[#7c3aed]" : "bg-white/20"
                       }`}
                     >
                       <span
-                        className={`inline-block h-5 w-5 transform rounded-full bg-white transition duration-200 ${
+                        className={`settings-toggle-thumb inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ${
                           notifDaily ? "translate-x-6" : "translate-x-1"
                         }`}
                       />
@@ -451,14 +451,14 @@ export default function SettingsPage() {
                 <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
                   <Link
                     href="/terms"
-                    className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/90 hover:bg-white/5"
+                    className="settings-row-tap tap-press flex items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/90 hover:bg-white/5"
                   >
                     <span>Terms &amp; Conditions</span>
                     <span className="text-white/40">›</span>
                   </Link>
                   <Link
                     href="/privacy"
-                    className="flex items-center justify-between px-4 py-3 text-sm text-white/90 hover:bg-white/5"
+                    className="settings-row-tap tap-press flex items-center justify-between px-4 py-3 text-sm text-white/90 hover:bg-white/5"
                   >
                     <span>Privacy Policy</span>
                     <span className="text-white/40">›</span>
@@ -474,7 +474,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={comingSoon}
-                    className="flex w-full items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/90 hover:bg-white/5"
+                    className="settings-row-tap flex w-full items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/90 hover:bg-white/5"
                   >
                     <span>Send feedback</span>
                     <span className="text-white/40">→</span>
@@ -482,7 +482,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={comingSoon}
-                    className="flex w-full items-center justify-between px-4 py-3 text-sm text-white/90 hover:bg-white/5"
+                    className="settings-row-tap flex w-full items-center justify-between px-4 py-3 text-sm text-white/90 hover:bg-white/5"
                   >
                     <span>Rate the app</span>
                     <span className="text-white/40">→</span>

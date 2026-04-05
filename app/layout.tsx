@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { PageTransition } from "@/app/components/PageTransition";
 import { PHProvider } from "@/app/providers";
 import PostHogPageView from "@/app/posthog-pageview";
 
@@ -58,7 +59,7 @@ export default function RootLayout({
             <Suspense fallback={null}>
               <PostHogPageView />
             </Suspense>
-            {children}
+            <PageTransition>{children}</PageTransition>
           </div>
         </PHProvider>
       </body>

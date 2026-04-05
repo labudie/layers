@@ -1034,7 +1034,7 @@ export function DailyGameClient({
     return () => window.removeEventListener("resize", onResize);
   }, [currentChallenge?.id, currentChallenge?.image_url]);
 
-  /** Fade out challenge visuals for 300ms, swap challenge or open summary, then fade in. */
+  /** Fade out challenge visuals for 200ms, swap challenge or open summary, then fade in. */
   const advanceAfterTransitionOut = useCallback((isLast: boolean) => {
     if (fadeTimeoutRef.current != null) {
       window.clearTimeout(fadeTimeoutRef.current);
@@ -1060,7 +1060,7 @@ export function DailyGameClient({
         revealTimeoutRef.current = null;
         setChallengeTransitioning(false);
       }, 0);
-    }, 300);
+    }, 200);
   }, []);
 
   const advanceNow = useCallback(
@@ -1257,7 +1257,7 @@ export function DailyGameClient({
   const isLastChallenge = currentChallengeIndex >= total - 1;
 
   const challengeVisualFadeClassName = mounted
-    ? `transition-opacity duration-300 ease-out ${
+    ? `transition-opacity duration-200 [transition-timing-function:var(--smooth)] ${
         challengeTransitioning
           ? "pointer-events-none opacity-0"
           : "opacity-100"
@@ -1607,7 +1607,7 @@ export function DailyGameClient({
                     className="relative mx-[calc(50%-50vw)] w-[100vw]"
                   >
                     <div
-                      className={`challenge-image-frame flex max-h-[60vh] w-full items-center justify-center overflow-hidden rounded-none bg-[#0f0520] ${imageFeedbackClassName}`}
+                      className={`challenge-image-frame flex max-h-[60vh] w-full items-center justify-center overflow-hidden rounded-none bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
                       onClick={() => {
                         if (displayChallengeImageUrl) {
                           openImageModal(displayChallengeImageUrl);
@@ -1621,7 +1621,7 @@ export function DailyGameClient({
                           loading="eager"
                           decoding="async"
                           onLoad={() => setChallengeMainImageLoaded(true)}
-                          className={`block max-h-[60vh] w-auto max-w-full cursor-zoom-in object-contain transition-opacity duration-200 ease-out ${
+                          className={`block max-h-[60vh] w-auto max-w-full cursor-zoom-in object-contain transition-opacity duration-200 [transition-timing-function:var(--smooth)] ${
                             challengeMainImageLoaded
                               ? "opacity-100"
                               : "opacity-0"
@@ -1729,11 +1729,20 @@ export function DailyGameClient({
                               : g.verdict === "close"
                                 ? "border-amber-400/35 bg-amber-400/15 text-amber-200"
                                 : "border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.15)] text-red-200";
+                          const isLatest = i === currentGuesses.length - 1;
+                          const guessAnim =
+                            isLatest && g.verdict === "correct"
+                              ? "guess-chip-anim--correct"
+                              : isLatest && g.verdict === "wrong"
+                                ? "guess-chip-anim--wrong"
+                                : isLatest
+                                  ? "guess-chip-anim"
+                                  : "";
                           return (
                             <div
-                              key={`${g.value}-${i}`}
+                              key={`${currentChallenge?.id ?? "c"}-${i}-${g.value}`}
                               role="listitem"
-                              className={`flex h-9 w-9 items-center justify-center rounded-full border px-0.5 text-sm font-bold tabular-nums ${chipClass}`}
+                              className={`flex h-9 w-9 items-center justify-center rounded-full border px-0.5 text-sm font-bold tabular-nums ${chipClass} ${guessAnim}`}
                             >
                               {g.value}
                             </div>
@@ -1793,7 +1802,7 @@ export function DailyGameClient({
                               typeof guessInput !== "number"
                             }
                             onClick={() => void submitGuess()}
-                            className="h-11 w-full shrink-0 rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white disabled:opacity-40 sm:w-auto"
+                            className="h-11 w-full shrink-0 rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-[var(--accent2)] hover:brightness-105 disabled:opacity-40 sm:w-auto"
                           >
                             Submit
                           </button>

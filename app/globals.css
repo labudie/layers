@@ -14,6 +14,10 @@
   --success: #10b981; /* emerald green */
   --error: #ef4444; /* clean red */
   --foreground: var(--text);
+  /* Motion tokens — iOS-style easing */
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --snappy: cubic-bezier(0.4, 0, 0.6, 1);
 }
 
 @theme inline {
@@ -155,4 +159,305 @@ textarea.at-handle {
   font-weight: 600;
   /* Inputs: match ~0.9em vs typical 16px control text */
   font-size: 0.875rem;
+}
+
+/* --- Premium micro-interactions (respect reduced motion below) --- */
+
+button,
+[type="button"],
+[type="submit"],
+[type="reset"],
+[role="button"] {
+  transition:
+    background-color 0.15s var(--smooth),
+    border-color 0.15s var(--smooth),
+    color 0.15s var(--smooth),
+    opacity 0.15s var(--smooth),
+    box-shadow 0.15s var(--smooth),
+    filter 0.15s var(--smooth),
+    transform 0.22s var(--spring);
+}
+
+button:hover:not(:disabled),
+[type="submit"]:hover:not(:disabled),
+[role="button"]:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+button:active:not(:disabled),
+[type="submit"]:active:not(:disabled),
+[type="reset"]:active:not(:disabled),
+[role="button"]:active:not(:disabled) {
+  transform: scale(0.96);
+  filter: brightness(0.92);
+  transition-timing-function: var(--smooth);
+}
+
+a {
+  transition:
+    color 0.15s var(--smooth),
+    opacity 0.15s var(--smooth),
+    filter 0.15s var(--smooth),
+    transform 0.22s var(--spring),
+    background-color 0.15s var(--smooth);
+}
+
+.tap-press:active {
+  transform: scale(0.96);
+  filter: brightness(0.92);
+  transition-timing-function: var(--smooth);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(
+    [type="hidden"]
+  ),
+textarea,
+select {
+  transition:
+    border-color 0.15s var(--smooth),
+    box-shadow 0.15s var(--smooth),
+    transform 0.15s var(--smooth),
+    background-color 0.15s var(--smooth),
+    color 0.15s var(--smooth);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(
+    [type="hidden"]
+  ):focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  transform: scale(1.01);
+  box-shadow:
+    0 0 0 3px rgba(124, 58, 237, 0.28),
+    0 0 20px rgba(124, 58, 237, 0.12);
+}
+
+.page-transition-shell {
+  opacity: 0;
+  animation: page-nav-fade 0.2s var(--smooth) forwards;
+  will-change: opacity;
+}
+
+@keyframes page-nav-fade {
+  to {
+    opacity: 1;
+  }
+}
+
+.lb-tab-panel {
+  animation: lb-tab-fade 0.22s var(--smooth) both;
+}
+
+@keyframes lb-tab-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.leaderboard-tab-pill--active {
+  transition:
+    background-color 0.22s var(--smooth),
+    color 0.22s var(--smooth),
+    box-shadow 0.22s var(--smooth),
+    transform 0.22s var(--spring) !important;
+}
+
+tbody.leaderboard-stagger tr.lb-stagger-row {
+  opacity: 0;
+  animation: lb-row-rise 0.4s var(--smooth) forwards;
+  animation-delay: calc(var(--lb-i, 0) * 40ms);
+}
+
+@keyframes lb-row-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-drawer-open="true"] .drawer-nav-stagger {
+  animation: drawer-nav-in 0.38s var(--smooth) both;
+  animation-delay: var(--drawer-delay, 0ms);
+}
+
+[data-drawer-open="false"] .drawer-nav-stagger {
+  animation: none;
+}
+
+@keyframes drawer-nav-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.guess-chip-anim {
+  animation: guess-chip-pop 0.48s var(--spring) both;
+}
+
+.guess-chip-anim--wrong {
+  animation: guess-chip-wrong-full 0.82s var(--smooth) both;
+}
+
+.guess-chip-anim--correct {
+  animation: guess-chip-correct-full 0.82s var(--spring) both;
+}
+
+@keyframes guess-chip-pop {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes guess-chip-wrong-full {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.5);
+  }
+  38% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  52% {
+    transform: scale(1) translateX(0);
+  }
+  60% {
+    transform: scale(1) translateX(-5px);
+  }
+  68% {
+    transform: scale(1) translateX(5px);
+  }
+  76% {
+    transform: scale(1) translateX(-4px);
+  }
+  84% {
+    transform: scale(1) translateX(4px);
+  }
+  92% {
+    transform: scale(1) translateX(-2px);
+  }
+  100% {
+    transform: scale(1) translateX(0);
+  }
+}
+
+@keyframes guess-chip-correct-full {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.5);
+  }
+  36% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  50% {
+    transform: scale(1) translateY(0);
+  }
+  62% {
+    transform: scale(1) translateY(-6px);
+  }
+  78% {
+    transform: scale(1) translateY(2px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+
+.settings-row-tap {
+  transition: background-color 0.35s var(--smooth);
+}
+
+.settings-row-tap:active {
+  background-color: rgba(124, 58, 237, 0.22);
+}
+
+.settings-toggle-track {
+  transition: background-color 0.22s var(--smooth);
+}
+
+.settings-toggle-thumb {
+  transition: transform 0.38s var(--spring);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.2s;
+  animation-timing-function: var(--smooth);
+}
+
+::view-transition-old(root) {
+  animation-name: vt-fade-out;
+}
+
+::view-transition-new(root) {
+  animation-name: vt-fade-in;
+}
+
+@keyframes vt-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes vt-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition-shell {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  .lb-tab-panel,
+  tbody.leaderboard-stagger tr.lb-stagger-row,
+  [data-drawer-open="true"] .drawer-nav-stagger,
+  .guess-chip-anim,
+  .guess-chip-anim--wrong,
+  .guess-chip-anim--correct {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  button:active:not(:disabled),
+  [role="button"]:active:not(:disabled),
+  .tap-press:active {
+    transform: none !important;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(
+      [type="hidden"]
+    ):focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    transform: none !important;
+  }
 }
