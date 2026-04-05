@@ -32,6 +32,7 @@ import {
   CreatorProfileLink,
   ProfileUsernameLink,
 } from "@/lib/profile-handle-link";
+import { SITE_SHARE_URL } from "@/lib/site-url";
 import { stripAtHandle } from "@/lib/username-display";
 
 type GuessRow = {
@@ -254,6 +255,27 @@ function creatorUsernameKey(raw: string | null | undefined) {
   return stripAtHandle(raw ?? "").trim().toLowerCase();
 }
 
+function HomeGameSkeleton() {
+  return (
+    <div
+      className="mt-3 flex min-h-[50vh] flex-1 animate-pulse flex-col gap-4 pb-6"
+      aria-busy
+      aria-label="Loading today’s puzzles"
+    >
+      <div className="mx-[calc(50%-50vw)] h-[min(60vh,28rem)] w-[100vw] bg-white/[0.06] blur-[1px]" />
+      <div className="space-y-2 px-1">
+        <div className="h-5 w-[60%] max-w-xs rounded-lg bg-white/[0.08]" />
+        <div className="h-4 w-24 rounded-md bg-white/[0.06]" />
+      </div>
+      <div className="flex gap-2 px-1">
+        <div className="h-11 flex-1 rounded-full bg-white/[0.07]" />
+        <div className="h-11 w-28 shrink-0 rounded-full bg-[var(--accent)]/30" />
+      </div>
+      <p className="px-1 text-center text-xs text-white/40">Loading your progress…</p>
+    </div>
+  );
+}
+
 function CreatorResultAvatar({
   creatorName,
   avatarByUsername,
@@ -372,7 +394,12 @@ export function DailyGameClient({
     }>
   >([]);
   const [easternHeroSeconds, setEasternHeroSeconds] = useState(0);
-  const [copied, setCopied] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState<"idle" | "copied" | "shared">(
+    "idle",
+  );
+  const [gameDataReady, setGameDataReady] = useState(
+    () => challengesFromServer.length === 0,
+  );
 
   const showDailyHome = total > 0 && showSummary && !showResultsDetail;
   const showNoChallengesHome = total === 0;
@@ -671,12 +698,21 @@ export function DailyGameClient({
     const list = challengesRef.current;
     let cancelled = false;
 
+    if (!list.length) {
+      setGameDataReady(true);
+    } else if (!userId) {
+      setGameDataReady(true);
+    } else {
+      setGameDataReady(false);
+    }
+
     (async () => {
       if (!list.length) {
         if (!cancelled) {
           setGuessesByIndex([]);
           setCurrentChallengeIndex(0);
           setShowSummary(false);
+          setGameDataReady(true);
         }
         return;
       }
@@ -686,6 +722,7 @@ export function DailyGameClient({
           setGuessesByIndex(list.map(() => []));
           setCurrentChallengeIndex(0);
           setShowSummary(false);
+          setGameDataReady(true);
         }
         return;
       }
@@ -746,6 +783,10 @@ export function DailyGameClient({
       } else {
         setShowSummary(false);
         setCurrentChallengeIndex(firstOpen);
+      }
+
+      if (!cancelled) {
+        setGameDataReady(true);
       }
     })();
 
@@ -1272,16 +1313,50 @@ export function DailyGameClient({
     posthog?.capture("share_clicked");
     const dn = dayNumber ?? "—";
     const gridLines = guessesByIndex.map((guesses) =>
-      guesses.map((g) => emojiForVerdict(g.verdict)).join("")
+      guesses.map((g) => emojiForVerdict(g.verdict)).join("") || "—",
     );
-    const text = [`layers #${dn}`, "", ...gridLines].join("\n");
+    const solvedCount = guessesByIndex.filter((g) =>
+      g.some((x) => x.verdict === "correct"),
+    ).length;
+    const resultLine = `${solvedCount}/${challenges.length} solved`;
+    const shareUrl = SITE_SHARE_URL;
+    const shareText = [
+      `layers #${dn}`,
+      "",
+      ...gridLines,
+      "",
+      resultLine,
+      shareUrl,
+    ].join("\n");
+
+    const sharePayload = {
+      title: "Layers",
+      text: shareText,
+      url: shareUrl,
+    };
 
     try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      if (
+        typeof navigator !== "undefined" &&
+        typeof navigator.share === "function" &&
+        (!navigator.canShare || navigator.canShare(sharePayload))
+      ) {
+        await navigator.share(sharePayload);
+        setShareFeedback("shared");
+        window.setTimeout(() => setShareFeedback("idle"), 2000);
+        return;
+      }
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return;
+      console.error("[shareDaily] navigator.share", e);
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setShareFeedback("copied");
+      window.setTimeout(() => setShareFeedback("idle"), 2000);
     } catch {
-      // ignore
+      /* ignore */
     }
   }, [challenges, dayNumber, guessesByIndex, posthog]);
 
@@ -1332,7 +1407,7 @@ export function DailyGameClient({
         ) : undefined
       }
       belowHeader={
-        total > 0 && !showSummary ? (
+        total > 0 && !showSummary && gameDataReady ? (
           <div className="flex shrink-0 items-center justify-center px-4 pt-2 md:px-5">
             <div className="rounded-full border border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.1)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-sm">
               <span className="text-white/70">Next challenge </span>
@@ -1355,7 +1430,9 @@ export function DailyGameClient({
           }`}
           onRefresh={refreshTodayChallenges}
         >
-        {showNoChallengesHome ? (
+        {!gameDataReady && challenges.length > 0 ? (
+          <HomeGameSkeleton />
+        ) : showNoChallengesHome ? (
           <div className="flex flex-1 flex-col items-center px-2 py-10 text-center">
             <div className="bg-gradient-to-br from-white to-[#c4b5fd] bg-clip-text text-5xl font-extrabold tracking-tight text-transparent drop-shadow-[0_0_40px_rgba(124,58,237,0.45)]">
               Layers
@@ -1450,7 +1527,11 @@ export function DailyGameClient({
                 onClick={() => void shareDaily()}
                 className="rounded-2xl border-2 border-white/25 bg-transparent px-6 py-3.5 text-sm font-bold text-white transition hover:bg-white/10"
               >
-                {copied ? "Copied!" : "Share"}
+                {shareFeedback === "copied"
+                  ? "Copied!"
+                  : shareFeedback === "shared"
+                    ? "Shared!"
+                    : "Share"}
               </button>
             </div>
 
@@ -1621,7 +1702,11 @@ export function DailyGameClient({
                 onClick={shareDaily}
                 className="rounded-xl border-2 border-white bg-transparent px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10"
               >
-                {copied ? "Copied!" : "Share"}
+                {shareFeedback === "copied"
+                  ? "Copied!"
+                  : shareFeedback === "shared"
+                    ? "Shared!"
+                    : "Share"}
               </button>
               <p className="mt-2 text-xs text-white/45">
                 Copies a {total}-row emoji grid (one row per challenge).

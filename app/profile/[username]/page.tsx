@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { createSupabaseServerClient } from "@/lib/supabase";
@@ -45,18 +44,9 @@ export default async function PublicProfilePage({
   const { username: rawParam } = await params;
   const decoded = decodeURIComponent(rawParam);
   const handle = stripAtHandle(decoded);
-  const drawerBackHome = (
-    <Link
-      href="/"
-      className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
-    >
-      ← Home
-    </Link>
-  );
-
   if (!handle.length) {
     return (
-      <AppSiteChrome title="Profile" drawerFooterExtra={drawerBackHome}>
+      <AppSiteChrome title="Profile">
         <div className="mx-auto max-w-lg px-4 py-10">
           <p className="mt-6 text-center text-lg font-semibold text-white/75">
             Profile not found
@@ -78,7 +68,7 @@ export default async function PublicProfilePage({
 
   if (profileError || !profileData) {
     return (
-      <AppSiteChrome title="Profile" drawerFooterExtra={drawerBackHome}>
+      <AppSiteChrome title="Profile">
         <div className="mx-auto max-w-lg px-4 py-10">
           <p className="mt-6 text-center text-lg font-semibold text-white/75">
             Profile not found
@@ -133,10 +123,7 @@ export default async function PublicProfilePage({
   const displayHandle = profile.username ?? handle;
 
   return (
-    <AppSiteChrome
-      title={`@${stripAtHandle(displayHandle)}`}
-      drawerFooterExtra={drawerBackHome}
-    >
+    <AppSiteChrome title={`@${stripAtHandle(displayHandle)}`}>
       <div className="mx-auto w-full max-w-2xl px-4 py-6 md:px-5">
         <section className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)] p-6">
           <div className="flex flex-col items-center text-center">

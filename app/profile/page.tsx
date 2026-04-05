@@ -98,14 +98,6 @@ export default function ProfilePage() {
   return (
     <AppSiteChrome
       title="Profile"
-      drawerFooterExtra={
-        <Link
-          href="/"
-          className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
-        >
-          ← Home
-        </Link>
-      }
     >
       <div className="mx-auto w-full max-w-xl px-4 py-6 md:px-5">
         <h1 className="text-3xl font-extrabold tracking-tight">Profile</h1>

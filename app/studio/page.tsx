@@ -804,14 +804,6 @@ export default async function AdminPage({
           Admin
         </span>
       }
-      drawerFooterExtra={
-        <Link
-          href="/"
-          className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
-        >
-          ← Home
-        </Link>
-      }
     >
       <div className="mx-auto w-full max-w-6xl px-4 py-4 md:px-5 md:py-6">
         <div className="mb-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100">

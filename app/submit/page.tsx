@@ -212,14 +212,6 @@ export default function SubmitPage() {
   return (
     <AppSiteChrome
       title="Submit"
-      drawerFooterExtra={
-        <Link
-          href="/"
-          className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
-        >
-          ← Home
-        </Link>
-      }
     >
       <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-5">
         <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)] p-5">

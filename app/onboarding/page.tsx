@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -140,17 +139,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <AppSiteChrome
-      title="Layers"
-      drawerFooterExtra={
-        <Link
-          href="/"
-          className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
-        >
-          ← Home
-        </Link>
-      }
-    >
+    <AppSiteChrome title="Layers">
       <div className="flex flex-1 flex-col items-center justify-center px-4 py-10">
         <div className="w-full max-w-sm text-center">
         <h1 className="text-2xl font-extrabold tracking-tight text-white">

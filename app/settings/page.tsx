@@ -209,17 +209,7 @@ export default function SettingsPage() {
   }, [editingName]);
 
   return (
-    <AppSiteChrome
-      title="Settings"
-      drawerFooterExtra={
-        <Link
-          href="/"
-          className="inline-flex rounded-xl px-2 py-1.5 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
-        >
-          ← Home
-        </Link>
-      }
-    >
+    <AppSiteChrome title="Settings">
       <PullToRefresh
         className="flex min-h-0 flex-1 flex-col"
         disabled={loading}

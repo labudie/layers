@@ -114,17 +114,21 @@ export function PullToRefresh({
 
   const runRefresh = useCallback(async () => {
     if (refreshingRef.current) return;
-    safeVibrate(20);
+    safeVibrate(25);
     refreshingRef.current = true;
     setRefreshing(true);
     setPull(THRESHOLD * 0.42);
     pullRef.current = THRESHOLD * 0.42;
+    let completedOk = false;
     try {
       await onRefreshRef.current();
+      completedOk = true;
     } catch (e) {
       console.error("[PullToRefresh]", e);
     } finally {
-      safeVibrate([10, 50, 10]);
+      if (completedOk) {
+        safeVibrate([10, 30, 10]);
+      }
       refreshingRef.current = false;
       setRefreshing(false);
       setPull(0);

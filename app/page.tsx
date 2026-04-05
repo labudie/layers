@@ -65,8 +65,11 @@ export default async function Home() {
     profileTotalSolved = Math.max(0, Math.floor(Number(row?.total_solved) || 0));
   }
 
+  const clientMountKey = `${todayEastern}-${challenges.map((c) => c.id).join("-")}`;
+
   return (
     <DailyGameClient
+      key={clientMountKey}
       challenges={challenges}
       userEmail={userEmail}
       userId={userId}

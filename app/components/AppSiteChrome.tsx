@@ -19,8 +19,6 @@ export type AppSiteChromeProps = {
   title: ReactNode;
   /** Right side of header (badge, actions). Empty placeholder when omitted. */
   right?: ReactNode;
-  /** Shown inside the drawer after main links (e.g. ← Back). */
-  drawerFooterExtra?: ReactNode;
   /** Optional row directly under the header (e.g. home countdown). */
   belowHeader?: ReactNode;
   children: ReactNode;
@@ -35,7 +33,6 @@ const drawerIconClass =
 export function AppSiteChrome({
   title,
   right,
-  drawerFooterExtra,
   belowHeader,
   children,
   className = "",
@@ -232,13 +229,6 @@ export function AppSiteChrome({
               ))}
             </div>
 
-            {drawerFooterExtra ? (
-              <>
-                <div className="mx-2 mt-3 border-t border-white/10" />
-                <div className="mt-2 px-2 text-sm">{drawerFooterExtra}</div>
-              </>
-            ) : null}
-
             <div className="mx-2 mt-3 border-t border-white/10" />
 
             {signedIn ? (
@@ -270,20 +260,20 @@ export function AppSiteChrome({
         </nav>
       </div>
 
-      <header className="grid shrink-0 grid-cols-[auto_1fr_auto] items-center gap-2 px-4 pt-4 md:px-5">
+      <header className="relative flex min-h-[52px] shrink-0 items-center justify-center px-4 pb-3 pt-4 md:min-h-[56px] md:px-5">
         <button
           type="button"
           aria-label="Open menu"
           aria-expanded={drawerOpen}
           onClick={() => setDrawerOpen(true)}
-          className="tap-press flex h-10 w-10 shrink-0 items-center justify-center justify-self-start rounded-full border border-white/10 bg-[rgba(26,10,46,0.75)] text-lg font-semibold text-white shadow-sm transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-white/10 hover:brightness-105"
+          className="tap-press absolute left-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-[rgba(26,10,46,0.75)] text-lg font-semibold text-white shadow-sm transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-white/10 hover:brightness-105 md:left-5"
         >
           ☰
         </button>
-        <div className="min-w-0 justify-self-center text-center text-xl font-extrabold tracking-tight">
+        <div className="pointer-events-none max-w-[min(16rem,calc(100%-6.5rem))] truncate text-center text-xl font-extrabold tracking-tight">
           {title}
         </div>
-        <div className="flex min-h-10 min-w-10 shrink-0 items-center justify-end justify-self-end">
+        <div className="absolute right-4 top-1/2 z-10 flex min-h-10 min-w-10 -translate-y-1/2 items-center justify-end md:right-5">
           {right ?? <span className="inline-block h-10 w-10 shrink-0" aria-hidden />}
         </div>
       </header>
