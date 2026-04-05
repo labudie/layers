@@ -26,7 +26,10 @@ import {
   playWrongGuessSound,
   readGameSoundEnabled,
 } from "@/lib/game-sound";
-import { CreatorProfileLink } from "@/lib/profile-handle-link";
+import {
+  CreatorProfileLink,
+  ProfileUsernameLink,
+} from "@/lib/profile-handle-link";
 import { stripAtHandle } from "@/lib/username-display";
 
 type GuessRow = {
@@ -73,6 +76,42 @@ function ymdDaysAgo(days: number, from: Date = new Date()) {
   const d = new Date(from);
   d.setDate(d.getDate() - days);
   return easternYMD(d);
+}
+
+/** Seconds until the US Eastern calendar day rolls over (daily puzzle reset). */
+function secondsUntilEasternMidnight(from: Date = new Date()): number {
+  const d0 = easternYMD(from);
+  let lo = from.getTime();
+  let hi = from.getTime() + 48 * 3600 * 1000;
+  for (let i = 0; i < 48; i++) {
+    const mid = lo + (hi - lo) / 2;
+    if (easternYMD(new Date(mid)) === d0) lo = mid;
+    else hi = mid;
+  }
+  return Math.max(0, Math.ceil((hi - from.getTime()) / 1000));
+}
+
+function formatFriendlyEasternToday() {
+  return new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "America/New_York",
+  });
+}
+
+function formatCheckBackPhrase(seconds: number) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h >= 1) return `${h} hour${h === 1 ? "" : "s"}`;
+  if (m >= 1) return `${m} minute${m === 1 ? "" : "s"}`;
+  return "a moment";
+}
+
+function shortUserIdLabel(userId: string) {
+  const id = userId?.trim() ?? "";
+  return id.length <= 8 ? id : `${id.slice(0, 8)}…`;
 }
 
 function mulberry32(seed: number) {
@@ -282,7 +321,31 @@ export function DailyGameClient({
   );
   const [currentChallengeIndex, setCurrentChallengeIndex] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
+
+  const solvedTodayCount = useMemo(
+    () =>
+      guessesByIndex.reduce(
+        (acc, g) => acc + (g.some((x) => x.verdict === "correct") ? 1 : 0),
+        0
+      ),
+    [guessesByIndex]
+  );
+  /** When true, show full per-challenge results; when false but showSummary, show premium daily home. */
+  const [showResultsDetail, setShowResultsDetail] = useState(false);
+  const [leaderPreview, setLeaderPreview] = useState<
+    Array<{
+      rank: number;
+      userId: string;
+      username: string | null;
+      totalAttempts: number;
+    }>
+  >([]);
+  const [easternHeroSeconds, setEasternHeroSeconds] = useState(0);
   const [copied, setCopied] = useState(false);
+
+  const showDailyHome = total > 0 && showSummary && !showResultsDetail;
+  const showNoChallengesHome = total === 0;
+
   /** After a correct submit, brief hold before auto-advance (no "Next" click). */
   const [pendingAutoAdvance, setPendingAutoAdvance] = useState(false);
   /** After a failed round (6 guesses), auto-advance after short reveal delay. */
@@ -878,6 +941,84 @@ export function DailyGameClient({
     return () => window.clearInterval(t);
   }, []);
 
+  useEffect(() => {
+    setShowResultsDetail(false);
+  }, [challengeIdsKey]);
+
+  useEffect(() => {
+    const needHero =
+      showNoChallengesHome || (showSummary && !showResultsDetail && total > 0);
+    if (!needHero) return;
+    const tick = () =>
+      setEasternHeroSeconds(secondsUntilEasternMidnight(new Date()));
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [showNoChallengesHome, showSummary, showResultsDetail, total]);
+
+  useEffect(() => {
+    if (!showDailyHome) {
+      setLeaderPreview([]);
+      return;
+    }
+    const ids = challengeIdsKey.split(",").filter(Boolean);
+    if (!ids.length) {
+      setLeaderPreview([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase()
+        .from("results")
+        .select("user_id, attempts_used, solved")
+        .in("challenge_id", ids);
+      if (cancelled) return;
+      if (error || !data?.length) {
+        setLeaderPreview([]);
+        return;
+      }
+      const agg = new Map<string, { attempts: number; solved: number }>();
+      for (const r of data as Array<{
+        user_id: string;
+        attempts_used: number | null;
+        solved: boolean | null;
+      }>) {
+        const o = agg.get(r.user_id) ?? { attempts: 0, solved: 0 };
+        o.attempts += Math.max(0, Math.floor(Number(r.attempts_used) || 0));
+        o.solved += r.solved === true ? 1 : 0;
+        agg.set(r.user_id, o);
+      }
+      const sorted = [...agg.entries()].sort(
+        (a, b) =>
+          a[1].attempts - b[1].attempts || b[1].solved - a[1].solved
+      );
+      const top = sorted.slice(0, 3);
+      const uids = top.map((t) => t[0]);
+      const { data: profs } = await supabase()
+        .from("profiles")
+        .select("id, username")
+        .in("id", uids);
+      if (cancelled) return;
+      const uname = new Map(
+        (profs ?? []).map((p: { id: string; username: string | null }) => [
+          p.id,
+          p.username,
+        ])
+      );
+      setLeaderPreview(
+        top.map(([uid, v], i) => ({
+          rank: i + 1,
+          userId: uid,
+          username: (uname.get(uid) as string | null | undefined) ?? null,
+          totalAttempts: v.attempts,
+        }))
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showDailyHome, challengeIdsKey]);
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     // If an uploaded image exists, we don't need (and don't mount) the canvas.
@@ -909,6 +1050,7 @@ export function DailyGameClient({
       fadeTimeoutRef.current = null;
       setPendingAutoAdvance(false);
       if (isLast) {
+        setShowResultsDetail(false);
         setShowSummary(true);
       } else {
         setCurrentChallengeIndex((x) => x + 1);
@@ -1159,29 +1301,180 @@ export function DailyGameClient({
         ) : undefined
       }
       belowHeader={
-        <div className="flex shrink-0 items-center justify-center px-4 pt-2 md:px-5">
-          <div className="rounded-full border border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.1)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-sm">
-            <span className="text-white/70">Next challenge </span>
-            <span className="font-mono text-base font-bold text-[var(--text)]">
-              {countdownText ?? "--:--:--"}
-            </span>
+        total > 0 && !showSummary ? (
+          <div className="flex shrink-0 items-center justify-center px-4 pt-2 md:px-5">
+            <div className="rounded-full border border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.1)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-sm">
+              <span className="text-white/70">Next challenge </span>
+              <span className="font-mono text-base font-bold text-[var(--text)]">
+                {countdownText ?? "--:--:--"}
+              </span>
+            </div>
           </div>
-        </div>
+        ) : null
       }
       className="h-dvh min-h-0 overflow-hidden"
     >
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div
-          className={`mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 ${showSummary ? "overflow-y-auto" : "overflow-hidden"} md:px-5`}
+          className={`mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 md:px-5 ${
+            total === 0 || showSummary ? "min-h-0 overflow-y-auto" : "overflow-hidden"
+          } ${
+            showDailyHome || showNoChallengesHome
+              ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#06020f_100%)]"
+              : ""
+          }`}
         >
-        {!total ? (
-          <div className="mt-10 flex items-center justify-center">
-            <div className="text-lg font-semibold text-white/80">
-              No challenge today
+        {showNoChallengesHome ? (
+          <div className="flex flex-1 flex-col items-center px-2 py-10 text-center">
+            <div className="bg-gradient-to-br from-white to-[#c4b5fd] bg-clip-text text-5xl font-extrabold tracking-tight text-transparent drop-shadow-[0_0_40px_rgba(124,58,237,0.45)]">
+              Layers
+            </div>
+            <p className="mt-8 text-lg font-semibold text-white/90">
+              No challenges today
+            </p>
+            <p className="mt-3 max-w-sm text-sm leading-relaxed text-white/55">
+              New puzzles appear each US Eastern day. Check back after the reset.
+            </p>
+            <div className="mt-10 w-full max-w-xs rounded-2xl border border-white/10 bg-black/25 px-5 py-6 backdrop-blur-sm">
+              <div className="text-xs font-bold uppercase tracking-[0.2em] text-white/40">
+                Next reset in
+              </div>
+              <div className="mt-2 font-mono text-4xl font-bold tabular-nums tracking-tight text-white">
+                {formatHMS(easternHeroSeconds)}
+              </div>
+              <p className="mt-3 text-sm text-white/50">
+                Check back in {formatCheckBackPhrase(easternHeroSeconds)}
+              </p>
+            </div>
+            <p className="mt-10 text-xs font-medium text-white/35">
+              Coming soon · Fresh layers daily
+            </p>
+          </div>
+        ) : showDailyHome ? (
+          <div className="flex flex-1 flex-col items-center px-2 pb-10 pt-8 text-center">
+            <div className="bg-gradient-to-br from-white via-[#e9d5ff] to-[#a78bfa] bg-clip-text text-5xl font-extrabold tracking-tight text-transparent drop-shadow-[0_0_48px_rgba(139,92,246,0.5)]">
+              Layers
+            </div>
+            <p className="mt-6 text-lg font-bold text-emerald-300">
+              Daily Complete <span className="inline-block">✓</span>
+            </p>
+            <p className="mt-1 text-sm text-white/55">{formatFriendlyEasternToday()}</p>
+
+            <div className="mt-10 w-full max-w-sm rounded-3xl border border-[rgba(167,139,250,0.35)] bg-black/20 px-6 py-8 shadow-[0_0_60px_rgba(88,28,135,0.25)] backdrop-blur-md">
+              <div className="text-xs font-bold uppercase tracking-[0.25em] text-violet-200/70">
+                Next challenges in
+              </div>
+              <div className="mt-3 font-mono text-5xl font-bold tabular-nums tracking-tight text-white md:text-6xl">
+                {formatHMS(easternHeroSeconds)}
+              </div>
+            </div>
+
+            <div className="mt-10 w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-4">
+              <div className="text-xs font-bold uppercase tracking-wider text-white/45">
+                Today&apos;s score
+              </div>
+              <div className="mt-2 text-2xl font-extrabold text-white">
+                {solvedTodayCount}{" "}
+                <span className="text-lg font-semibold text-white/50">/ {total}</span>{" "}
+                <span className="text-base font-medium text-white/40">solved</span>
+              </div>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {challenges.map((ch, i) => {
+                  const g = guessesByIndex[i] ?? [];
+                  const solved = g.some((x) => x.verdict === "correct");
+                  const line =
+                    g.map((x) => emojiForVerdict(x.verdict)).join("") || "—";
+                  return (
+                    <div
+                      key={ch.id}
+                      className="min-w-[4.5rem] rounded-xl border border-white/10 bg-black/30 px-2 py-2"
+                    >
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                        #{i + 1}
+                      </div>
+                      <div className="mt-1 font-mono text-base tracking-widest">
+                        {line}
+                      </div>
+                      <div
+                        className={`mt-1 text-xs font-bold ${solved ? "text-emerald-400" : "text-white/35"}`}
+                      >
+                        {solved ? "Solved" : "—"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                onClick={() => setShowResultsDetail(true)}
+                className="rounded-2xl bg-white px-6 py-3.5 text-sm font-bold text-[#1a0a2e] shadow-lg shadow-violet-500/20 transition hover:bg-violet-100"
+              >
+                View Results
+              </button>
+              <button
+                type="button"
+                onClick={() => void shareDaily()}
+                className="rounded-2xl border-2 border-white/25 bg-transparent px-6 py-3.5 text-sm font-bold text-white transition hover:bg-white/10"
+              >
+                {copied ? "Copied!" : "Share"}
+              </button>
+            </div>
+
+            <div className="mt-12 w-full max-w-md text-left">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-white/45">
+                  Leaderboard · Today
+                </span>
+                <Link
+                  href="/leaderboard"
+                  className="text-xs font-semibold text-[var(--accent2)] hover:underline"
+                >
+                  Full board →
+                </Link>
+              </div>
+              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/25">
+                {leaderPreview.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-sm text-white/45">
+                    No scores yet — be the first on the board.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-white/5">
+                    {leaderPreview.map((row) => (
+                      <li
+                        key={row.userId}
+                        className="flex items-center gap-3 px-4 py-3 text-sm"
+                      >
+                        <span className="w-8 font-mono font-bold text-white/50">
+                          {row.rank}
+                        </span>
+                        <span className="min-w-0 flex-1 font-semibold text-white">
+                          <ProfileUsernameLink
+                            username={row.username}
+                            fallbackDisplay={shortUserIdLabel(row.userId)}
+                          />
+                        </span>
+                        <span className="shrink-0 tabular-nums text-white/70">
+                          {row.totalAttempts} attempts
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
-        ) : showSummary ? (
+        ) : showSummary && showResultsDetail ? (
           <div className="mt-8 space-y-6">
+            <button
+              type="button"
+              onClick={() => setShowResultsDetail(false)}
+              className="text-sm font-semibold text-[var(--accent2)] hover:underline"
+            >
+              ← Back to daily home
+            </button>
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm font-semibold text-white/80">
               Daily complete · {total} challenges
             </div>
