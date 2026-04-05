@@ -34,7 +34,7 @@ export const metadata: Metadata = {
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/icon-192.png", sizes: "180x180" }],
+    apple: "/apple-touch-icon.png",
   },
 };
 
@@ -48,6 +48,9 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+      </head>
       <body className="flex min-h-dvh flex-col overflow-x-hidden">
         <PHProvider>
           <div className="flex min-h-0 flex-1 flex-col">
