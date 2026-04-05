@@ -4,7 +4,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { PHProvider } from "@/app/providers";
 import PostHogPageView from "@/app/posthog-pageview";
-import { AppShell } from "@/app/AppShell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,7 +36,7 @@ export default function RootLayout({
             <Suspense fallback={null}>
               <PostHogPageView />
             </Suspense>
-            <AppShell>{children}</AppShell>
+            {children}
           </div>
         </PHProvider>
       </body>

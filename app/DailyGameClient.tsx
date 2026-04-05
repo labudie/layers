@@ -10,6 +10,7 @@ import {
   type CSSProperties,
 } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { usePostHog } from "posthog-js/react";
 import type { Challenge } from "./page";
 import {
@@ -25,6 +26,7 @@ import {
   playWrongGuessSound,
   readGameSoundEnabled,
 } from "@/lib/game-sound";
+import { AtUsernameDisplay } from "@/lib/AtHandle";
 import { CreatorProfileLink } from "@/lib/profile-handle-link";
 import { stripAtHandle } from "@/lib/username-display";
 
@@ -213,17 +215,24 @@ export function DailyGameClient({
   userEmail,
   userId,
   profileUsername,
+  profileAvatarUrl,
+  profileStreak = 0,
+  profileTotalSolved = 0,
   lastPlayedDate,
 }: {
   challenges: Challenge[];
   userEmail: string | null;
   userId: string | null;
   profileUsername?: string | null;
+  profileAvatarUrl?: string | null;
+  profileStreak?: number;
+  profileTotalSolved?: number;
   lastPlayedDate?: string | null;
 }) {
   const total = challenges.length;
   const dayNumber = challenges[0]?.day_number ?? null;
   const signedIn = Boolean(userEmail);
+  const router = useRouter();
   const posthog = usePostHog();
 
   const challengeIdsKey = useMemo(
@@ -259,6 +268,8 @@ export function DailyGameClient({
   const [confettiBursts, setConfettiBursts] = useState<number[]>([]);
   const [downloadBusyId, setDownloadBusyId] = useState<string | null>(null);
   const [tutorialStep, setTutorialStep] = useState<1 | 2 | 3 | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement | null>(null);
 
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
@@ -285,6 +296,15 @@ export function DailyGameClient({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDrawerOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [drawerOpen]);
 
   const dismissTutorial = useCallback(() => {
     try {
@@ -981,6 +1001,19 @@ export function DailyGameClient({
 
   const isLastChallenge = currentChallengeIndex >= total - 1;
 
+  const profileHandle = stripAtHandle(profileUsername ?? "");
+  const profileHref =
+    signedIn && profileHandle.length > 0
+      ? `/profile/${encodeURIComponent(profileHandle)}`
+      : "/login";
+
+  async function signOut() {
+    await supabase().auth.signOut();
+    setDrawerOpen(false);
+    router.refresh();
+    router.push("/");
+  }
+
   const challengeVisualFadeClassName = mounted
     ? `transition-opacity duration-300 ease-out ${
         challengeTransitioning
@@ -1015,10 +1048,180 @@ export function DailyGameClient({
     return Math.hypot(dx, dy);
   }, []);
 
+  const drawerNavClass =
+    "flex items-center gap-3 rounded-xl px-4 py-3.5 text-[15px] font-semibold text-white/90 transition-colors hover:bg-white/[0.08] active:bg-white/[0.06]";
+  const drawerIconClass = "flex h-9 w-9 shrink-0 items-center justify-center text-lg opacity-90";
+
   return (
-    <div className="flex h-[calc(100dvh-var(--app-bottom-nav-height,0px))] min-h-0 w-full flex-col overflow-hidden bg-[var(--background)] text-[var(--text)]">
-      <header className="flex shrink-0 items-center px-4 pt-4 md:px-5">
-        <div className="text-xl font-extrabold tracking-tight">Layers</div>
+    <div className="flex h-dvh min-h-0 w-full flex-col overflow-hidden bg-[var(--background)] text-[var(--text)]">
+      <div
+        className={`fixed inset-0 z-[130] transition-[opacity,visibility] duration-200 ease-out ${
+          drawerOpen
+            ? "visible opacity-100"
+            : "pointer-events-none invisible opacity-0"
+        }`}
+        aria-hidden={!drawerOpen}
+      >
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="absolute inset-0 bg-[#0f0520]/65 backdrop-blur-[3px]"
+          onClick={() => setDrawerOpen(false)}
+        />
+        <nav
+          ref={drawerRef}
+          className={`absolute left-0 top-0 flex h-full w-[min(20rem,88vw)] max-w-[320px] flex-col border-r border-white/10 bg-[#0a0518] shadow-[8px_0_40px_rgba(0,0,0,0.45)] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+            drawerOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+          aria-label="Main menu"
+        >
+          <div className="flex flex-1 flex-col overflow-y-auto px-3 pb-4 pt-6">
+            <div className="flex flex-col items-stretch px-2 pb-4">
+              <div className="mx-auto h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-white/15 bg-[var(--accent)]/20">
+                {signedIn && profileAvatarUrl ? (
+                  <img
+                    src={profileAvatarUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-2xl text-white/40">
+                    👤
+                  </div>
+                )}
+              </div>
+              {signedIn ? (
+                <>
+                  <div className="mt-3 text-center">
+                    <span className="text-lg font-bold text-white">
+                      <AtUsernameDisplay
+                        raw={profileUsername}
+                        fallback={
+                          userId ? `player_${userId.slice(0, 8)}` : "Player"
+                        }
+                      />
+                    </span>
+                  </div>
+                  <div className="mt-3 flex justify-center gap-5 text-sm text-white/70">
+                    <span>
+                      <span className="font-semibold text-[var(--accent2)]">
+                        {profileStreak}
+                      </span>{" "}
+                      day streak
+                    </span>
+                    <span>
+                      <span className="font-semibold text-[var(--accent2)]">
+                        {profileTotalSolved}
+                      </span>{" "}
+                      solved
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-3 text-center text-sm text-white/55">
+                  Sign in to save progress
+                </p>
+              )}
+            </div>
+
+            <div className="mx-2 border-t border-white/10" />
+
+            <div className="mt-2 flex flex-col gap-0.5">
+              <Link
+                href="/"
+                className={drawerNavClass}
+                onClick={() => setDrawerOpen(false)}
+              >
+                <span className={drawerIconClass} aria-hidden>
+                  🏠
+                </span>
+                Home
+              </Link>
+              <Link
+                href="/leaderboard"
+                className={drawerNavClass}
+                onClick={() => setDrawerOpen(false)}
+              >
+                <span className={drawerIconClass} aria-hidden>
+                  🏆
+                </span>
+                Leaderboard
+              </Link>
+              <Link
+                href="/submit"
+                className={drawerNavClass}
+                onClick={() => setDrawerOpen(false)}
+              >
+                <span className={drawerIconClass} aria-hidden>
+                  🎨
+                </span>
+                Submit Your Work
+              </Link>
+              <Link
+                href={profileHref}
+                className={drawerNavClass}
+                onClick={() => setDrawerOpen(false)}
+              >
+                <span className={drawerIconClass} aria-hidden>
+                  👤
+                </span>
+                Profile
+              </Link>
+              <Link
+                href="/settings"
+                className={drawerNavClass}
+                onClick={() => setDrawerOpen(false)}
+              >
+                <span className={drawerIconClass} aria-hidden>
+                  ⚙️
+                </span>
+                Settings
+              </Link>
+            </div>
+
+            <div className="mx-2 mt-3 border-t border-white/10" />
+
+            {signedIn ? (
+              <button
+                type="button"
+                className={`${drawerNavClass} mt-2 text-red-300 hover:bg-red-500/15 hover:text-red-200`}
+                onClick={() => void signOut()}
+              >
+                <span className={drawerIconClass} aria-hidden>
+                  🚪
+                </span>
+                Sign Out
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className={`${drawerNavClass} mt-2 text-[var(--accent2)]`}
+                onClick={() => setDrawerOpen(false)}
+              >
+                <span className={drawerIconClass} aria-hidden>
+                  →
+                </span>
+                Sign in
+              </Link>
+            )}
+          </div>
+        </nav>
+      </div>
+
+      <header className="relative flex shrink-0 items-center justify-between px-4 pt-4 md:px-5">
+        <button
+          type="button"
+          aria-label="Open menu"
+          aria-expanded={drawerOpen}
+          onClick={() => setDrawerOpen(true)}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-[rgba(26,10,46,0.75)] text-lg font-semibold text-white shadow-sm transition hover:bg-white/10"
+        >
+          ☰
+        </button>
+        <div className="pointer-events-none absolute inset-x-0 flex justify-center">
+          <div className="text-xl font-extrabold tracking-tight">Layers</div>
+        </div>
+        <div className="h-10 w-10 shrink-0" aria-hidden />
       </header>
 
       <div className="flex shrink-0 items-center justify-center px-4 pt-2 md:px-5">

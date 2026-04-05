@@ -53,18 +53,29 @@ export default async function Home() {
 
   let profileUsername: string | null = null;
   let lastPlayedDate: string | null = null;
+  let profileAvatarUrl: string | null = null;
+  let profileStreak = 0;
+  let profileTotalSolved = 0;
   if (userId) {
     const { data: prof } = await supabase
       .from("profiles")
-      .select("username, last_played_date")
+      .select(
+        "username, last_played_date, avatar_url, current_streak, total_solved"
+      )
       .eq("id", userId)
       .maybeSingle();
     const row = prof as {
       username?: string | null;
       last_played_date?: string | null;
+      avatar_url?: string | null;
+      current_streak?: number | null;
+      total_solved?: number | null;
     } | null;
     profileUsername = row?.username?.trim() ?? null;
     lastPlayedDate = row?.last_played_date ?? null;
+    profileAvatarUrl = row?.avatar_url?.trim() ?? null;
+    profileStreak = Math.max(0, Math.floor(Number(row?.current_streak) || 0));
+    profileTotalSolved = Math.max(0, Math.floor(Number(row?.total_solved) || 0));
   }
 
   return (
@@ -73,6 +84,9 @@ export default async function Home() {
       userEmail={userEmail}
       userId={userId}
       profileUsername={profileUsername}
+      profileAvatarUrl={profileAvatarUrl}
+      profileStreak={profileStreak}
+      profileTotalSolved={profileTotalSolved}
       lastPlayedDate={lastPlayedDate}
     />
   );

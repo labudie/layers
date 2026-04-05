@@ -358,6 +358,7 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
   }
 
   try {
+    // Auth session from request cookies so Postgres RLS runs as the signed-in admin.
     const sb = createSupabaseServerClient(await cookies());
     const cards = JSON.parse(cardsJson) as Array<{
       title: string;
