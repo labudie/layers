@@ -1,7 +1,7 @@
 /**
  * Resizes the Layers logo into PWA / Apple touch icon sizes.
  * Run: npm run icons
- * Default source: public/Layers App Logo New.png (override: node scripts/generate-icons.js <path>)
+ * Default source: public/Layers App Logo.png (override: node scripts/generate-icons.js <path>)
  */
 
 const fs = require("fs");
@@ -9,7 +9,7 @@ const path = require("path");
 const sharp = require("sharp");
 
 const publicDir = path.join(__dirname, "..", "public");
-const defaultSource = path.join(publicDir, "Layers App Logo New.png");
+const defaultSource = path.join(publicDir, "Layers App Logo.png");
 
 const sourcePath = path.resolve(
   process.argv[2] || process.env.ICON_SOURCE || defaultSource
@@ -17,7 +17,7 @@ const sourcePath = path.resolve(
 
 if (!fs.existsSync(sourcePath)) {
   console.error(
-    "Missing source image. Add your logo as public/Layers App Logo New.png or pass a path:\n" +
+    "Missing source image. Add your logo as public/Layers App Logo.png or pass a path:\n" +
       "  node scripts/generate-icons.js path/to/logo.png"
   );
   process.exit(1);

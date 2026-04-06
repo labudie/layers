@@ -147,7 +147,13 @@ export function PullToRefresh({
     const onTouchStart = (e: TouchEvent) => {
       if (refreshingRef.current) return;
       if (e.touches.length !== 1) return;
-      if (el.scrollTop > 2) return;
+      if (el.scrollTop > 2) {
+        // Do not leave pull-to-refresh active from a prior gesture — prevents stray preventDefault.
+        activeRef.current = false;
+        axisChosenRef.current = false;
+        thresholdHapticRef.current = false;
+        return;
+      }
       activeRef.current = true;
       axisChosenRef.current = false;
       startYRef.current = e.touches[0].clientY;

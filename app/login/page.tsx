@@ -1,7 +1,9 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { createSupabaseBrowserClient } from "@/lib/supabase";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
+import { APP_LOGO_SRC } from "@/lib/app-logo";
+import { createSupabaseBrowserClient } from "@/lib/supabase";
 
 export default function LoginPage() {
   async function signInWithGoogle() {
@@ -21,7 +23,11 @@ export default function LoginPage() {
     <AppSiteChrome title="Layers">
       <main className="flex flex-1 items-center justify-center px-4 py-10 text-[var(--text)] md:px-6">
         <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
-          <div className="text-2xl font-extrabold tracking-tight">layers</div>
+          <img
+            src={APP_LOGO_SRC}
+            alt="Layers"
+            className="h-10 w-auto max-w-[220px] object-contain"
+          />
           <div className="mt-2 text-sm text-white/70">
             Sign in to save your progress and play today’s challenge.
           </div>

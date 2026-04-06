@@ -123,11 +123,14 @@ export function AppSiteChrome({
     <div
       className={`flex min-h-dvh w-full flex-col bg-[var(--background)] text-[var(--text)] ${className}`.trim()}
     >
+      {/* When closed: parent `pointer-events-none` does not apply to descendants in HTML — the
+          full-screen backdrop button would still steal touches/scrolling. Disable hits on direct
+          children too (`[&>*]:pointer-events-none`). */}
       <div
         className={`fixed inset-0 z-[130] transition-[opacity,visibility] duration-[250ms] [transition-timing-function:var(--smooth)] ${
           drawerOpen
             ? "visible opacity-100"
-            : "pointer-events-none invisible opacity-0"
+            : "pointer-events-none invisible opacity-0 [&>*]:pointer-events-none"
         }`}
         aria-hidden={!drawerOpen}
       >

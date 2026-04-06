@@ -32,6 +32,7 @@ import {
   CreatorProfileLink,
   ProfileUsernameLink,
 } from "@/lib/profile-handle-link";
+import { APP_LOGO_SRC } from "@/lib/app-logo";
 import { SITE_SHARE_URL } from "@/lib/site-url";
 import { stripAtHandle } from "@/lib/username-display";
 
@@ -1471,9 +1472,11 @@ export function DailyGameClient({
           <HomeGameSkeleton />
         ) : showNoChallengesHome ? (
           <div className="flex flex-1 flex-col items-center px-2 py-10 text-center">
-            <div className="bg-gradient-to-br from-white to-[#c4b5fd] bg-clip-text text-5xl font-extrabold tracking-tight text-transparent drop-shadow-[0_0_40px_rgba(124,58,237,0.45)]">
-              Layers
-            </div>
+            <img
+              src={APP_LOGO_SRC}
+              alt="Layers"
+              className="h-14 w-auto max-w-[min(280px,85vw)] object-contain drop-shadow-[0_0_40px_rgba(124,58,237,0.45)]"
+            />
             <p className="mt-8 text-lg font-semibold text-white/90">
               No challenges today
             </p>
@@ -1497,9 +1500,11 @@ export function DailyGameClient({
           </div>
         ) : showDailyHome ? (
           <div className="flex flex-1 flex-col items-center px-2 pb-10 pt-8 text-center">
-            <div className="bg-gradient-to-br from-white via-[#e9d5ff] to-[#a78bfa] bg-clip-text text-5xl font-extrabold tracking-tight text-transparent drop-shadow-[0_0_48px_rgba(139,92,246,0.5)]">
-              Layers
-            </div>
+            <img
+              src={APP_LOGO_SRC}
+              alt="Layers"
+              className="h-14 w-auto max-w-[min(280px,85vw)] object-contain drop-shadow-[0_0_48px_rgba(139,92,246,0.5)]"
+            />
             <p className="mt-6 text-lg font-bold text-emerald-300">
               Daily Complete <span className="inline-block">✓</span>
             </p>
