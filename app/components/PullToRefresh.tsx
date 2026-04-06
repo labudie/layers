@@ -270,12 +270,12 @@ export function PullToRefresh({
     <div className={`relative flex min-h-0 flex-1 flex-col ${className}`.trim()}>
       <div
         ref={scrollRef}
-        className={`pull-to-refresh-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain ${scrollAreaClassName}`.trim()}
+        className={`pull-to-refresh-scroll min-h-0 min-w-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-y-contain ${scrollAreaClassName}`.trim()}
         aria-busy={refreshing}
         style={{ WebkitOverflowScrolling: "touch" } as CSSProperties}
       >
         <div
-          className="min-h-full"
+          className="min-h-full min-w-0 max-w-full"
           style={
             {
               transform: `translateY(${pull}px)`,

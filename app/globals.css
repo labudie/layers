@@ -43,6 +43,7 @@ body {
 }
 
 .challenge-image-frame {
+  box-sizing: border-box;
   border-width: 1px;
   border-style: solid;
   border-color: rgb(255 255 255 / 0.15);

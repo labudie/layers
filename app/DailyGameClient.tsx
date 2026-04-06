@@ -273,7 +273,7 @@ function HomeGameSkeleton() {
       aria-busy
       aria-label="Loading today’s puzzles"
     >
-      <div className="mx-[calc(50%-50vw)] h-[min(60vh,28rem)] w-[100vw] bg-white/[0.06] blur-[1px]" />
+      <div className="h-[min(60vh,28rem)] w-full max-w-full rounded-xl bg-white/[0.06] blur-[1px]" />
       <div className="space-y-2">
         <div className="h-5 w-[60%] max-w-xs rounded-lg bg-white/[0.08]" />
         <div className="h-4 w-24 rounded-md bg-white/[0.06]" />
@@ -1456,12 +1456,12 @@ export function DailyGameClient({
           </div>
         ) : null
       }
-      className="h-dvh min-h-0 overflow-hidden"
+      className="h-dvh min-h-0 min-w-0 overflow-x-hidden overflow-y-hidden"
     >
       <div className="relative flex min-h-0 flex-1 flex-col">
         <PullToRefresh
           disabled={Boolean(modalImageUrl)}
-          className={`mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 md:px-5 ${
+          className={`mx-auto flex w-full min-w-0 max-w-3xl flex-1 flex-col px-4 md:px-5 ${
             showDailyHome || showNoChallengesHome
               ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#06020f_100%)]"
               : ""
@@ -1763,37 +1763,41 @@ export function DailyGameClient({
                 <>
                   <div
                     ref={tutorialImageRef}
-                    className="relative mx-[calc(50%-50vw)] w-[100vw]"
+                    className="relative w-full max-w-full"
                   >
+                    {/* Border + feedback animation live on outer (overflow visible) so red/green
+                        strokes are not clipped; inner clips only the bitmap to rounded rect. */}
                     <div
-                      className={`challenge-image-frame flex max-h-[60vh] w-full items-center justify-center overflow-hidden rounded-none bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                      className={`challenge-image-frame box-border flex max-h-[60vh] w-full max-w-full cursor-zoom-in items-center justify-center rounded-[var(--radius-card)] bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
                       onClick={() => {
                         if (displayChallengeImageUrl) {
                           openImageModal(displayChallengeImageUrl);
                         }
                       }}
                     >
-                      {currentChallenge.image_url ? (
-                        <img
-                          src={displayChallengeImageUrl ?? ""}
-                          alt={currentChallenge.title ?? "Challenge image"}
-                          loading="eager"
-                          decoding="async"
-                          onLoad={() => setChallengeMainImageLoaded(true)}
-                          className={`block max-h-[60vh] w-auto max-w-full cursor-zoom-in object-contain transition-opacity duration-200 [transition-timing-function:var(--smooth)] ${
-                            challengeMainImageLoaded
-                              ? "opacity-100"
-                              : "opacity-0"
-                          }`}
-                          style={{ background: "#0f0520" }}
-                        />
-                      ) : (
-                        <canvas
-                          ref={canvasRef}
-                          className="block h-[60vh] w-full max-w-full"
-                          style={{ background: "#0f0520" }}
-                        />
-                      )}
+                      <div className="max-h-[60vh] w-full max-w-full overflow-hidden rounded-[var(--radius-card)]">
+                        {currentChallenge.image_url ? (
+                          <img
+                            src={displayChallengeImageUrl ?? ""}
+                            alt={currentChallenge.title ?? "Challenge image"}
+                            loading="eager"
+                            decoding="async"
+                            onLoad={() => setChallengeMainImageLoaded(true)}
+                            className={`block max-h-[60vh] w-full max-w-full cursor-zoom-in object-contain transition-opacity duration-200 [transition-timing-function:var(--smooth)] ${
+                              challengeMainImageLoaded
+                                ? "opacity-100"
+                                : "opacity-0"
+                            }`}
+                            style={{ background: "#0f0520" }}
+                          />
+                        ) : (
+                          <canvas
+                            ref={canvasRef}
+                            className="block h-[60vh] w-full max-w-full"
+                            style={{ background: "#0f0520" }}
+                          />
+                        )}
+                      </div>
                     </div>
                     {isSponsored ? (
                       <div className="absolute left-3 bottom-3 z-20 rounded-full border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.15)] px-3 py-1 text-[11px] font-semibold text-amber-200 backdrop-blur-sm">
@@ -1903,7 +1907,7 @@ export function DailyGameClient({
 
                     {currentGuesses.length > 0 ? (
                       <div
-                        className={`flex flex-nowrap items-center gap-2 ${challengeVisualFadeClassName}`}
+                        className={`flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] ${challengeVisualFadeClassName}`}
                         role="list"
                         aria-label="Guess history"
                       >
