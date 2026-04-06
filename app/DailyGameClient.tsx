@@ -730,6 +730,9 @@ export function DailyGameClient({
   const canSubmitGuess = Boolean(
     roundActive && signedIn && userId
   );
+  const compactGameplayMode = Boolean(
+    !showNoChallengesHome && !showDailyHome && !showSummary
+  );
 
   // Restore guesses + resume position / summary
   useEffect(() => {
@@ -1312,6 +1315,45 @@ export function DailyGameClient({
     posthog,
   ]);
 
+  const vibrateKeyTap = useCallback(() => {
+    if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") {
+      return;
+    }
+    try {
+      navigator.vibrate(8);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const appendGuessDigit = useCallback(
+    (digit: number) => {
+      if (!roundActive) return;
+      vibrateKeyTap();
+      const safeDigit = Math.max(0, Math.min(9, Math.floor(digit)));
+      const current = typeof guessInput === "number" ? String(Math.max(0, Math.floor(guessInput))) : "";
+      const nextRaw = `${current}${safeDigit}`.slice(0, 4);
+      const next = nextRaw.replace(/^0+(?=\d)/, "");
+      setGuessInput(next.length ? Number(next) : 0);
+    },
+    [guessInput, roundActive, vibrateKeyTap]
+  );
+
+  const backspaceGuessDigit = useCallback(() => {
+    if (!roundActive) return;
+    vibrateKeyTap();
+    const current = typeof guessInput === "number" ? String(Math.max(0, Math.floor(guessInput))) : "";
+    if (!current.length) return;
+    const next = current.slice(0, -1);
+    setGuessInput(next.length ? Number(next) : "");
+  }, [guessInput, roundActive, vibrateKeyTap]);
+
+  const submitGuessFromPad = useCallback(() => {
+    if (!canSubmitGuess || typeof guessInput !== "number") return;
+    vibrateKeyTap();
+    void submitGuess();
+  }, [canSubmitGuess, guessInput, submitGuess, vibrateKeyTap]);
+
   const downloadChallengeImage = useCallback(async (ch: Challenge) => {
     if (!ch.image_url) return;
     if (downloadBusyId === ch.id) return;
@@ -1466,6 +1508,7 @@ export function DailyGameClient({
               ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#06020f_100%)]"
               : ""
           }`}
+          scrollAreaClassName={compactGameplayMode ? "overflow-y-hidden" : ""}
           onRefresh={refreshTodayChallenges}
         >
         <div className="pb-[120px]">
@@ -1755,6 +1798,196 @@ export function DailyGameClient({
                 Copies a {total}-row emoji grid (one row per challenge).
               </p>
             </div>
+          </div>
+        ) : compactGameplayMode ? (
+          <div className="flex h-[calc(100dvh-120px)] min-h-0 flex-col">
+            {currentChallenge ? (
+              <>
+                <div className="flex h-8 shrink-0 items-center justify-center gap-2 text-center text-xs text-white/65">
+                  <span className="truncate">
+                    Next challenge{" "}
+                    <span className="font-mono font-bold text-white">
+                      {countdownText ?? "--:--:--"}
+                    </span>
+                  </span>
+                  <span aria-hidden className="text-white/35">·</span>
+                  <span className="font-mono text-white/75">
+                    {currentChallengeIndex + 1}/{total}
+                  </span>
+                </div>
+
+                <div
+                  ref={tutorialImageRef}
+                  className="relative left-1/2 h-[35dvh] min-h-[200px] w-dvw -translate-x-1/2 shrink-0"
+                >
+                  <div
+                    className={`challenge-image-frame box-border flex h-full w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                    onClick={() => {
+                      if (displayChallengeImageUrl) openImageModal(displayChallengeImageUrl);
+                    }}
+                  >
+                    {currentChallenge.image_url ? (
+                      <img
+                        src={displayChallengeImageUrl ?? ""}
+                        alt={currentChallenge.title ?? "Challenge image"}
+                        loading="eager"
+                        decoding="async"
+                        onLoad={() => setChallengeMainImageLoaded(true)}
+                        className={`block h-full w-full max-w-full object-contain transition-opacity duration-200 [transition-timing-function:var(--smooth)] ${
+                          challengeMainImageLoaded ? "opacity-100" : "opacity-0"
+                        }`}
+                        style={{ background: "#0f0520" }}
+                      />
+                    ) : (
+                      <canvas
+                        ref={canvasRef}
+                        className="block h-full w-full"
+                        style={{ background: "#0f0520" }}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div className={`mt-2 flex h-10 min-w-0 shrink-0 items-center justify-between gap-3 ${challengeVisualFadeClassName}`}>
+                  <h2 className="min-w-0 truncate text-sm font-semibold text-white">
+                    {currentChallenge.title ?? "Untitled"}
+                  </h2>
+                  <div className="relative shrink-0">
+                    <button
+                      ref={infoButtonRef}
+                      type="button"
+                      aria-expanded={infoPopoverOpen}
+                      aria-haspopup="dialog"
+                      aria-label="Challenge details"
+                      onClick={() => setInfoPopoverOpen((o) => !o)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-sm font-semibold text-white/90 hover:bg-white/10 active:bg-white/[0.12]"
+                    >
+                      ⓘ
+                    </button>
+                    {infoPopoverOpen ? (
+                      <div
+                        ref={infoPopoverRef}
+                        role="dialog"
+                        aria-label="Challenge info"
+                        className="absolute right-0 top-full z-[60] mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-white/10 bg-[rgba(26,10,46,0.98)] p-3 text-left text-xs shadow-2xl backdrop-blur-md"
+                      >
+                        {isSponsored && sponsorName ? (
+                          <p className="text-amber-200">
+                            <span className="font-semibold">⭐ Sponsored by:</span>{" "}
+                            {sponsorName}
+                          </p>
+                        ) : null}
+                        <p className="text-white/85">
+                          <span className="font-semibold text-white">Creator:</span>{" "}
+                          <CreatorProfileLink raw={currentChallenge.creator_name} />
+                        </p>
+                        <p className="mt-1.5 text-white/85">
+                          <span className="font-semibold text-white">Software:</span>{" "}
+                          {currentChallenge.software ?? "—"}
+                        </p>
+                        <p className="mt-1.5 text-white/85">
+                          <span className="font-semibold text-white">Category:</span>{" "}
+                          {currentChallenge.category ?? "—"}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div
+                  className={`mb-2 flex h-8 shrink-0 items-center justify-center gap-1.5 ${challengeVisualFadeClassName}`}
+                  role="img"
+                  aria-label={`Guesses used ${currentGuesses.length} of 6`}
+                >
+                  {Array.from({ length: 6 }).map((_, i) => {
+                    const g = currentGuesses[i];
+                    let cellClass = "border border-white/35 bg-transparent";
+                    if (g?.verdict === "correct") cellClass = "border-transparent bg-emerald-500";
+                    else if (g?.verdict === "close") cellClass = "border-transparent bg-amber-500";
+                    else if (g?.verdict === "wrong") cellClass = "border-transparent bg-red-500";
+                    const anim = guessSlotAnimIndex === i ? "guess-slot-enter" : "";
+                    return (
+                      <div
+                        key={`${currentChallenge.id}-slot-${i}`}
+                        className={`h-6 w-6 shrink-0 rounded-[4px] ${cellClass} ${anim}`}
+                      />
+                    );
+                  })}
+                </div>
+
+                <div className="grid min-h-0 flex-1 grid-rows-[auto,1fr] gap-2 pb-1">
+                  {currentFinished ? (
+                    <div className="flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
+                        {solvedWithCorrect ? "Correct" : "Answer"}
+                      </div>
+                      <div className="font-mono text-4xl font-extrabold tracking-tight text-white">
+                        {currentAnswer ?? "—"}
+                      </div>
+                      {pendingAutoAdvance ? (
+                        <p className="text-sm font-semibold text-[var(--success)]">
+                          Continuing…
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={challengeTransitioning}
+                          onClick={() => advanceAfterTransitionOut(isLastChallenge)}
+                          className="inline-flex min-h-[48px] items-center justify-center rounded-[var(--radius-pill)] bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40"
+                        >
+                          {isLastChallenge ? "View daily summary" : "Next challenge"}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex h-11 items-center justify-center rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.45)] text-center">
+                        <span className="font-mono text-3xl font-extrabold tracking-[0.08em] text-white">
+                          {typeof guessInput === "number" ? guessInput : "—"}
+                        </span>
+                      </div>
+                      <div className="grid min-h-0 grid-cols-3 grid-rows-4 gap-2">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
+                          <button
+                            key={`digit-${digit}`}
+                            type="button"
+                            onClick={() => appendGuessDigit(digit)}
+                            disabled={!roundActive}
+                            className="tap-press min-h-[48px] rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
+                          >
+                            {digit}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={backspaceGuessDigit}
+                          disabled={!roundActive || typeof guessInput !== "number"}
+                          className="tap-press min-h-[48px] rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-xl font-bold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
+                        >
+                          ⌫
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => appendGuessDigit(0)}
+                          disabled={!roundActive}
+                          className="tap-press min-h-[48px] rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
+                        >
+                          0
+                        </button>
+                        <button
+                          type="button"
+                          onClick={submitGuessFromPad}
+                          disabled={!canSubmitGuess || typeof guessInput !== "number"}
+                          className="tap-press min-h-[48px] rounded-[var(--radius-card)] border border-emerald-300/35 bg-emerald-500/85 text-xl font-extrabold text-white shadow-sm transition-[transform,filter,background-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-40"
+                        >
+                          ✓
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            ) : null}
           </div>
         ) : (
           <>
