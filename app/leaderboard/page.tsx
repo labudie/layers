@@ -121,7 +121,7 @@ export default async function LeaderboardPage({
   return (
     <AppSiteChrome title="Leaderboard">
       <LeaderboardPullToRefresh>
-      <div className="mx-auto w-full max-w-2xl px-4 py-6 md:px-5">
+      <div className="mx-auto w-full max-w-2xl px-4 pt-6 pb-[100px] md:px-5 md:pb-[100px]">
         <h1 className="text-3xl font-extrabold tracking-tight">Leaderboard</h1>
         <p className="mt-2 text-sm text-white/60">
           Today&apos;s results (active date: {leaderboardDay})

@@ -212,12 +212,13 @@ export default function SettingsPage() {
     <AppSiteChrome title="Settings">
       <PullToRefresh
         className="flex min-h-0 min-w-0 flex-1 flex-col"
+        scrollAreaClassName="min-h-dvh max-h-none"
         disabled={loading}
         onRefresh={async () => {
           await load({ silent: true });
         }}
       >
-      <div className="mx-auto w-full min-w-0 max-w-2xl px-4 py-5 md:px-5 md:py-6">
+      <div className="mx-auto w-full min-w-0 max-w-2xl px-4 pt-5 pb-[100px] md:px-5 md:pt-6 md:pb-[100px]">
         {loading ? (
           <div className="mt-10 text-white/70">Loading…</div>
         ) : (

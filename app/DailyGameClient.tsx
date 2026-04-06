@@ -269,20 +269,20 @@ function creatorUsernameKey(raw: string | null | undefined) {
 function HomeGameSkeleton() {
   return (
     <div
-      className="mt-3 flex min-h-[50vh] flex-1 animate-pulse flex-col gap-4 pb-6"
+      className="mt-3 flex min-h-[50vh] flex-1 animate-pulse flex-col gap-4 pb-6 min-w-0"
       aria-busy
       aria-label="Loading today’s puzzles"
     >
       <div className="mx-[calc(50%-50vw)] h-[min(60vh,28rem)] w-[100vw] bg-white/[0.06] blur-[1px]" />
-      <div className="space-y-2 px-1">
+      <div className="space-y-2">
         <div className="h-5 w-[60%] max-w-xs rounded-lg bg-white/[0.08]" />
         <div className="h-4 w-24 rounded-md bg-white/[0.06]" />
       </div>
-      <div className="flex gap-2 px-1">
+      <div className="flex gap-2">
         <div className="h-11 flex-1 rounded-full bg-white/[0.07]" />
         <div className="h-11 w-28 shrink-0 rounded-full bg-[var(--accent)]/30" />
       </div>
-      <p className="px-1 text-center text-xs text-white/40">Loading your progress…</p>
+      <p className="text-center text-xs text-white/40">Loading your progress…</p>
     </div>
   );
 }
@@ -1468,10 +1468,11 @@ export function DailyGameClient({
           }`}
           onRefresh={refreshTodayChallenges}
         >
+        <div className="pb-[120px]">
         {!gameDataReady && challenges.length > 0 ? (
           <HomeGameSkeleton />
         ) : showNoChallengesHome ? (
-          <div className="flex flex-1 flex-col items-center px-2 py-10 text-center">
+          <div className="flex flex-1 flex-col items-center py-10 text-center">
             <img
               src={APP_LOGO_INGAME_SRC}
               alt="Layers"
@@ -1499,7 +1500,7 @@ export function DailyGameClient({
             </p>
           </div>
         ) : showDailyHome ? (
-          <div className="flex flex-1 flex-col items-center px-2 pb-10 pt-8 text-center">
+          <div className="flex flex-1 flex-col items-center pb-10 pt-8 text-center">
             <img
               src={APP_LOGO_INGAME_SRC}
               alt="Layers"
@@ -1560,14 +1561,14 @@ export function DailyGameClient({
               <button
                 type="button"
                 onClick={() => setShowResultsDetail(true)}
-                className="rounded-2xl bg-white px-6 py-3.5 text-sm font-bold text-[#1a0a2e] shadow-lg shadow-violet-500/20 transition hover:bg-violet-100"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-white px-6 text-sm font-bold text-[#1a0a2e] shadow-lg shadow-violet-500/20 transition hover:bg-violet-100"
               >
                 View Results
               </button>
               <button
                 type="button"
                 onClick={() => void shareDaily()}
-                className="rounded-2xl border-2 border-white/25 bg-transparent px-6 py-3.5 text-sm font-bold text-white transition hover:bg-white/10"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-2xl border-2 border-white/25 bg-transparent px-6 text-sm font-bold text-white transition hover:bg-white/10"
               >
                 {shareFeedback === "copied"
                   ? "Copied!"
@@ -1577,7 +1578,7 @@ export function DailyGameClient({
               </button>
             </div>
 
-            <div className="mt-12 w-full max-w-md text-left">
+            <div className="mt-12 w-full max-w-md text-left min-w-0">
               <div className="mb-3">
                 <Link
                   href="/leaderboard"
@@ -1757,7 +1758,7 @@ export function DailyGameClient({
           </div>
         ) : (
           <>
-            <div className="mt-[12px] flex min-h-0 flex-1 flex-col gap-3 pb-2">
+            <div className="mt-3 flex min-h-0 min-w-0 flex-1 flex-col gap-3">
               {currentChallenge && (
                 <>
                   <div
@@ -1802,7 +1803,7 @@ export function DailyGameClient({
                   </div>
 
                   <div
-                    className={`relative flex items-start justify-between gap-3 ${challengeVisualFadeClassName}`}
+                    className={`relative flex min-w-0 items-start justify-between gap-3 ${challengeVisualFadeClassName}`}
                   >
                     <div className="min-w-0">
                       <h2 className="text-base font-semibold leading-snug">
@@ -1863,7 +1864,7 @@ export function DailyGameClient({
                   </div>
 
                   <div
-                    className={`flex justify-center gap-1.5 py-1 ${challengeVisualFadeClassName}`}
+                    className={`mb-2 flex justify-center gap-1.5 py-1 ${challengeVisualFadeClassName}`}
                     role="img"
                     aria-label={`Guesses used ${currentGuesses.length} of 6`}
                   >
@@ -1888,7 +1889,7 @@ export function DailyGameClient({
                     })}
                   </div>
 
-                  <div className="flex flex-col gap-3">
+                  <div className="flex min-w-0 flex-col gap-3">
                     {failedWithSixGuesses ? (
                       <div className="rounded-[var(--radius-card)] border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] px-4 py-3 text-center shadow-sm">
                         <div className="text-sm font-semibold text-[rgba(16,185,129,0.9)]">
@@ -1941,7 +1942,7 @@ export function DailyGameClient({
                           type="button"
                           disabled={challengeTransitioning}
                           onClick={() => advanceNow(false)}
-                          className="h-11 w-full rounded-xl bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40"
+                          className="min-h-[48px] w-full rounded-xl bg-[var(--accent)] px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40"
                         >
                           Next →
                         </button>
@@ -1950,14 +1951,14 @@ export function DailyGameClient({
                           type="button"
                           disabled={challengeTransitioning}
                           onClick={() => advanceNow(true)}
-                          className="h-11 w-full rounded-xl bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40"
+                          className="min-h-[48px] w-full rounded-xl bg-[var(--accent)] px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40"
                         >
                           Next →
                         </button>
                       )
                     ) : (
                       <>
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                        <div className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-3">
                           <input
                             ref={guessInputRef}
                             type="number"
@@ -1976,7 +1977,7 @@ export function DailyGameClient({
                             onKeyDown={(e) => {
                               if (e.key === "Enter") void submitGuess();
                             }}
-                            className="h-11 w-full rounded-full border border-white/10 bg-[var(--surface)] px-4 text-base font-semibold text-[var(--text)] outline-none placeholder:text-white/30 focus-visible:ring-2 focus-visible:ring-[rgba(124,58,237,0.4)] disabled:opacity-40"
+                            className="box-border min-h-[48px] w-full min-w-0 rounded-full border border-white/10 bg-[var(--surface)] px-4 py-2 text-base font-semibold leading-normal text-[var(--text)] outline-none placeholder:text-white/30 focus-visible:ring-2 focus-visible:ring-[rgba(124,58,237,0.4)] disabled:opacity-40"
                             placeholder="Layer count…"
                           />
                           <button
@@ -1986,7 +1987,7 @@ export function DailyGameClient({
                               typeof guessInput !== "number"
                             }
                             onClick={() => void submitGuess()}
-                            className="h-11 w-full shrink-0 rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-[var(--accent2)] hover:brightness-105 disabled:opacity-40 sm:w-auto"
+                            className="min-h-[48px] w-full shrink-0 rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-bold text-white shadow-sm transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-[var(--accent2)] hover:brightness-105 disabled:opacity-40 sm:w-auto sm:min-w-[7rem]"
                           >
                             Submit
                           </button>
@@ -2039,7 +2040,7 @@ export function DailyGameClient({
                                 onClick={() =>
                                   advanceAfterTransitionOut(false)
                                 }
-                                className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40 md:rounded-xl md:py-3 shadow-sm transition-colors hover:bg-[var(--accent2)]"
+                                className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40 md:rounded-xl"
                               >
                                 Next challenge
                               </button>
@@ -2048,7 +2049,7 @@ export function DailyGameClient({
                                 type="button"
                                 disabled={challengeTransitioning}
                                 onClick={() => advanceAfterTransitionOut(true)}
-                                className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40 md:rounded-xl md:py-3 shadow-sm transition-colors hover:bg-[var(--accent2)]"
+                                className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40 md:rounded-xl"
                               >
                                 View daily summary
                               </button>
@@ -2059,7 +2060,7 @@ export function DailyGameClient({
                             type="button"
                             disabled={challengeTransitioning}
                             onClick={() => advanceAfterTransitionOut(false)}
-                            className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40 md:rounded-xl md:py-3 shadow-sm transition-colors hover:bg-[var(--accent2)]"
+                            className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40 md:rounded-xl"
                           >
                             Next challenge
                           </button>
@@ -2068,7 +2069,7 @@ export function DailyGameClient({
                             type="button"
                             disabled={challengeTransitioning}
                             onClick={() => advanceAfterTransitionOut(true)}
-                            className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40 md:rounded-xl md:py-3 shadow-sm transition-colors hover:bg-[var(--accent2)]"
+                            className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40 md:rounded-xl"
                           >
                             View daily summary
                           </button>
@@ -2081,6 +2082,7 @@ export function DailyGameClient({
             </div>
           </>
         )}
+        </div>
         </PullToRefresh>
 
       {modalImageUrl ? (

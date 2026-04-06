@@ -123,29 +123,23 @@ export function AppSiteChrome({
     <div
       className={`flex min-h-dvh w-full flex-col bg-[var(--background)] text-[var(--text)] ${className}`.trim()}
     >
-      {/* When closed: parent `pointer-events-none` does not apply to descendants in HTML — the
-          full-screen backdrop button would still steal touches/scrolling. Disable hits on direct
-          children too (`[&>*]:pointer-events-none`). */}
+      {/* Unmount when closed so no fixed layer (and no full-screen backdrop `button`) can exist in
+          the DOM to steal scroll/touches — opacity/visibility alone is not enough on some WebKit builds. */}
+      {drawerOpen ? (
       <div
-        className={`fixed inset-0 z-[130] transition-[opacity,visibility] duration-[250ms] [transition-timing-function:var(--smooth)] ${
-          drawerOpen
-            ? "visible opacity-100"
-            : "pointer-events-none invisible opacity-0 [&>*]:pointer-events-none"
-        }`}
-        aria-hidden={!drawerOpen}
+        className="fixed inset-0 z-[130]"
+        aria-hidden={false}
       >
         <button
           type="button"
           aria-label="Close menu"
-          className="absolute inset-0 bg-[#0f0520]/65 backdrop-blur-[3px] transition-opacity duration-[250ms] [transition-timing-function:var(--smooth)]"
+          className="absolute inset-0 bg-[#0f0520]/65 backdrop-blur-[3px]"
           onClick={() => setDrawerOpen(false)}
         />
         <nav
           ref={drawerRef}
-          data-drawer-open={drawerOpen ? "true" : "false"}
-          className={`absolute left-0 top-0 flex h-full w-[min(20rem,88vw)] max-w-[320px] flex-col border-r border-white/10 bg-[#0a0518] shadow-[8px_0_40px_rgba(0,0,0,0.45)] transition-transform duration-[250ms] [transition-timing-function:var(--smooth)] ${
-            drawerOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
+          data-drawer-open="true"
+          className="absolute left-0 top-0 flex h-full w-[min(20rem,88vw)] max-w-[320px] translate-x-0 flex-col border-r border-white/10 bg-[#0a0518] shadow-[8px_0_40px_rgba(0,0,0,0.45)]"
           aria-label="Main menu"
         >
           <div className="flex flex-1 flex-col overflow-y-auto px-3 pb-4 pt-6">
@@ -262,6 +256,7 @@ export function AppSiteChrome({
           </div>
         </nav>
       </div>
+      ) : null}
 
       <header className="relative flex min-h-[52px] shrink-0 items-center justify-center px-4 pb-3 pt-4 md:min-h-[56px] md:px-5">
         <button
@@ -277,7 +272,12 @@ export function AppSiteChrome({
           {title}
         </div>
         <div className="absolute right-4 top-1/2 z-10 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-end md:right-5">
-          {right ?? <span className="inline-block h-11 w-11 shrink-0" aria-hidden />}
+          {right ?? (
+            <span
+              className="pointer-events-none inline-block h-11 w-11 shrink-0"
+              aria-hidden
+            />
+          )}
         </div>
       </header>
 

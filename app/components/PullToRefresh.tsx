@@ -71,11 +71,14 @@ export function PullToRefresh({
   onRefresh,
   children,
   className = "",
+  scrollAreaClassName = "",
   disabled = false,
 }: {
   onRefresh: () => Promise<void>;
   children: ReactNode;
   className?: string;
+  /** Merged onto the scrollable div (e.g. min-h-dvh for settings). */
+  scrollAreaClassName?: string;
   disabled?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -147,8 +150,8 @@ export function PullToRefresh({
     const onTouchStart = (e: TouchEvent) => {
       if (refreshingRef.current) return;
       if (e.touches.length !== 1) return;
-      if (el.scrollTop > 2) {
-        // Do not leave pull-to-refresh active from a prior gesture — prevents stray preventDefault.
+      // Only arm pull-to-refresh from the true top; avoids preventDefault while scrolled.
+      if (el.scrollTop >= 1) {
         activeRef.current = false;
         axisChosenRef.current = false;
         thresholdHapticRef.current = false;
@@ -166,7 +169,7 @@ export function PullToRefresh({
       if (!activeRef.current || refreshingRef.current) return;
       if (e.touches.length !== 1) return;
 
-      if (el.scrollTop > 2) {
+      if (el.scrollTop >= 1) {
         resetPullVisual();
         return;
       }
@@ -209,7 +212,14 @@ export function PullToRefresh({
         thresholdHapticRef.current = false;
       }
 
-      if (visual > 1) {
+      // Only block native scroll when at scroll top, committed to vertical pull, and pulling down.
+      const atTop = el.scrollTop < 1;
+      if (
+        atTop &&
+        axisChosenRef.current &&
+        rawY > 0 &&
+        visual > 1
+      ) {
         e.preventDefault();
       }
     };
@@ -260,7 +270,7 @@ export function PullToRefresh({
     <div className={`relative flex min-h-0 flex-1 flex-col ${className}`.trim()}>
       <div
         ref={scrollRef}
-        className="pull-to-refresh-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain"
+        className={`pull-to-refresh-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain ${scrollAreaClassName}`.trim()}
         aria-busy={refreshing}
         style={{ WebkitOverflowScrolling: "touch" } as CSSProperties}
       >

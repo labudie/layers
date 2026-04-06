@@ -213,7 +213,7 @@ export default function SubmitPage() {
     <AppSiteChrome
       title="Submit"
     >
-      <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-5">
+      <div className="mx-auto w-full max-w-3xl px-4 pt-6 pb-[100px] md:px-5 md:pb-[100px]">
         <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)] p-5">
           <h1 className="text-2xl font-extrabold">Submit Your Work</h1>
           <p className="mt-1 text-sm text-white/60">
@@ -376,7 +376,7 @@ export default function SubmitPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-xl bg-[var(--accent)] px-5 py-3 text-sm font-bold text-white transition hover:bg-[var(--accent2)] disabled:opacity-50"
+              className="min-h-[48px] w-full rounded-xl bg-[var(--accent)] px-5 py-3 text-sm font-bold text-white transition hover:bg-[var(--accent2)] disabled:opacity-50"
             >
               {submitting ? "Submitting..." : "Submit Your Work"}
             </button>
