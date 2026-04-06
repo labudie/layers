@@ -1801,13 +1801,13 @@ export function DailyGameClient({
           </div>
         ) : compactGameplayMode ? (
           <div
-            className="flex min-h-0 flex-1 flex-col overflow-hidden"
-            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+            className="grid min-h-0 flex-1 grid-rows-[44px,minmax(0,1fr),36px,44px,200px] overflow-hidden"
+            style={{ paddingBottom: "max(env(safe-area-inset-bottom), 8px)" }}
           >
             {currentChallenge ? (
               <>
                 <div
-                  className={`flex h-9 min-w-0 shrink-0 items-center justify-between gap-2 ${challengeVisualFadeClassName}`}
+                  className={`flex h-11 min-w-0 items-center justify-between gap-2 ${challengeVisualFadeClassName}`}
                 >
                   <div className="min-w-0 truncate text-sm font-semibold text-white">
                     {currentChallenge.title ?? "Untitled"}
@@ -1860,37 +1860,16 @@ export function DailyGameClient({
                 </div>
 
                 <div
-                  className={`mb-1.5 flex h-7 shrink-0 items-center justify-center gap-1.5 ${challengeVisualFadeClassName}`}
-                  role="img"
-                  aria-label={`Guesses used ${currentGuesses.length} of 6`}
-                >
-                  {Array.from({ length: 6 }).map((_, i) => {
-                    const g = currentGuesses[i];
-                    let cellClass = "border border-white/35 bg-transparent";
-                    if (g?.verdict === "correct") cellClass = "border-transparent bg-emerald-500";
-                    else if (g?.verdict === "close") cellClass = "border-transparent bg-amber-500";
-                    else if (g?.verdict === "wrong") cellClass = "border-transparent bg-red-500";
-                    const anim = guessSlotAnimIndex === i ? "guess-slot-enter" : "";
-                    return (
-                      <div
-                        key={`${currentChallenge.id}-slot-${i}`}
-                        className={`h-5 w-5 shrink-0 rounded-[4px] ${cellClass} ${anim}`}
-                      />
-                    );
-                  })}
-                </div>
-
-                <div
                   ref={tutorialImageRef}
-                  className="relative left-1/2 mb-1 flex min-h-0 w-dvw -translate-x-1/2 flex-1 items-center justify-center"
+                  className="relative left-1/2 min-h-0 w-dvw -translate-x-1/2"
                 >
                   <div
-                    className={`challenge-image-frame box-border flex h-full max-h-[60dvh] w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                    className={`challenge-image-frame box-border flex h-full max-h-[45vh] w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] max-[700px]:max-h-[35vh] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
                     onClick={() => {
                       if (displayChallengeImageUrl) openImageModal(displayChallengeImageUrl);
                     }}
                   >
-                    <div className="h-full w-full max-h-[58dvh] aspect-[479/567]">
+                    <div className="h-full w-full max-h-[45vh] aspect-[479/567] max-[700px]:max-h-[35vh]">
                       {currentChallenge.image_url ? (
                         <img
                           src={displayChallengeImageUrl ?? ""}
@@ -1914,9 +1893,36 @@ export function DailyGameClient({
                   </div>
                 </div>
 
-                <div className="grid min-h-0 flex-1 grid-rows-[auto,1fr] gap-1">
+                <div
+                  className={`my-[4px] flex h-9 items-center justify-center gap-1.5 ${challengeVisualFadeClassName}`}
+                  role="img"
+                  aria-label={`Guesses used ${currentGuesses.length} of 6`}
+                >
+                  {Array.from({ length: 6 }).map((_, i) => {
+                    const g = currentGuesses[i];
+                    let cellClass = "border border-white/35 bg-transparent";
+                    if (g?.verdict === "correct") cellClass = "border-transparent bg-emerald-500";
+                    else if (g?.verdict === "close") cellClass = "border-transparent bg-amber-500";
+                    else if (g?.verdict === "wrong") cellClass = "border-transparent bg-red-500";
+                    const anim = guessSlotAnimIndex === i ? "guess-slot-enter" : "";
+                    return (
+                      <div
+                        key={`${currentChallenge.id}-slot-${i}`}
+                        className={`h-5 w-5 shrink-0 rounded-[4px] ${cellClass} ${anim}`}
+                      />
+                    );
+                  })}
+                </div>
+
+                <div className="flex h-11 items-center justify-center rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.45)] text-center">
+                  <span className="font-mono text-[36px] font-extrabold leading-none tracking-[0.06em] text-white">
+                    {typeof guessInput === "number" ? guessInput : "—"}
+                  </span>
+                </div>
+
+                <div className="grid h-[200px] min-h-[200px] grid-cols-3 grid-rows-4 gap-[4px] pt-[4px]">
                   {currentFinished ? (
-                    <div className="flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
+                    <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
                       <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
                         {solvedWithCorrect ? "Correct" : "Answer"}
                       </div>
@@ -1940,69 +1946,61 @@ export function DailyGameClient({
                     </div>
                   ) : (
                     <>
-                      <div className="flex h-12 items-center justify-center rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.45)] text-center">
-                        <span className="font-mono text-[36px] font-extrabold leading-none tracking-[0.06em] text-white">
-                          {typeof guessInput === "number" ? guessInput : "—"}
-                        </span>
-                      </div>
-
-                      <div className="grid h-[220px] min-h-[220px] grid-cols-3 grid-rows-4 gap-2">
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
-                          <button
-                            key={`digit-${digit}`}
-                            type="button"
-                            onClick={() => appendGuessDigit(digit)}
-                            disabled={!roundActive}
-                            className="tap-press rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
-                          >
-                            {digit}
-                          </button>
-                        ))}
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
                         <button
+                          key={`digit-${digit}`}
                           type="button"
-                          onClick={backspaceGuessDigit}
-                          disabled={!roundActive || typeof guessInput !== "number"}
-                          className="tap-press flex items-center justify-center rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
-                          aria-label="Delete"
-                        >
-                          <svg
-                            width="28"
-                            height="28"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M21 5H9.5a2 2 0 0 0-1.4.58L3 10.67a2 2 0 0 0 0 2.83l5.1 5.09a2 2 0 0 0 1.4.58H21a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinejoin="round"
-                            />
-                            <path
-                              d="m15.5 9.5-5 5m0-5 5 5"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => appendGuessDigit(0)}
+                          onClick={() => appendGuessDigit(digit)}
                           disabled={!roundActive}
-                          className="tap-press rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
+                          className="tap-press h-[50px] rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
                         >
-                          0
+                          {digit}
                         </button>
-                        <button
-                          type="button"
-                          onClick={submitGuessFromPad}
-                          disabled={!canSubmitGuess || typeof guessInput !== "number"}
-                          className="tap-press rounded-[var(--radius-card)] border border-emerald-300/35 bg-emerald-500/85 text-xl font-extrabold text-white shadow-sm transition-[transform,filter,background-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-40"
+                      ))}
+                      <button
+                        type="button"
+                        onClick={backspaceGuessDigit}
+                        disabled={!roundActive || typeof guessInput !== "number"}
+                        className="tap-press flex h-[50px] items-center justify-center rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
+                        aria-label="Delete"
+                      >
+                        <svg
+                          width="28"
+                          height="28"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
                         >
-                          ✓
-                        </button>
-                      </div>
+                          <path
+                            d="M21 5H9.5a2 2 0 0 0-1.4.58L3 10.67a2 2 0 0 0 0 2.83l5.1 5.09a2 2 0 0 0 1.4.58H21a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="m15.5 9.5-5 5m0-5 5 5"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => appendGuessDigit(0)}
+                        disabled={!roundActive}
+                        className="tap-press h-[50px] rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
+                      >
+                        0
+                      </button>
+                      <button
+                        type="button"
+                        onClick={submitGuessFromPad}
+                        disabled={!canSubmitGuess || typeof guessInput !== "number"}
+                        className="tap-press h-[50px] rounded-[var(--radius-card)] border border-emerald-300/35 bg-emerald-500/85 text-xl font-extrabold text-white shadow-sm transition-[transform,filter,background-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-40"
+                      >
+                        ✓
+                      </button>
                     </>
                   )}
                 </div>
