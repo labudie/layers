@@ -1511,7 +1511,7 @@ export function DailyGameClient({
           scrollAreaClassName={compactGameplayMode ? "overflow-y-hidden" : ""}
           onRefresh={refreshTodayChallenges}
         >
-        <div className={compactGameplayMode ? "pb-0" : "pb-[120px]"}>
+        <div className={compactGameplayMode ? "h-full pb-0" : "pb-[120px]"}>
         {!gameDataReady && challenges.length > 0 ? (
           <HomeGameSkeleton />
         ) : showNoChallengesHome ? (
@@ -1801,7 +1801,7 @@ export function DailyGameClient({
           </div>
         ) : compactGameplayMode ? (
           <div
-            className="grid min-h-0 flex-1 grid-rows-[44px,minmax(0,1fr),36px,44px,200px] overflow-hidden"
+            className="grid h-full min-h-0 flex-1 grid-rows-[44px,minmax(0,1fr),36px,44px,200px] overflow-hidden"
             style={{ paddingBottom: "max(env(safe-area-inset-bottom), 8px)" }}
           >
             {currentChallenge ? (
@@ -1864,12 +1864,12 @@ export function DailyGameClient({
                   className="relative left-1/2 min-h-0 w-dvw -translate-x-1/2"
                 >
                   <div
-                    className={`challenge-image-frame box-border flex h-full max-h-[45vh] w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] max-[700px]:max-h-[35vh] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                    className={`challenge-image-frame box-border flex h-full max-h-[52vh] w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] max-[700px]:max-h-[38vh] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
                     onClick={() => {
                       if (displayChallengeImageUrl) openImageModal(displayChallengeImageUrl);
                     }}
                   >
-                    <div className="h-full w-full max-h-[45vh] aspect-[479/567] max-[700px]:max-h-[35vh]">
+                    <div className="h-full w-full max-h-[52vh] aspect-[479/567] max-[700px]:max-h-[38vh]">
                       {currentChallenge.image_url ? (
                         <img
                           src={displayChallengeImageUrl ?? ""}
@@ -1894,7 +1894,7 @@ export function DailyGameClient({
                 </div>
 
                 <div
-                  className={`my-[4px] flex h-9 items-center justify-center gap-1.5 ${challengeVisualFadeClassName}`}
+                  className={`my-[4px] flex h-9 items-center justify-center gap-1 ${challengeVisualFadeClassName}`}
                   role="img"
                   aria-label={`Guesses used ${currentGuesses.length} of 6`}
                 >
