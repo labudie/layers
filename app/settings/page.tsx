@@ -453,7 +453,10 @@ export default function SettingsPage() {
                 <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-white/45">
                   Legal
                 </div>
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
+                <div
+                  className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]"
+                  data-no-tap-haptic
+                >
                   <Link
                     href="/terms"
                     className="settings-row-tap tap-press flex min-h-[48px] items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/90 hover:bg-white/5 active:bg-white/[0.07]"

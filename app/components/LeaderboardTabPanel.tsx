@@ -10,7 +10,11 @@ export function LeaderboardTabPanel({
   children: ReactNode;
 }) {
   return (
-    <div className="lb-tab-panel mt-2" data-lb-tab={tab}>
+    <div
+      className="lb-tab-panel mt-2"
+      data-lb-tab={tab}
+      data-no-tap-haptic
+    >
       {children}
     </div>
   );
