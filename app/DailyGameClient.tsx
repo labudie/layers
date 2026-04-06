@@ -1801,7 +1801,7 @@ export function DailyGameClient({
           </div>
         ) : compactGameplayMode ? (
           <div
-            className="grid h-full min-h-0 flex-1 grid-rows-[44px,minmax(0,1fr),36px,44px,200px] overflow-hidden"
+            className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
             style={{ paddingBottom: "max(env(safe-area-inset-bottom), 8px)" }}
           >
             {currentChallenge ? (
@@ -1861,7 +1861,7 @@ export function DailyGameClient({
 
                 <div
                   ref={tutorialImageRef}
-                  className="relative left-1/2 min-h-0 w-dvw -translate-x-1/2"
+                  className="relative left-1/2 flex min-h-0 flex-1 items-center justify-center w-dvw -translate-x-1/2"
                 >
                   <div
                     className={`challenge-image-frame box-border flex h-full max-h-[52vh] w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] max-[700px]:max-h-[38vh] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
@@ -1920,7 +1920,7 @@ export function DailyGameClient({
                   </span>
                 </div>
 
-                <div className="grid h-[200px] min-h-[200px] grid-cols-3 grid-rows-4 gap-[4px] pt-[4px]">
+                <div className="mt-2 grid h-[200px] min-h-[200px] shrink-0 grid-cols-3 grid-rows-4 gap-[4px] pt-[4px]">
                   {currentFinished ? (
                     <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
                       <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
