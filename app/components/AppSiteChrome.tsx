@@ -266,15 +266,15 @@ export function AppSiteChrome({
           aria-label="Open menu"
           aria-expanded={drawerOpen}
           onClick={() => setDrawerOpen(true)}
-          className="tap-press absolute left-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-[rgba(26,10,46,0.75)] text-lg font-semibold text-white shadow-sm transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-white/10 hover:brightness-105 md:left-5"
+          className="tap-press absolute left-4 top-1/2 z-10 flex h-11 min-h-[44px] w-11 min-w-[44px] -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-[rgba(26,10,46,0.75)] text-lg font-semibold text-white shadow-sm transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-white/10 hover:brightness-105 md:left-5"
         >
           ☰
         </button>
         <div className="pointer-events-none max-w-[min(16rem,calc(100%-6.5rem))] truncate text-center text-xl font-extrabold tracking-tight">
           {title}
         </div>
-        <div className="absolute right-4 top-1/2 z-10 flex min-h-10 min-w-10 -translate-y-1/2 items-center justify-end md:right-5">
-          {right ?? <span className="inline-block h-10 w-10 shrink-0" aria-hidden />}
+        <div className="absolute right-4 top-1/2 z-10 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-end md:right-5">
+          {right ?? <span className="inline-block h-11 w-11 shrink-0" aria-hidden />}
         </div>
       </header>
 

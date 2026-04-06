@@ -153,7 +153,7 @@ export default async function LeaderboardPage({
                     return (
                       <tr
                         key={`${row.user_id}-${row.created_at ?? ""}-${i}`}
-                        className="lb-stagger-row border-b border-white/5 last:border-0"
+                        className="lb-stagger-row border-b border-white/5 transition-colors last:border-0 active:bg-white/[0.06]"
                         style={{ "--lb-i": i } as CSSProperties}
                       >
                         <td className="px-4 py-3 font-mono font-semibold text-white/90">
@@ -203,7 +203,7 @@ export default async function LeaderboardPage({
                     return (
                       <tr
                         key={`${row.id}-${i}`}
-                        className="lb-stagger-row border-b border-white/5 last:border-0"
+                        className="lb-stagger-row border-b border-white/5 transition-colors last:border-0 active:bg-white/[0.06]"
                         style={{ "--lb-i": i } as CSSProperties}
                       >
                         <td className="px-4 py-3 font-mono font-semibold text-white/90">
@@ -248,7 +248,7 @@ export default async function LeaderboardPage({
                   return (
                     <tr
                       key={`${row.creator_name ?? "creator"}-${i}`}
-                      className="lb-stagger-row border-b border-white/5 last:border-0"
+                      className="lb-stagger-row border-b border-white/5 transition-colors last:border-0 active:bg-white/[0.06]"
                       style={{ "--lb-i": i } as CSSProperties}
                     >
                       <td className="px-4 py-3 font-mono font-semibold text-white/90">

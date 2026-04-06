@@ -18,6 +18,8 @@
   --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --smooth: cubic-bezier(0.4, 0, 0.2, 1);
   --snappy: cubic-bezier(0.4, 0, 0.6, 1);
+  --radius-card: 12px;
+  --radius-pill: 24px;
 }
 
 @theme inline {
@@ -388,6 +390,7 @@ tbody.leaderboard-stagger tr.lb-stagger-row {
 
 .settings-row-tap:active {
   background-color: rgba(124, 58, 237, 0.22);
+  transform: scale(0.995);
 }
 
 .settings-toggle-track {
@@ -430,6 +433,36 @@ tbody.leaderboard-stagger tr.lb-stagger-row {
   }
 }
 
+@keyframes guess-slot-pop {
+  0% {
+    opacity: 0.88;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.guess-slot-enter {
+  animation: guess-slot-pop 0.42s var(--spring) both;
+}
+
+@keyframes calendar-month-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.calendar-month-enter {
+  animation: calendar-month-fade 0.26s var(--smooth) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-transition-shell {
     animation: none !important;
@@ -441,7 +474,9 @@ tbody.leaderboard-stagger tr.lb-stagger-row {
   [data-drawer-open="true"] .drawer-nav-stagger,
   .guess-chip-anim,
   .guess-chip-anim--wrong,
-  .guess-chip-anim--correct {
+  .guess-chip-anim--correct,
+  .guess-slot-enter,
+  .calendar-month-enter {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
@@ -458,6 +493,10 @@ tbody.leaderboard-stagger tr.lb-stagger-row {
     ):focus-visible,
   textarea:focus-visible,
   select:focus-visible {
+    transform: none !important;
+  }
+
+  .settings-row-tap:active {
     transform: none !important;
   }
 }

@@ -447,6 +447,13 @@ export function DailyGameClient({
   const panStartOffsetRef = useRef({ x: 0, y: 0 });
   const lastTapRef = useRef<{ ts: number; x: number; y: number } | null>(null);
   const perfectDayFeedbackFiredRef = useRef(false);
+  const guessTrackerRef = useRef<{ challengeIdx: number; len: number }>({
+    challengeIdx: -1,
+    len: 0,
+  });
+  const [guessSlotAnimIndex, setGuessSlotAnimIndex] = useState<number | null>(
+    null,
+  );
 
   const challengesRef = useRef(challenges);
   useEffect(() => {
@@ -660,6 +667,26 @@ export function DailyGameClient({
   }, [challenges, currentChallengeIndex]);
 
   const currentGuesses = guessesByIndex[currentChallengeIndex] ?? [];
+  const currentGuessCount = currentGuesses.length;
+
+  useEffect(() => {
+    const r = guessTrackerRef.current;
+    if (r.challengeIdx !== currentChallengeIndex) {
+      r.challengeIdx = currentChallengeIndex;
+      r.len = currentGuessCount;
+      setGuessSlotAnimIndex(null);
+      return;
+    }
+    if (currentGuessCount > r.len) {
+      const idx = currentGuessCount - 1;
+      setGuessSlotAnimIndex(idx);
+      const t = window.setTimeout(() => setGuessSlotAnimIndex(null), 480);
+      r.len = currentGuessCount;
+      return () => window.clearTimeout(t);
+    }
+    r.len = currentGuessCount;
+  }, [currentChallengeIndex, currentGuessCount]);
+
   const currentAnswer = currentChallenge?.layer_count ?? null;
   const challengeMeta = currentChallenge as
     | (Challenge & {
@@ -1536,20 +1563,26 @@ export function DailyGameClient({
             </div>
 
             <div className="mt-12 w-full max-w-md text-left">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-white/45">
-                  Leaderboard · Today
-                </span>
+              <div className="mb-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
                 <Link
                   href="/leaderboard"
-                  className="text-xs font-semibold text-[var(--accent2)] hover:underline"
+                  className="group inline-flex min-h-[44px] min-w-[44px] items-center gap-1 text-xs font-bold uppercase tracking-wider text-white/75 underline decoration-white/30 decoration-1 underline-offset-[6px] transition-colors hover:text-white hover:decoration-[var(--accent2)]"
                 >
-                  Full board →
+                  Leaderboard
+                  <span
+                    className="text-[var(--accent2)] transition-transform group-hover:translate-x-0.5"
+                    aria-hidden
+                  >
+                    →
+                  </span>
                 </Link>
+                <span className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                  · Today
+                </span>
               </div>
-              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/25">
+              <div className="overflow-hidden rounded-[var(--radius-card)] border border-white/10 bg-black/25">
                 {leaderPreview.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-white/45">
+                  <p className="px-4 py-6 text-center text-sm text-white/55">
                     No scores yet — be the first on the board.
                   </p>
                 ) : (
@@ -1568,7 +1601,7 @@ export function DailyGameClient({
                             fallbackDisplay={shortUserIdLabel(row.userId)}
                           />
                         </span>
-                        <span className="shrink-0 tabular-nums text-white/70">
+                        <span className="shrink-0 tabular-nums text-white/80">
                           {row.totalAttempts} attempts
                         </span>
                       </li>
@@ -1778,7 +1811,7 @@ export function DailyGameClient({
                         aria-haspopup="dialog"
                         aria-label="Challenge details"
                         onClick={() => setInfoPopoverOpen((o) => !o)}
-                        className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-base font-semibold leading-none text-white/85 hover:bg-white/10"
+                        className="flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full border border-white/10 bg-white/5 text-base font-semibold leading-none text-white/90 hover:bg-white/10 active:bg-white/[0.12]"
                       >
                         ⓘ
                       </button>
@@ -1820,9 +1853,35 @@ export function DailyGameClient({
                     </div>
                   </div>
 
+                  <div
+                    className={`flex justify-center gap-1.5 py-1 ${challengeVisualFadeClassName}`}
+                    role="img"
+                    aria-label={`Guesses used ${currentGuesses.length} of 6`}
+                  >
+                    {Array.from({ length: 6 }).map((_, i) => {
+                      const g = currentGuesses[i];
+                      let cellClass = "border border-white/35 bg-transparent";
+                      if (g?.verdict === "correct") {
+                        cellClass = "border-transparent bg-emerald-500";
+                      } else if (g?.verdict === "close") {
+                        cellClass = "border-transparent bg-amber-500";
+                      } else if (g?.verdict === "wrong") {
+                        cellClass = "border-transparent bg-red-500";
+                      }
+                      const anim =
+                        guessSlotAnimIndex === i ? "guess-slot-enter" : "";
+                      return (
+                        <div
+                          key={`${currentChallenge.id}-slot-${i}`}
+                          className={`h-6 w-6 shrink-0 rounded-[4px] ${cellClass} ${anim}`}
+                        />
+                      );
+                    })}
+                  </div>
+
                   <div className="flex flex-col gap-3">
                     {failedWithSixGuesses ? (
-                      <div className="rounded-2xl border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] px-4 py-3 text-center shadow-sm">
+                      <div className="rounded-[var(--radius-card)] border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] px-4 py-3 text-center shadow-sm">
                         <div className="text-sm font-semibold text-[rgba(16,185,129,0.9)]">
                           Answer
                         </div>

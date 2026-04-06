@@ -351,8 +351,8 @@ export function AdminChallengeFormClient({
       </div>
 
       <div className="mt-5 space-y-4">
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="rounded-[var(--radius-card)] border border-white/10 bg-black/20 p-4">
+          <div className="mb-1 flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={() =>
@@ -360,12 +360,12 @@ export function AdminChallengeFormClient({
                   (d) => new Date(d.getFullYear(), d.getMonth() - 1, 1)
                 )
               }
-              className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-sm font-semibold text-white/90 hover:bg-white/10"
+              className="inline-flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl font-bold leading-none text-white/95 transition-colors hover:bg-white/10 active:bg-white/[0.14]"
               aria-label="Previous month"
             >
-              ←
+              ‹
             </button>
-            <div className="text-sm font-semibold text-white/85">
+            <div className="min-w-0 flex-1 text-center text-base font-bold tracking-tight text-white/90">
               {calendarMonth.toLocaleDateString("en-US", {
                 month: "long",
                 year: "numeric",
@@ -378,32 +378,45 @@ export function AdminChallengeFormClient({
                   (d) => new Date(d.getFullYear(), d.getMonth() + 1, 1)
                 )
               }
-              className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-sm font-semibold text-white/90 hover:bg-white/10"
+              className="inline-flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl font-bold leading-none text-white/95 transition-colors hover:bg-white/10 active:bg-white/[0.14]"
               aria-label="Next month"
             >
-              →
+              ›
             </button>
           </div>
 
-          <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-white/50">
+          <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] font-semibold uppercase tracking-widest text-white/40">
             {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-              <div key={i}>{d}</div>
+              <div key={i} className="py-2">
+                {d}
+              </div>
             ))}
           </div>
-          <div className="mt-1 grid grid-cols-7 gap-1">
+
+          <div
+            key={`${monthMeta.year}-${monthMeta.month}`}
+            className="calendar-month-enter grid grid-cols-7 gap-2"
+          >
             {monthMeta.cells.map((cell, i) => {
               if (!cell.date || !cell.day) {
-                return <div key={`empty-${i}`} className="h-8" />;
+                return <div key={`empty-${i}`} className="min-h-[56px]" />;
               }
               const count = scheduleCountsState[cell.date] ?? 0;
               const isToday = cell.date === today;
               const isSelected = cell.date === activeDate;
-              const circleClass =
-                count >= 5
-                  ? "bg-emerald-500/90 border-emerald-300/30"
-                  : count >= 1
-                    ? "bg-[linear-gradient(90deg,rgba(245,158,11,0.95)_50%,rgba(0,0,0,0)_50%)] border-amber-300/35"
-                    : "bg-transparent border-white/20";
+
+              let numberClass = "text-white/92";
+              if (isToday) {
+                numberClass =
+                  "bg-[var(--accent)] text-white shadow-[0_2px_10px_rgba(124,58,237,0.45)]";
+                if (isSelected) {
+                  numberClass +=
+                    " ring-2 ring-white/35 ring-offset-2 ring-offset-[rgba(15,5,32,0.98)]";
+                }
+              } else if (isSelected) {
+                numberClass =
+                  "bg-transparent text-white ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[rgba(15,5,32,0.98)]";
+              }
 
               return (
                 <button
@@ -415,29 +428,42 @@ export function AdminChallengeFormClient({
                     setBatchStartPosition(1);
                     setInspectChallenge(null);
                   }}
-                  className={`relative h-8 rounded-md text-xs transition ${
-                    isSelected ? "bg-[var(--accent)]/25" : "hover:bg-white/5"
+                  className={`flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-[var(--radius-card)] px-0.5 py-1.5 transition-colors active:bg-white/[0.1] ${
+                    isSelected && !isToday
+                      ? "bg-[var(--accent)]/15"
+                      : "hover:bg-white/[0.06]"
                   }`}
                 >
                   <span
-                    className={`absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border ${circleClass} ${
-                      isToday ? "ring-2 ring-[var(--accent)]" : ""
-                    }`}
-                  />
-                  <span className="relative z-10 font-semibold text-white">
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-[color,background-color,box-shadow] ${numberClass}`}
+                  >
                     {cell.day}
+                  </span>
+                  <span className="flex h-2 w-full items-center justify-center">
+                    {count >= 5 ? (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.55)]"
+                        aria-hidden
+                      />
+                    ) : count >= 1 ? (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]"
+                        aria-hidden
+                      />
+                    ) : null}
                   </span>
                 </button>
               );
             })}
           </div>
-          <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-white/60">
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/90" />
-              5 scheduled
+
+          <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-white/55">
+            <span className="inline-flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              5 challenges scheduled
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-full bg-[linear-gradient(90deg,rgba(245,158,11,0.95)_50%,rgba(0,0,0,0)_50%)] border border-amber-300/35" />
+            <span className="inline-flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
               1-4 scheduled
             </span>
           </div>

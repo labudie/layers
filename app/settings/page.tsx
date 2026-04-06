@@ -456,14 +456,14 @@ export default function SettingsPage() {
                 <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
                   <Link
                     href="/terms"
-                    className="settings-row-tap tap-press flex items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/90 hover:bg-white/5"
+                    className="settings-row-tap tap-press flex min-h-[48px] items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/90 hover:bg-white/5 active:bg-white/[0.07]"
                   >
                     <span>Terms &amp; Conditions</span>
                     <span className="text-white/40">›</span>
                   </Link>
                   <Link
                     href="/privacy"
-                    className="settings-row-tap tap-press flex items-center justify-between px-4 py-3 text-sm text-white/90 hover:bg-white/5"
+                    className="settings-row-tap tap-press flex min-h-[48px] items-center justify-between px-4 py-3 text-sm text-white/90 hover:bg-white/5 active:bg-white/[0.07]"
                   >
                     <span>Privacy Policy</span>
                     <span className="text-white/40">›</span>
@@ -479,7 +479,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={comingSoon}
-                    className="settings-row-tap flex w-full items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/90 hover:bg-white/5"
+                    className="settings-row-tap flex min-h-[48px] w-full items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/90 hover:bg-white/5 active:bg-white/[0.07]"
                   >
                     <span>Send feedback</span>
                     <span className="text-white/40">→</span>
@@ -487,7 +487,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={comingSoon}
-                    className="settings-row-tap flex w-full items-center justify-between px-4 py-3 text-sm text-white/90 hover:bg-white/5"
+                    className="settings-row-tap flex min-h-[48px] w-full items-center justify-between px-4 py-3 text-sm text-white/90 hover:bg-white/5 active:bg-white/[0.07]"
                   >
                     <span>Rate the app</span>
                     <span className="text-white/40">→</span>

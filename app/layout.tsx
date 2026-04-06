@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { PageTransition } from "@/app/components/PageTransition";
+import { TapHaptics } from "@/app/components/TapHaptics";
 import { PHProvider } from "@/app/providers";
 import PostHogPageView from "@/app/posthog-pageview";
 
@@ -56,6 +57,7 @@ export default function RootLayout({
         {/* Per-page chrome: `AppSiteChrome` (hamburger left, title center). Home uses it via `DailyGameClient`. */}
         <PHProvider>
           <div className="flex min-h-0 flex-1 flex-col">
+            <TapHaptics />
             <Suspense fallback={null}>
               <PostHogPageView />
             </Suspense>
