@@ -32,7 +32,7 @@ import {
   CreatorProfileLink,
   ProfileUsernameLink,
 } from "@/lib/profile-handle-link";
-import { APP_LOGO_SRC } from "@/lib/app-logo";
+import { APP_LOGO_INGAME_SRC } from "@/lib/app-logo";
 import { SITE_SHARE_URL } from "@/lib/site-url";
 import { stripAtHandle } from "@/lib/username-display";
 
@@ -1473,7 +1473,7 @@ export function DailyGameClient({
         ) : showNoChallengesHome ? (
           <div className="flex flex-1 flex-col items-center px-2 py-10 text-center">
             <img
-              src={APP_LOGO_SRC}
+              src={APP_LOGO_INGAME_SRC}
               alt="Layers"
               className="h-14 w-auto max-w-[min(280px,85vw)] object-contain drop-shadow-[0_0_40px_rgba(124,58,237,0.45)]"
             />
@@ -1501,7 +1501,7 @@ export function DailyGameClient({
         ) : showDailyHome ? (
           <div className="flex flex-1 flex-col items-center px-2 pb-10 pt-8 text-center">
             <img
-              src={APP_LOGO_SRC}
+              src={APP_LOGO_INGAME_SRC}
               alt="Layers"
               className="h-14 w-auto max-w-[min(280px,85vw)] object-contain drop-shadow-[0_0_48px_rgba(139,92,246,0.5)]"
             />
