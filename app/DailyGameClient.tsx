@@ -104,6 +104,16 @@ function formatFriendlyEasternToday() {
   });
 }
 
+/** Long month + day + year in US Eastern (e.g. "March 27, 2026"). */
+function formatLeaderboardPreviewDateEastern() {
+  return new Date().toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "America/New_York",
+  });
+}
+
 function formatCheckBackPhrase(seconds: number) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -1563,22 +1573,16 @@ export function DailyGameClient({
             </div>
 
             <div className="mt-12 w-full max-w-md text-left">
-              <div className="mb-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
+              <div className="mb-3">
                 <Link
                   href="/leaderboard"
-                  className="group inline-flex min-h-[44px] min-w-[44px] items-center gap-1 text-xs font-bold uppercase tracking-wider text-white/75 underline decoration-white/30 decoration-1 underline-offset-[6px] transition-colors hover:text-white hover:decoration-[var(--accent2)]"
+                  className="inline-flex min-h-[44px] items-center text-xs font-bold uppercase tracking-wider text-[var(--accent2)] transition-opacity hover:opacity-90 active:opacity-80"
                 >
                   Leaderboard
-                  <span
-                    className="text-[var(--accent2)] transition-transform group-hover:translate-x-0.5"
-                    aria-hidden
-                  >
-                    →
-                  </span>
                 </Link>
-                <span className="text-xs font-semibold uppercase tracking-wider text-white/50">
-                  · Today
-                </span>
+                <p className="mt-0.5 text-xs text-white/45">
+                  {formatLeaderboardPreviewDateEastern()}
+                </p>
               </div>
               <div className="overflow-hidden rounded-[var(--radius-card)] border border-white/10 bg-black/25">
                 {leaderPreview.length === 0 ? (
