@@ -1509,9 +1509,18 @@ export function DailyGameClient({
               : ""
           }`}
           scrollAreaClassName={compactGameplayMode ? "overflow-y-hidden" : ""}
+          contentClassName={
+            compactGameplayMode ? "flex h-full min-h-full min-w-0 flex-col" : ""
+          }
           onRefresh={refreshTodayChallenges}
         >
-        <div className={compactGameplayMode ? "h-full pb-0" : "pb-[120px]"}>
+        <div
+          className={
+            compactGameplayMode
+              ? "flex min-h-0 min-w-0 flex-1 flex-col pb-0"
+              : "pb-[120px]"
+          }
+        >
         {!gameDataReady && challenges.length > 0 ? (
           <HomeGameSkeleton />
         ) : showNoChallengesHome ? (
@@ -1801,13 +1810,13 @@ export function DailyGameClient({
           </div>
         ) : compactGameplayMode ? (
           <div
-            className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
             style={{ paddingBottom: "max(env(safe-area-inset-bottom), 8px)" }}
           >
             {currentChallenge ? (
               <>
                 <div
-                  className={`flex h-11 min-w-0 items-center justify-between gap-2 ${challengeVisualFadeClassName}`}
+                  className={`flex h-11 shrink-0 min-w-0 items-center justify-between gap-2 ${challengeVisualFadeClassName}`}
                 >
                   <div className="min-w-0 truncate text-sm font-semibold text-white">
                     {currentChallenge.title ?? "Untitled"}
@@ -1861,15 +1870,15 @@ export function DailyGameClient({
 
                 <div
                   ref={tutorialImageRef}
-                  className="relative left-1/2 flex min-h-0 flex-1 items-center justify-center w-dvw -translate-x-1/2"
+                  className="relative left-1/2 flex min-h-0 min-w-0 flex-1 items-center justify-center w-dvw -translate-x-1/2"
                 >
                   <div
-                    className={`challenge-image-frame box-border flex h-full max-h-[52vh] w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] max-[700px]:max-h-[38vh] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                    className={`challenge-image-frame box-border flex h-full min-h-0 max-h-full w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
                     onClick={() => {
                       if (displayChallengeImageUrl) openImageModal(displayChallengeImageUrl);
                     }}
                   >
-                    <div className="h-full w-full max-h-[52vh] aspect-[479/567] max-[700px]:max-h-[38vh]">
+                    <div className="flex h-full min-h-0 w-full max-w-full items-center justify-center">
                       {currentChallenge.image_url ? (
                         <img
                           src={displayChallengeImageUrl ?? ""}
@@ -1893,34 +1902,35 @@ export function DailyGameClient({
                   </div>
                 </div>
 
-                <div
-                  className={`my-[4px] flex h-9 items-center justify-center gap-1 ${challengeVisualFadeClassName}`}
-                  role="img"
-                  aria-label={`Guesses used ${currentGuesses.length} of 6`}
-                >
-                  {Array.from({ length: 6 }).map((_, i) => {
-                    const g = currentGuesses[i];
-                    let cellClass = "border border-white/35 bg-transparent";
-                    if (g?.verdict === "correct") cellClass = "border-transparent bg-emerald-500";
-                    else if (g?.verdict === "close") cellClass = "border-transparent bg-amber-500";
-                    else if (g?.verdict === "wrong") cellClass = "border-transparent bg-red-500";
-                    const anim = guessSlotAnimIndex === i ? "guess-slot-enter" : "";
-                    return (
-                      <div
-                        key={`${currentChallenge.id}-slot-${i}`}
-                        className={`h-5 w-5 shrink-0 rounded-[4px] ${cellClass} ${anim}`}
-                      />
-                    );
-                  })}
-                </div>
+                <div className="mt-auto flex w-full shrink-0 flex-col gap-2">
+                  <div
+                    className={`flex h-9 items-center justify-center gap-1 ${challengeVisualFadeClassName}`}
+                    role="img"
+                    aria-label={`Guesses used ${currentGuesses.length} of 6`}
+                  >
+                    {Array.from({ length: 6 }).map((_, i) => {
+                      const g = currentGuesses[i];
+                      let cellClass = "border border-white/35 bg-transparent";
+                      if (g?.verdict === "correct") cellClass = "border-transparent bg-emerald-500";
+                      else if (g?.verdict === "close") cellClass = "border-transparent bg-amber-500";
+                      else if (g?.verdict === "wrong") cellClass = "border-transparent bg-red-500";
+                      const anim = guessSlotAnimIndex === i ? "guess-slot-enter" : "";
+                      return (
+                        <div
+                          key={`${currentChallenge.id}-slot-${i}`}
+                          className={`h-5 w-5 shrink-0 rounded-[4px] ${cellClass} ${anim}`}
+                        />
+                      );
+                    })}
+                  </div>
 
-                <div className="flex h-11 items-center justify-center rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.45)] text-center">
-                  <span className="font-mono text-[36px] font-extrabold leading-none tracking-[0.06em] text-white">
-                    {typeof guessInput === "number" ? guessInput : "—"}
-                  </span>
-                </div>
+                  <div className="flex h-11 items-center justify-center rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.45)] text-center">
+                    <span className="font-mono text-[36px] font-extrabold leading-none tracking-[0.06em] text-white">
+                      {typeof guessInput === "number" ? guessInput : "—"}
+                    </span>
+                  </div>
 
-                <div className="mt-2 grid h-[200px] min-h-[200px] shrink-0 grid-cols-3 grid-rows-4 gap-[4px] pt-[4px]">
+                  <div className="grid h-[200px] min-h-[200px] shrink-0 grid-cols-3 grid-rows-4 gap-[4px] pt-1">
                   {currentFinished ? (
                     <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
                       <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
@@ -2003,6 +2013,7 @@ export function DailyGameClient({
                       </button>
                     </>
                   )}
+                  </div>
                 </div>
               </>
             ) : null}

@@ -72,6 +72,7 @@ export function PullToRefresh({
   children,
   className = "",
   scrollAreaClassName = "",
+  contentClassName = "",
   disabled = false,
 }: {
   onRefresh: () => Promise<void>;
@@ -79,6 +80,8 @@ export function PullToRefresh({
   className?: string;
   /** Merged onto the scrollable div (e.g. min-h-dvh for settings). */
   scrollAreaClassName?: string;
+  /** Merged onto the inner content wrapper (e.g. h-full flex flex-col for one-screen layouts). */
+  contentClassName?: string;
   disabled?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -275,7 +278,7 @@ export function PullToRefresh({
         style={{ WebkitOverflowScrolling: "touch" } as CSSProperties}
       >
         <div
-          className="min-h-full min-w-0 max-w-full"
+          className={`min-h-full min-w-0 max-w-full ${contentClassName}`.trim()}
           style={
             {
               transform: `translateY(${pull}px)`,
