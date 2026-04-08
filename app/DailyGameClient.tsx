@@ -1815,7 +1815,7 @@ export function DailyGameClient({
         ) : compactGameplayMode ? (
           <div
             className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-            style={{ paddingBottom: "max(env(safe-area-inset-bottom), 8px)" }}
+            style={{ paddingBottom: "max(env(safe-area-inset-bottom), 16px)" }}
           >
             {currentChallenge ? (
               <>

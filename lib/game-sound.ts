@@ -249,11 +249,41 @@ function playDtmfTone(
 export function playDialPadTone(key: string) {
   if (!readGameSoundEnabled()) return;
   withAudio((ctx, now) => {
-    const resolvedKey = key === "delete" ? "*" : key === "submit" ? "#" : key;
-    const pair = DTMF_FREQS[resolvedKey];
-    if (pair) {
-      // iPhone phone keypad style: short, clean DTMF dual-tone
-      playDtmfTone(ctx, now, pair[0], pair[1], 0.075, 0.085);
+    // iOS keyboard-like tap: very short bright click with tiny noise tail.
+    const osc = ctx.createOscillator();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(1750, now);
+    osc.frequency.exponentialRampToValueAtTime(820, now + 0.02);
+
+    const toneGain = ctx.createGain();
+    toneGain.gain.setValueAtTime(0.0001, now);
+    toneGain.gain.exponentialRampToValueAtTime(0.04, now + 0.0035);
+    toneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.028);
+    osc.connect(toneGain);
+    toneGain.connect(ctx.destination);
+
+    const noiseLen = Math.floor(ctx.sampleRate * 0.03);
+    const noiseBuffer = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / noiseLen);
     }
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuffer;
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = "highpass";
+    noiseFilter.frequency.setValueAtTime(1200, now);
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.0001, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.011, now + 0.0015);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.02);
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.032);
+    noise.start(now);
+    noise.stop(now + 0.025);
   });
 }
