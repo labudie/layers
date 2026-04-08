@@ -14,18 +14,31 @@ import {
   ProfileUsernameLink,
 } from "@/lib/profile-handle-link";
 
-/** Row from `leaderboard_daily_results` RPC (results ⋈ profiles ⋈ challenges). */
+type DailyProfileEmbed = {
+  username: string | null;
+  avatar_url: string | null;
+};
+
+type DailyChallengeEmbed = {
+  title: string | null;
+  active_date: string | null;
+};
+
+/** Normalized `results` row with embedded profile + challenge (Supabase may return a 1-item array per FK). */
 type DailyLeaderboardRow = {
+  id: string | number;
   user_id: string;
-  challenge_id: string;
   solved: boolean | null;
   attempts_used: number | null;
   created_at: string | null;
-  username: string | null;
-  avatar_url: string | null;
-  challenge_title: string | null;
-  challenge_active_date: string | null;
+  profiles: DailyProfileEmbed | null;
+  challenges: DailyChallengeEmbed | null;
 };
+
+function unwrapOne<T>(v: T | T[] | null | undefined): T | null {
+  if (v == null) return null;
+  return Array.isArray(v) ? (v[0] ?? null) : v;
+}
 
 type ProfileRow = {
   id: string;
@@ -64,16 +77,47 @@ export default async function LeaderboardPage({
     timeZone: "America/New_York",
   });
 
-  const { data: dailyRpcData, error: dailyRpcError } = await supabase.rpc(
-    "leaderboard_daily_results",
-    { p_active_date: today },
-  );
+  const { data: dailyRowsRaw, error: dailyError } = await supabase
+    .from("results")
+    .select(
+      `
+      id,
+      user_id,
+      solved,
+      attempts_used,
+      created_at,
+      profiles (username, avatar_url),
+      challenges (title, active_date)
+    `,
+    )
+    .eq("challenges.active_date", today)
+    .order("attempts_used", { ascending: true })
+    .order("created_at", { ascending: true });
 
-  if (dailyRpcError) {
-    console.error("[leaderboard] leaderboard_daily_results", dailyRpcError);
+  if (dailyError) {
+    console.error("[leaderboard] daily results", dailyError);
   }
 
-  const dailyRows = (dailyRpcData ?? []) as DailyLeaderboardRow[];
+  const dailyRows: DailyLeaderboardRow[] = (dailyRowsRaw ?? []).map((r) => {
+    const row = r as {
+      id: string | number;
+      user_id: string;
+      solved: boolean | null;
+      attempts_used: number | null;
+      created_at: string | null;
+      profiles: DailyProfileEmbed | DailyProfileEmbed[] | null;
+      challenges: DailyChallengeEmbed | DailyChallengeEmbed[] | null;
+    };
+    return {
+      id: row.id,
+      user_id: row.user_id,
+      solved: row.solved,
+      attempts_used: row.attempts_used,
+      created_at: row.created_at,
+      profiles: unwrapOne(row.profiles),
+      challenges: unwrapOne(row.challenges),
+    };
+  });
   const empty = !dailyRows.length;
   const leaderboardDay = today;
 
@@ -122,9 +166,13 @@ export default async function LeaderboardPage({
                   </tr>
                 </thead>
                 <tbody className="leaderboard-stagger">
-                  {dailyRows.map((row, i) => (
+                  {dailyRows.map((row, i) => {
+                    const username = row.profiles?.username ?? null;
+                    const avatarUrl = row.profiles?.avatar_url ?? null;
+                    const challengeTitle = row.challenges?.title ?? "Untitled";
+                    return (
                     <tr
-                      key={`${row.user_id}-${row.challenge_id}-${row.created_at ?? ""}-${i}`}
+                      key={`${row.id}-${row.created_at ?? ""}-${i}`}
                       className="lb-stagger-row border-b border-white/5 transition-colors last:border-0 active:bg-white/[0.06]"
                       style={{ "--lb-i": i } as CSSProperties}
                     >
@@ -133,24 +181,24 @@ export default async function LeaderboardPage({
                       </td>
                       <td className="px-4 py-3 text-sm text-white/90">
                         <div className="flex min-w-0 items-center gap-2">
-                          {row.avatar_url ? (
+                          {avatarUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={row.avatar_url}
+                              src={avatarUrl}
                               alt=""
                               className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-white/15"
                             />
                           ) : null}
                           <span className="min-w-0">
                             <ProfileUsernameLink
-                              username={row.username ?? undefined}
+                              username={username ?? undefined}
                               fallbackDisplay={shortUsername(row.user_id)}
                             />
                           </span>
                         </div>
                       </td>
                       <td className="max-w-[10rem] truncate px-4 py-3 text-white/80">
-                        {row.challenge_title ?? "Untitled"}
+                        {challengeTitle}
                       </td>
                       <td className="px-4 py-3 text-white/80">
                         {row.solved === true
@@ -163,7 +211,8 @@ export default async function LeaderboardPage({
                         {row.attempts_used ?? "—"}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
