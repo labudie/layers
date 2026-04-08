@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { usePostHog } from "posthog-js/react";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
+import { GameplayProfileSheet } from "@/app/components/GameplayProfileSheet";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import type { Challenge } from "./page";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
@@ -29,8 +30,10 @@ import {
   playWrongGuessSound,
   readGameSoundEnabled,
 } from "@/lib/game-sound";
+import { AtHandle } from "@/lib/AtHandle";
 import {
   CreatorProfileLink,
+  profileHandleLinkClass,
   ProfileUsernameLink,
 } from "@/lib/profile-handle-link";
 import { APP_LOGO_INGAME_SRC } from "@/lib/app-logo";
@@ -43,6 +46,8 @@ type GuessRow = {
   direction: "high" | "low" | "equal";
   closeness: number;
 };
+
+const MAX_GUESSES = 3;
 
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
@@ -248,7 +253,10 @@ function isChallengeFinished(
   guesses: GuessRow[]
 ) {
   if (!answer || answer <= 0) return false;
-  return guesses.some((g) => g.verdict === "correct") || guesses.length >= 6;
+  return (
+    guesses.some((g) => g.verdict === "correct") ||
+    guesses.length >= MAX_GUESSES
+  );
 }
 
 function canvasSeedForChallenge(ch: Challenge): number {
@@ -265,6 +273,26 @@ function canvasSeedForChallenge(ch: Challenge): number {
 
 function creatorUsernameKey(raw: string | null | undefined) {
   return stripAtHandle(raw ?? "").trim().toLowerCase();
+}
+
+function GameplayCreatorProfileLink({
+  raw,
+  onOpenProfile,
+}: {
+  raw: string | null | undefined;
+  onOpenProfile: (handle: string) => void;
+}) {
+  const b = stripAtHandle(raw ?? "");
+  if (!b.length) return "—";
+  return (
+    <button
+      type="button"
+      className={`${profileHandleLinkClass} cursor-pointer border-none bg-transparent p-0 font-inherit`}
+      onClick={() => onOpenProfile(b)}
+    >
+      <AtHandle>@{b}</AtHandle>
+    </button>
+  );
 }
 
 function HomeGameSkeleton() {
@@ -418,13 +446,16 @@ export function DailyGameClient({
 
   /** After a correct submit, brief hold before auto-advance (no "Next" click). */
   const [pendingAutoAdvance, setPendingAutoAdvance] = useState(false);
-  /** After a failed round (6 guesses), auto-advance after short reveal delay. */
+  /** After a failed round (max guesses), auto-advance after short reveal delay. */
   const [pendingFailedAutoAdvance, setPendingFailedAutoAdvance] = useState(false);
   /** Opacity fade on title, attempt rows, input — main challenge image uses its own load fade. */
   const [challengeTransitioning, setChallengeTransitioning] = useState(false);
   /** Hydration-safe: dynamic transition classes only after mount. */
   const [mounted, setMounted] = useState(false);
   const [infoPopoverOpen, setInfoPopoverOpen] = useState(false);
+  const [profilePreviewHandle, setProfilePreviewHandle] = useState<
+    string | null
+  >(null);
   const infoButtonRef = useRef<HTMLButtonElement | null>(null);
   const infoPopoverRef = useRef<HTMLDivElement | null>(null);
   const guessInputRef = useRef<HTMLInputElement | null>(null);
@@ -715,8 +746,10 @@ export function DailyGameClient({
   );
 
   const solvedWithCorrect = currentGuesses.some((g) => g.verdict === "correct");
-  const failedWithSixGuesses =
-    currentFinished && !solvedWithCorrect && currentGuesses.length >= 6;
+  const failedWithMaxGuesses =
+    currentFinished &&
+    !solvedWithCorrect &&
+    currentGuesses.length >= MAX_GUESSES;
 
   /** Current puzzle round is playable (input may be used; submit needs auth). */
   const roundActive = Boolean(
@@ -795,7 +828,7 @@ export function DailyGameClient({
           const meta = verdictForGuess(v, answer);
           return { value: v, ...meta };
         });
-        matrix.push(restored.slice(0, 6));
+        matrix.push(restored.slice(0, MAX_GUESSES));
       }
 
       if (cancelled) return;
@@ -1191,7 +1224,7 @@ export function DailyGameClient({
   );
 
   useEffect(() => {
-    if (!failedWithSixGuesses || showSummary) return;
+    if (!failedWithMaxGuesses || showSummary) return;
     if (autoAdvanceTimeoutRef.current != null) {
       window.clearTimeout(autoAdvanceTimeoutRef.current);
       autoAdvanceTimeoutRef.current = null;
@@ -1212,7 +1245,7 @@ export function DailyGameClient({
       setPendingFailedAutoAdvance(false);
     };
   }, [
-    failedWithSixGuesses,
+    failedWithMaxGuesses,
     showSummary,
     currentChallengeIndex,
     total,
@@ -1251,7 +1284,7 @@ export function DailyGameClient({
     });
 
     if (
-      (verdict === "correct" || attemptNumber >= 6) &&
+      (verdict === "correct" || attemptNumber >= MAX_GUESSES) &&
       !completedChallengeIdsRef.current.has(currentChallenge.id)
     ) {
       completedChallengeIdsRef.current.add(currentChallenge.id);
@@ -1264,7 +1297,7 @@ export function DailyGameClient({
 
     setGuessesByIndex((prev) => {
       const next = prev.map((arr, i) =>
-        i === idx ? [...arr, nextRow].slice(0, 6) : arr
+        i === idx ? [...arr, nextRow].slice(0, MAX_GUESSES) : arr
       );
       return next;
     });
@@ -1480,6 +1513,55 @@ export function DailyGameClient({
     return Math.hypot(dx, dy);
   }, []);
 
+  const guessTrackerHeaderRow = useMemo(() => {
+    if (
+      total === 0 ||
+      showSummary ||
+      !gameDataReady ||
+      showNoChallengesHome ||
+      !currentChallenge ||
+      modalImageUrl
+    ) {
+      return null;
+    }
+    return (
+      <div
+        className={`flex min-h-[36px] items-center justify-center gap-2 py-1.5 ${challengeVisualFadeClassName}`}
+        role="img"
+        aria-label={`Guesses used ${currentGuesses.length} of ${MAX_GUESSES}`}
+      >
+        {Array.from({ length: MAX_GUESSES }).map((_, i) => {
+          const g = currentGuesses[i];
+          let cellClass = "border border-white/35 bg-transparent";
+          if (g?.verdict === "correct") {
+            cellClass = "border-transparent bg-emerald-500";
+          } else if (g?.verdict === "close") {
+            cellClass = "border-transparent bg-amber-500";
+          } else if (g?.verdict === "wrong") {
+            cellClass = "border-transparent bg-red-500";
+          }
+          const anim = guessSlotAnimIndex === i ? "guess-slot-enter" : "";
+          return (
+            <div
+              key={`${currentChallenge.id}-hdr-slot-${i}`}
+              className={`h-5 w-5 shrink-0 rounded-[4px] ${cellClass} ${anim}`}
+            />
+          );
+        })}
+      </div>
+    );
+  }, [
+    total,
+    showSummary,
+    gameDataReady,
+    showNoChallengesHome,
+    currentChallenge,
+    modalImageUrl,
+    currentGuesses,
+    guessSlotAnimIndex,
+    challengeVisualFadeClassName,
+  ]);
+
   return (
     <AppSiteChrome
       title="Layers"
@@ -1491,22 +1573,29 @@ export function DailyGameClient({
         ) : undefined
       }
       belowHeader={
-        total > 0 && !showSummary && gameDataReady && !compactGameplayMode ? (
-          <div className="flex shrink-0 items-center justify-center px-4 pt-2 md:px-5">
-            <div className="rounded-full border border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.1)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-sm">
-              <span className="text-white/70">Next challenge </span>
-              <span className="font-mono text-base font-bold text-[var(--text)]">
-                {countdownText ?? "--:--:--"}
-              </span>
+        <>
+          {guessTrackerHeaderRow ? (
+            <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-1 pt-1 md:px-5">
+              {guessTrackerHeaderRow}
             </div>
-          </div>
-        ) : null
+          ) : null}
+          {total > 0 && !showSummary && gameDataReady && !compactGameplayMode ? (
+            <div className="flex shrink-0 items-center justify-center px-4 pb-2 pt-1 md:px-5">
+              <div className="rounded-full border border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.1)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-sm">
+                <span className="text-white/70">Next challenge </span>
+                <span className="font-mono text-base font-bold text-[var(--text)]">
+                  {countdownText ?? "--:--:--"}
+                </span>
+              </div>
+            </div>
+          ) : null}
+        </>
       }
       className="h-dvh min-h-0 min-w-0 overflow-x-hidden overflow-y-hidden"
     >
       <div className="relative flex min-h-0 flex-1 flex-col">
         <PullToRefresh
-          disabled={Boolean(modalImageUrl)}
+          disabled={Boolean(modalImageUrl) || profilePreviewHandle != null}
           className={`mx-auto flex w-full min-w-0 max-w-3xl flex-1 flex-col px-4 md:px-5 ${
             showDailyHome || showNoChallengesHome
               ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#06020f_100%)]"
@@ -1779,7 +1868,8 @@ export function DailyGameClient({
                               {ans ?? "—"}
                             </span>
                             {" · "}
-                            {solved ? "Solved" : "Not solved"} · {g.length}/6
+                            {solved ? "Solved" : "Not solved"} · {g.length}/
+                            {MAX_GUESSES}
                             attempts
                           </div>
                           {emojiRow ? (
@@ -1864,7 +1954,13 @@ export function DailyGameClient({
                                 Creator
                               </span>
                               <span className="min-w-0 text-right text-sm text-white/90">
-                                <CreatorProfileLink raw={currentChallenge.creator_name} />
+                                <GameplayCreatorProfileLink
+                                  raw={currentChallenge.creator_name}
+                                  onOpenProfile={(h) => {
+                                    setInfoPopoverOpen(false);
+                                    setProfilePreviewHandle(h);
+                                  }}
+                                />
                               </span>
                             </div>
                             <div className="flex items-start justify-between gap-3 rounded-lg bg-white/[0.04] px-3 py-2">
@@ -1894,6 +1990,7 @@ export function DailyGameClient({
                   ref={tutorialImageRef}
                   className="relative left-1/2 flex min-h-0 min-w-0 flex-1 items-center justify-center w-dvw -translate-x-1/2"
                 >
+                  <div className="mx-auto flex h-full min-h-0 w-[90%] max-w-full items-center justify-center">
                   <div
                     className={`challenge-image-frame box-border flex h-full min-h-0 max-h-full w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
                     onClick={() => {
@@ -1922,37 +2019,17 @@ export function DailyGameClient({
                       )}
                     </div>
                   </div>
+                  </div>
                 </div>
 
-                <div className="mt-auto flex w-full shrink-0 flex-col gap-2 px-1">
-                  <div
-                    className={`flex h-9 items-center justify-center gap-1 ${challengeVisualFadeClassName}`}
-                    role="img"
-                    aria-label={`Guesses used ${currentGuesses.length} of 6`}
-                  >
-                    {Array.from({ length: 6 }).map((_, i) => {
-                      const g = currentGuesses[i];
-                      let cellClass = "border border-white/35 bg-transparent";
-                      if (g?.verdict === "correct") cellClass = "border-transparent bg-emerald-500";
-                      else if (g?.verdict === "close") cellClass = "border-transparent bg-amber-500";
-                      else if (g?.verdict === "wrong") cellClass = "border-transparent bg-red-500";
-                      const anim = guessSlotAnimIndex === i ? "guess-slot-enter" : "";
-                      return (
-                        <div
-                          key={`${currentChallenge.id}-slot-${i}`}
-                          className={`h-5 w-5 shrink-0 rounded-[4px] ${cellClass} ${anim}`}
-                        />
-                      );
-                    })}
-                  </div>
-
+                <div className="mt-auto flex w-full shrink-0 flex-col gap-0.5 px-1">
                   <div className="flex h-11 items-center justify-center rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.45)] text-center">
                     <span className="font-mono text-[36px] font-extrabold leading-none tracking-[0.06em] text-white">
                       {typeof guessInput === "number" ? guessInput : "—"}
                     </span>
                   </div>
 
-                  <div className="grid h-[180px] min-h-[180px] shrink-0 grid-cols-3 grid-rows-4 gap-[4px] pt-1">
+                  <div className="grid h-[180px] min-h-[180px] shrink-0 grid-cols-3 grid-rows-4 gap-[4px] pt-0.5">
                   {currentFinished ? (
                     <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
                       <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
@@ -2042,13 +2119,14 @@ export function DailyGameClient({
           </div>
         ) : (
           <>
-            <div className="mt-3 flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+            <div className="mt-3 flex min-h-0 min-w-0 flex-1 flex-col gap-2">
               {currentChallenge && (
                 <>
                   <div
                     ref={tutorialImageRef}
                     className="relative w-full max-w-full"
                   >
+                    <div className="mx-auto w-[90%] max-w-full">
                     {/* Border + feedback animation live on outer (overflow visible) so red/green
                         strokes are not clipped; inner clips only the bitmap to rounded rect. */}
                     <div
@@ -2082,6 +2160,7 @@ export function DailyGameClient({
                           />
                         )}
                       </div>
+                    </div>
                     </div>
                   </div>
 
@@ -2129,7 +2208,13 @@ export function DailyGameClient({
                                 Creator
                               </span>
                               <span className="min-w-0 text-right text-sm text-white/90">
-                                <CreatorProfileLink raw={currentChallenge.creator_name} />
+                                <GameplayCreatorProfileLink
+                                  raw={currentChallenge.creator_name}
+                                  onOpenProfile={(h) => {
+                                    setInfoPopoverOpen(false);
+                                    setProfilePreviewHandle(h);
+                                  }}
+                                />
                               </span>
                             </div>
                             <div className="flex items-start justify-between gap-3 rounded-lg bg-white/[0.04] px-3 py-2">
@@ -2154,34 +2239,8 @@ export function DailyGameClient({
                     </div>
                   </div>
 
-                  <div
-                    className={`mb-2 flex justify-center gap-1.5 py-1 ${challengeVisualFadeClassName}`}
-                    role="img"
-                    aria-label={`Guesses used ${currentGuesses.length} of 6`}
-                  >
-                    {Array.from({ length: 6 }).map((_, i) => {
-                      const g = currentGuesses[i];
-                      let cellClass = "border border-white/35 bg-transparent";
-                      if (g?.verdict === "correct") {
-                        cellClass = "border-transparent bg-emerald-500";
-                      } else if (g?.verdict === "close") {
-                        cellClass = "border-transparent bg-amber-500";
-                      } else if (g?.verdict === "wrong") {
-                        cellClass = "border-transparent bg-red-500";
-                      }
-                      const anim =
-                        guessSlotAnimIndex === i ? "guess-slot-enter" : "";
-                      return (
-                        <div
-                          key={`${currentChallenge.id}-slot-${i}`}
-                          className={`h-6 w-6 shrink-0 rounded-[4px] ${cellClass} ${anim}`}
-                        />
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex min-w-0 flex-col gap-3">
-                    {failedWithSixGuesses ? (
+                  <div className="flex min-w-0 flex-col gap-2">
+                    {failedWithMaxGuesses ? (
                       <div className="rounded-[var(--radius-card)] border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] px-4 py-3 text-center shadow-sm">
                         <div className="text-sm font-semibold text-[rgba(16,185,129,0.9)]">
                           Answer
@@ -2227,7 +2286,7 @@ export function DailyGameClient({
                       </div>
                     ) : null}
 
-                    {failedWithSixGuesses ? (
+                    {failedWithMaxGuesses ? (
                       !isLastChallenge ? (
                         <button
                           type="button"
@@ -2297,14 +2356,14 @@ export function DailyGameClient({
                         ) : null}
                       </>
                     )}
-                    {failedWithSixGuesses && pendingFailedAutoAdvance ? (
+                    {failedWithMaxGuesses && pendingFailedAutoAdvance ? (
                       <p className="text-center text-xs font-semibold text-white/60">
                         Continuing in 2s...
                       </p>
                     ) : null}
                   </div>
 
-                  {currentFinished && !failedWithSixGuesses ? (
+                  {currentFinished && !failedWithMaxGuesses ? (
                     <div
                       className={`rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.6)] p-4 shadow-sm ${challengeVisualFadeClassName}`}
                     >
@@ -2375,6 +2434,12 @@ export function DailyGameClient({
         )}
         </div>
         </PullToRefresh>
+
+        <GameplayProfileSheet
+          open={profilePreviewHandle != null}
+          onClose={() => setProfilePreviewHandle(null)}
+          usernameHandle={profilePreviewHandle}
+        />
 
       {modalImageUrl ? (
         <div

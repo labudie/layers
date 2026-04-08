@@ -201,52 +201,7 @@ export function playJackpotCompletionSound() {
   });
 }
 
-const DTMF_FREQS: Record<string, [number, number]> = {
-  "1": [697, 1209],
-  "2": [697, 1336],
-  "3": [697, 1477],
-  "4": [770, 1209],
-  "5": [770, 1336],
-  "6": [770, 1477],
-  "7": [852, 1209],
-  "8": [852, 1336],
-  "9": [852, 1477],
-  "0": [941, 1336],
-  "*": [941, 1209],
-  "#": [941, 1477],
-};
-
-function playDtmfTone(
-  ctx: AudioContext,
-  t0: number,
-  lowFreq: number,
-  highFreq: number,
-  durationSec: number,
-  peakGain: number
-) {
-  const out = ctx.createGain();
-  out.gain.setValueAtTime(0.0001, t0);
-  out.gain.exponentialRampToValueAtTime(peakGain, t0 + 0.01);
-  out.gain.exponentialRampToValueAtTime(0.0001, t0 + durationSec);
-  out.connect(ctx.destination);
-
-  const lowOsc = ctx.createOscillator();
-  lowOsc.type = "sine";
-  lowOsc.frequency.setValueAtTime(lowFreq, t0);
-  lowOsc.connect(out);
-
-  const highOsc = ctx.createOscillator();
-  highOsc.type = "sine";
-  highOsc.frequency.setValueAtTime(highFreq, t0);
-  highOsc.connect(out);
-
-  lowOsc.start(t0);
-  highOsc.start(t0);
-  lowOsc.stop(t0 + durationSec + 0.02);
-  highOsc.stop(t0 + durationSec + 0.02);
-}
-
-export function playDialPadTone(key: string) {
+export function playDialPadTone(_key: string) {
   if (!readGameSoundEnabled()) return;
   withAudio((ctx, now) => {
     // iOS keyboard-like tap: very short bright click with tiny noise tail.

@@ -28,7 +28,7 @@ const STEPS: Record<
   },
   2: {
     title: "Your guess",
-    body: "Type your guess for the total layer count. You have 6 attempts. After each guess you'll learn if you're too high or too low.",
+    body: "Type your guess for the total layer count. You have 3 attempts. After each guess you'll learn if you're too high or too low.",
     primary: "Next",
   },
   3: {
