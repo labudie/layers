@@ -2,25 +2,29 @@ import type { CSSProperties } from "react";
 import { cookies } from "next/headers";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { LeaderboardPullToRefresh } from "@/app/components/LeaderboardPullToRefresh";
-import { LeaderboardTabBar } from "@/app/components/LeaderboardTabBar";
+import {
+  LeaderboardSwipeArea,
+  LeaderboardTabBar,
+} from "@/app/components/LeaderboardTabBar";
 import type { LeaderboardTabId } from "@/app/components/LeaderboardTabBar";
 import { LeaderboardTabPanel } from "@/app/components/LeaderboardTabPanel";
-import {
-  narrowToLatestActiveDate,
-  utcActiveDateWindow,
-} from "@/lib/challenge-active-date-window";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import {
   CreatorProfileLink,
   ProfileUsernameLink,
 } from "@/lib/profile-handle-link";
 
-type ResultRow = {
+/** Row from `leaderboard_daily_results` RPC (results ⋈ profiles ⋈ challenges). */
+type DailyLeaderboardRow = {
   user_id: string;
   challenge_id: string;
   solved: boolean | null;
   attempts_used: number | null;
   created_at: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  challenge_title: string | null;
+  challenge_active_date: string | null;
 };
 
 type ProfileRow = {
@@ -55,54 +59,23 @@ export default async function LeaderboardPage({
       : "daily";
 
   const supabase = createSupabaseServerClient(await cookies());
-  const { start, end } = utcActiveDateWindow();
 
-  const { data: windowChallenges, error: windowChallengesError } = await supabase
-    .from("challenges")
-    .select("id, active_date")
-    .gte("active_date", start)
-    .lte("active_date", end)
-    .order("active_date", { ascending: false });
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/New_York",
+  });
 
-  const raw =
-    !windowChallengesError && windowChallenges?.length
-      ? (windowChallenges as { id: string; active_date: string | null }[])
-      : [];
-  const narrowedRows = narrowToLatestActiveDate(raw);
-  const leaderboardDay = narrowedRows[0]?.active_date ?? "—";
-  const challengeIdsForToday = narrowedRows.map((c) => c.id);
+  const { data: dailyRpcData, error: dailyRpcError } = await supabase.rpc(
+    "leaderboard_daily_results",
+    { p_active_date: today },
+  );
 
-  let rows: ResultRow[] = [];
-  if (challengeIdsForToday.length) {
-    const { data, error } = await supabase
-      .from("results")
-      .select("user_id, challenge_id, solved, attempts_used, created_at")
-      .in("challenge_id", challengeIdsForToday)
-      .order("attempts_used", { ascending: true })
-      .order("created_at", { ascending: true });
-
-    if (!error && data?.length) {
-      rows = data as ResultRow[];
-    }
+  if (dailyRpcError) {
+    console.error("[leaderboard] leaderboard_daily_results", dailyRpcError);
   }
 
-  const empty = !rows.length;
-
-  // Load usernames for the players we need (fallback to user_id prefix).
-  const usernameMap = new Map<string, string | null>();
-  if (rows.length) {
-    const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
-    const { data: profileRows, error: profilesError } = await supabase
-      .from("profiles")
-      .select("id, username")
-      .in("id", userIds);
-
-    if (!profilesError && profileRows?.length) {
-      (profileRows as ProfileRow[]).forEach((p) => {
-        usernameMap.set(p.id, p.username);
-      });
-    }
-  }
+  const dailyRows = (dailyRpcData ?? []) as DailyLeaderboardRow[];
+  const empty = !dailyRows.length;
+  const leaderboardDay = today;
 
   const { data: allTimeProfiles } = await supabase
     .from("profiles")
@@ -127,9 +100,10 @@ export default async function LeaderboardPage({
           Today&apos;s results (active date: {leaderboardDay})
         </p>
 
-        <LeaderboardTabBar current={tab} />
+        <LeaderboardSwipeArea currentTab={tab}>
+          <LeaderboardTabBar current={tab} />
 
-        <LeaderboardTabPanel key={tab} tab={tab}>
+          <LeaderboardTabPanel key={tab} tab={tab}>
         {tab === "daily" ? (
           empty ? (
             <p className="mt-10 text-center text-lg font-semibold text-white/75">
@@ -142,42 +116,54 @@ export default async function LeaderboardPage({
                   <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
                     <th className="px-4 py-3">Rank</th>
                     <th className="px-4 py-3">Username</th>
-                    <th className="px-4 py-3">Attempts</th>
+                    <th className="px-4 py-3">Challenge</th>
                     <th className="px-4 py-3">Solved</th>
+                    <th className="px-4 py-3">Attempts</th>
                   </tr>
                 </thead>
                 <tbody className="leaderboard-stagger">
-                  {rows.map((row, i) => {
-                    const username = usernameMap.get(row.user_id);
-
-                    return (
-                      <tr
-                        key={`${row.user_id}-${row.created_at ?? ""}-${i}`}
-                        className="lb-stagger-row border-b border-white/5 transition-colors last:border-0 active:bg-white/[0.06]"
-                        style={{ "--lb-i": i } as CSSProperties}
-                      >
-                        <td className="px-4 py-3 font-mono font-semibold text-white/90">
-                          {i + 1}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-white/90">
-                          <ProfileUsernameLink
-                            username={username ?? undefined}
-                            fallbackDisplay={shortUsername(row.user_id)}
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-white/80">
-                          {row.attempts_used ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-white/80">
-                          {row.solved === true
-                            ? "Yes"
-                            : row.solved === false
-                              ? "No"
-                              : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {dailyRows.map((row, i) => (
+                    <tr
+                      key={`${row.user_id}-${row.challenge_id}-${row.created_at ?? ""}-${i}`}
+                      className="lb-stagger-row border-b border-white/5 transition-colors last:border-0 active:bg-white/[0.06]"
+                      style={{ "--lb-i": i } as CSSProperties}
+                    >
+                      <td className="px-4 py-3 font-mono font-semibold text-white/90">
+                        {i + 1}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-white/90">
+                        <div className="flex min-w-0 items-center gap-2">
+                          {row.avatar_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={row.avatar_url}
+                              alt=""
+                              className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-white/15"
+                            />
+                          ) : null}
+                          <span className="min-w-0">
+                            <ProfileUsernameLink
+                              username={row.username ?? undefined}
+                              fallbackDisplay={shortUsername(row.user_id)}
+                            />
+                          </span>
+                        </div>
+                      </td>
+                      <td className="max-w-[10rem] truncate px-4 py-3 text-white/80">
+                        {row.challenge_title ?? "Untitled"}
+                      </td>
+                      <td className="px-4 py-3 text-white/80">
+                        {row.solved === true
+                          ? "Yes"
+                          : row.solved === false
+                            ? "No"
+                            : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-white/80">
+                        {row.attempts_used ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -270,7 +256,8 @@ export default async function LeaderboardPage({
             </table>
           </div>
         )}
-        </LeaderboardTabPanel>
+          </LeaderboardTabPanel>
+        </LeaderboardSwipeArea>
       </div>
       </LeaderboardPullToRefresh>
     </AppSiteChrome>

@@ -262,14 +262,6 @@ select:focus-visible {
   }
 }
 
-.leaderboard-tab-pill--active {
-  transition:
-    background-color 0.22s var(--smooth),
-    color 0.22s var(--smooth),
-    box-shadow 0.22s var(--smooth),
-    transform 0.22s var(--spring) !important;
-}
-
 tbody.leaderboard-stagger tr.lb-stagger-row {
   opacity: 0;
   animation: lb-row-rise 0.4s var(--smooth) forwards;
