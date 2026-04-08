@@ -1822,8 +1822,13 @@ export function DailyGameClient({
                 <div
                   className={`flex h-11 shrink-0 min-w-0 items-center justify-between gap-2 ${challengeVisualFadeClassName}`}
                 >
-                  <div className="min-w-0 truncate text-sm font-semibold text-white">
-                    {currentChallenge.title ?? "Untitled"}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {currentChallenge.title ?? "Untitled"}
+                    </p>
+                    {isSponsored ? (
+                      <p className="mt-0.5 text-[11px] text-[rgba(255,255,255,0.4)]">Sponsored</p>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="font-mono text-xs text-white/75">
@@ -1849,17 +1854,9 @@ export function DailyGameClient({
                           className="absolute right-0 top-full z-[60] mt-2 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-white/15 bg-[linear-gradient(180deg,rgba(40,16,67,0.98)_0%,rgba(22,9,39,0.98)_100%)] p-3.5 text-left text-sm shadow-[0_24px_60px_rgba(0,0,0,0.52)] ring-1 ring-white/10 backdrop-blur-xl"
                         >
                           {isSponsored && sponsorName ? (
-                            <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-amber-100">
-                              <span className="text-base leading-none">⭐</span>
-                              <div className="min-w-0">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-200/90">
-                                  Sponsored by
-                                </p>
-                                <p className="truncate text-sm font-semibold text-amber-100">
-                                  {sponsorName}
-                                </p>
-                              </div>
-                            </div>
+                            <p className="text-sm text-[rgba(255,255,255,0.6)]">
+                              Sponsored by {sponsorName}
+                            </p>
                           ) : null}
                           <div className="space-y-2">
                             <div className="flex items-start justify-between gap-3 rounded-lg bg-white/[0.04] px-3 py-2">
@@ -1925,12 +1922,6 @@ export function DailyGameClient({
                       )}
                     </div>
                   </div>
-                  {isSponsored ? (
-                    <div className="pointer-events-none absolute bottom-3 left-5 z-20 inline-flex max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full border border-amber-300/35 bg-amber-300/15 px-3 py-1 text-[11px] font-semibold text-amber-100 shadow-[0_6px_18px_rgba(0,0,0,0.35)] backdrop-blur-sm">
-                      <span className="text-xs leading-none">⭐</span>
-                      <span>Sponsored</span>
-                    </div>
-                  ) : null}
                 </div>
 
                 <div className="mt-auto flex w-full shrink-0 flex-col gap-2 px-1">
@@ -2092,11 +2083,6 @@ export function DailyGameClient({
                         )}
                       </div>
                     </div>
-                    {isSponsored ? (
-                      <div className="absolute bottom-3 left-5 z-20 max-w-[calc(100%-1.5rem)] rounded-full border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.15)] px-3 py-1 text-[11px] font-semibold text-amber-200 backdrop-blur-sm">
-                        Sponsored
-                      </div>
-                    ) : null}
                   </div>
 
                   <div
@@ -2106,6 +2092,9 @@ export function DailyGameClient({
                       <h2 className="text-base font-semibold leading-snug">
                         {currentChallenge.title ?? "Untitled"}
                       </h2>
+                      {isSponsored ? (
+                        <p className="mt-0.5 text-[11px] text-[rgba(255,255,255,0.4)]">Sponsored</p>
+                      ) : null}
                       <p className="mt-1 text-sm font-mono text-white/60">
                         {currentChallengeIndex + 1}/{total}
                       </p>
@@ -2130,17 +2119,9 @@ export function DailyGameClient({
                           className="absolute right-0 top-full z-[60] mt-2 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-white/15 bg-[linear-gradient(180deg,rgba(40,16,67,0.98)_0%,rgba(22,9,39,0.98)_100%)] p-3.5 text-left text-sm shadow-[0_24px_60px_rgba(0,0,0,0.52)] ring-1 ring-white/10 backdrop-blur-xl"
                         >
                           {isSponsored && sponsorName ? (
-                            <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-amber-100">
-                              <span className="text-base leading-none">⭐</span>
-                              <div className="min-w-0">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-200/90">
-                                  Sponsored by
-                                </p>
-                                <p className="truncate text-sm font-semibold text-amber-100">
-                                  {sponsorName}
-                                </p>
-                              </div>
-                            </div>
+                            <p className="text-sm text-[rgba(255,255,255,0.6)]">
+                              Sponsored by {sponsorName}
+                            </p>
                           ) : null}
                           <div className="space-y-2">
                             <div className="flex items-start justify-between gap-3 rounded-lg bg-white/[0.04] px-3 py-2">
