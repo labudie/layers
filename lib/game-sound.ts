@@ -249,19 +249,11 @@ function playDtmfTone(
 export function playDialPadTone(key: string) {
   if (!readGameSoundEnabled()) return;
   withAudio((ctx, now) => {
-    const pair = DTMF_FREQS[key];
+    const resolvedKey = key === "delete" ? "*" : key === "submit" ? "#" : key;
+    const pair = DTMF_FREQS[resolvedKey];
     if (pair) {
-      playDtmfTone(ctx, now, pair[0], pair[1], 0.09, 0.1);
-      return;
-    }
-    if (key === "delete") {
-      playChime(ctx, now, 520, 0.05, 0.08, "triangle");
-      playChime(ctx, now + 0.04, 380, 0.06, 0.08, "triangle");
-      return;
-    }
-    if (key === "submit") {
-      playChime(ctx, now, 900, 0.05, 0.11, "sine");
-      playChime(ctx, now + 0.05, 1200, 0.08, 0.11, "sine");
+      // iPhone phone keypad style: short, clean DTMF dual-tone
+      playDtmfTone(ctx, now, pair[0], pair[1], 0.075, 0.085);
     }
   });
 }

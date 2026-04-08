@@ -1926,7 +1926,7 @@ export function DailyGameClient({
                     </div>
                   </div>
                   {isSponsored ? (
-                    <div className="pointer-events-none absolute left-3 bottom-3 z-20 inline-flex items-center gap-1.5 rounded-full border border-amber-300/35 bg-amber-300/15 px-3 py-1 text-[11px] font-semibold text-amber-100 shadow-[0_6px_18px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+                    <div className="pointer-events-none absolute bottom-3 left-5 z-20 inline-flex max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full border border-amber-300/35 bg-amber-300/15 px-3 py-1 text-[11px] font-semibold text-amber-100 shadow-[0_6px_18px_rgba(0,0,0,0.35)] backdrop-blur-sm">
                       <span className="text-xs leading-none">⭐</span>
                       <span>Sponsored</span>
                     </div>
@@ -1961,7 +1961,7 @@ export function DailyGameClient({
                     </span>
                   </div>
 
-                  <div className="grid h-[188px] min-h-[188px] shrink-0 grid-cols-3 grid-rows-4 gap-[6px] pt-1">
+                  <div className="grid h-[180px] min-h-[180px] shrink-0 grid-cols-3 grid-rows-4 gap-[4px] pt-1">
                   {currentFinished ? (
                     <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
                       <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
@@ -1993,7 +1993,7 @@ export function DailyGameClient({
                           type="button"
                           onClick={() => appendGuessDigit(digit)}
                           disabled={!roundActive}
-                          className="tap-press h-[44px] rounded-2xl border border-white/15 bg-[linear-gradient(180deg,rgba(58,31,95,0.85)_0%,rgba(26,10,46,0.82)_100%)] text-xl font-extrabold text-white shadow-[0_10px_24px_rgba(0,0,0,0.35)] ring-1 ring-white/10 transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.94] hover:bg-white/15 disabled:opacity-35"
+                          className="tap-press h-[42px] rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
                         >
                           {digit}
                         </button>
@@ -2002,7 +2002,7 @@ export function DailyGameClient({
                         type="button"
                         onClick={backspaceGuessDigit}
                         disabled={!roundActive || typeof guessInput !== "number"}
-                        className="tap-press flex h-[44px] items-center justify-center rounded-2xl border border-white/15 bg-[linear-gradient(180deg,rgba(58,31,95,0.85)_0%,rgba(26,10,46,0.82)_100%)] text-white shadow-[0_10px_24px_rgba(0,0,0,0.35)] ring-1 ring-white/10 transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.94] hover:bg-white/15 disabled:opacity-35"
+                        className="tap-press flex h-[42px] items-center justify-center rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
                         aria-label="Delete"
                       >
                         <svg
@@ -2030,7 +2030,7 @@ export function DailyGameClient({
                         type="button"
                         onClick={() => appendGuessDigit(0)}
                         disabled={!roundActive}
-                        className="tap-press h-[44px] rounded-2xl border border-white/15 bg-[linear-gradient(180deg,rgba(58,31,95,0.85)_0%,rgba(26,10,46,0.82)_100%)] text-xl font-extrabold text-white shadow-[0_10px_24px_rgba(0,0,0,0.35)] ring-1 ring-white/10 transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.94] hover:bg-white/15 disabled:opacity-35"
+                        className="tap-press h-[42px] rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
                       >
                         0
                       </button>
@@ -2038,7 +2038,7 @@ export function DailyGameClient({
                         type="button"
                         onClick={submitGuessFromPad}
                         disabled={!canSubmitGuess || typeof guessInput !== "number"}
-                        className="tap-press h-[44px] rounded-2xl border border-emerald-200/35 bg-[linear-gradient(180deg,rgba(16,185,129,0.95)_0%,rgba(5,150,105,0.92)_100%)] text-xl font-extrabold text-white shadow-[0_12px_24px_rgba(5,150,105,0.35)] ring-1 ring-emerald-200/30 transition-[transform,filter,background-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.94] hover:brightness-110 disabled:opacity-40"
+                        className="tap-press h-[42px] rounded-[var(--radius-card)] border border-emerald-300/35 bg-emerald-500/85 text-xl font-extrabold text-white shadow-sm transition-[transform,filter,background-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-40"
                       >
                         ✓
                       </button>
@@ -2093,7 +2093,7 @@ export function DailyGameClient({
                       </div>
                     </div>
                     {isSponsored ? (
-                      <div className="absolute left-3 bottom-3 z-20 rounded-full border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.15)] px-3 py-1 text-[11px] font-semibold text-amber-200 backdrop-blur-sm">
+                      <div className="absolute bottom-3 left-5 z-20 max-w-[calc(100%-1.5rem)] rounded-full border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.15)] px-3 py-1 text-[11px] font-semibold text-amber-200 backdrop-blur-sm">
                         Sponsored
                       </div>
                     ) : null}
