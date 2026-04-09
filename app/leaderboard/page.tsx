@@ -14,18 +14,20 @@ import {
   ProfileUsernameLink,
 } from "@/lib/profile-handle-link";
 
-/** Row shape from `daily_leaderboard` view (`select('*')`). */
+/** Aggregated daily row (one per user) built from `results` + `profiles`. */
 type DailyLeaderboardRow = {
-  id?: string | number;
-  user_id?: string | null;
-  created_at?: string | null;
-  active_date?: string | null;
+  user_id: string;
   username: string | null;
   avatar_url: string | null;
-  title: string | null;
-  solved: boolean | null;
-  attempts_used: number | null;
+  /** Capped at `DAILY_CHALLENGE_TOTAL`. */
+  solved_count: number;
+  /** Sum of `attempts_used` across all of today’s result rows for this user. */
+  total_guesses: number;
+  /** Earliest `created_at` among those rows (ms); for sorting only. */
+  first_completion_at: number | null;
 };
+
+const DAILY_CHALLENGE_TOTAL = 5;
 
 type ProfileRow = {
   id: string;
@@ -64,34 +66,134 @@ export default async function LeaderboardPage({
     timeZone: "America/New_York",
   });
 
-  const { data: dailyData, error: dailyError } = await supabase
-    .from("daily_leaderboard")
-    .select("*")
-    .eq("active_date", today)
-    .order("attempts_used", { ascending: true })
-    .order("created_at", { ascending: true });
+  const { data: todayChallenges } = await supabase
+    .from("challenges")
+    .select("id")
+    .eq("active_date", today);
 
-  if (dailyError) {
-    console.error("[leaderboard] daily results", dailyError);
+  const todayIds = (todayChallenges ?? []).map((c) => c.id);
+  console.log("[daily] today challenges", todayIds);
+
+  let dailyRows: DailyLeaderboardRow[] = [];
+
+  if (todayIds.length > 0) {
+    const { data: resultsData } = await supabase
+      .from("results")
+      .select("user_id, solved, attempts_used, challenge_id, created_at")
+      .in("challenge_id", todayIds);
+
+    console.log("[daily] results found", resultsData?.length);
+
+    type ResultPick = {
+      user_id: string;
+      solved: boolean | null;
+      attempts_used: number | null;
+      challenge_id: string;
+      created_at: string | null;
+    };
+
+    const resultsList = (resultsData ?? []) as ResultPick[];
+
+    const userIds = [
+      ...new Set(
+        resultsList.map((r) => r.user_id).filter((id): id is string => Boolean(id))
+      ),
+    ];
+
+    const profilesById = new Map<
+      string,
+      { username: string | null; avatar_url: string | null }
+    >();
+
+    if (userIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("id, username, avatar_url")
+        .in("id", userIds);
+
+      for (const p of profilesData ?? []) {
+        const row = p as {
+          id: string;
+          username: string | null;
+          avatar_url: string | null;
+        };
+        profilesById.set(row.id, {
+          username: row.username,
+          avatar_url: row.avatar_url,
+        });
+      }
+    }
+
+    const byUser = new Map<
+      string,
+      {
+        solved_count: number;
+        total_guesses: number;
+        first_completion_at: number | null;
+      }
+    >();
+
+    for (const r of resultsList) {
+      const uid = r.user_id;
+      if (!uid) continue;
+
+      let agg = byUser.get(uid);
+      if (!agg) {
+        agg = {
+          solved_count: 0,
+          total_guesses: 0,
+          first_completion_at: null,
+        };
+        byUser.set(uid, agg);
+      }
+
+      if (r.solved === true) {
+        agg.solved_count += 1;
+      }
+
+      const attempts =
+        r.attempts_used === null || r.attempts_used === undefined
+          ? NaN
+          : Number(r.attempts_used);
+      if (Number.isFinite(attempts)) {
+        agg.total_guesses += attempts;
+      }
+
+      const createdMs = r.created_at ? Date.parse(r.created_at) : NaN;
+      if (Number.isFinite(createdMs)) {
+        agg.first_completion_at =
+          agg.first_completion_at === null
+            ? createdMs
+            : Math.min(agg.first_completion_at, createdMs);
+      }
+    }
+
+    dailyRows = [...byUser.entries()].map(([user_id, v]) => {
+      const p = profilesById.get(user_id);
+      return {
+        user_id,
+        username: p?.username ?? null,
+        avatar_url: p?.avatar_url ?? null,
+        solved_count: Math.min(DAILY_CHALLENGE_TOTAL, v.solved_count),
+        total_guesses: v.total_guesses,
+        first_completion_at: v.first_completion_at,
+      };
+    });
+
+    dailyRows.sort((a, b) => {
+      if (b.solved_count !== a.solved_count) {
+        return b.solved_count - a.solved_count;
+      }
+      if (a.total_guesses !== b.total_guesses) {
+        return a.total_guesses - b.total_guesses;
+      }
+      const fa = a.first_completion_at ?? Number.POSITIVE_INFINITY;
+      const fb = b.first_completion_at ?? Number.POSITIVE_INFINITY;
+      if (fa !== fb) return fa - fb;
+      return a.user_id.localeCompare(b.user_id);
+    });
   }
 
-  const dailyRows: DailyLeaderboardRow[] = (dailyData ?? []).map((r) => {
-    const row = r as Record<string, unknown>;
-    return {
-      id: row.id as string | number | undefined,
-      user_id: (row.user_id as string | null | undefined) ?? null,
-      created_at: (row.created_at as string | null | undefined) ?? null,
-      active_date: (row.active_date as string | null | undefined) ?? null,
-      username: (row.username as string | null | undefined) ?? null,
-      avatar_url: (row.avatar_url as string | null | undefined) ?? null,
-      title: (row.title as string | null | undefined) ?? null,
-      solved: (row.solved as boolean | null | undefined) ?? null,
-      attempts_used:
-        row.attempts_used === null || row.attempts_used === undefined
-          ? null
-          : Number(row.attempts_used),
-    };
-  });
   const empty = !dailyRows.length;
   const leaderboardDay = today;
 
@@ -117,6 +219,11 @@ export default async function LeaderboardPage({
         <p className="mt-2 text-sm text-white/60">
           Today&apos;s results (active date: {leaderboardDay})
         </p>
+        {tab === "daily" ? (
+          <p className="mt-1 text-xs text-white/45">
+            Ranked by challenges solved, then fewest total guesses
+          </p>
+        ) : null}
 
         <LeaderboardSwipeArea currentTab={tab}>
           <LeaderboardTabBar current={tab} />
@@ -133,18 +240,15 @@ export default async function LeaderboardPage({
                 <thead>
                   <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
                     <th className="px-4 py-3">Rank</th>
-                    <th className="px-4 py-3">Username</th>
-                    <th className="px-4 py-3">Challenge</th>
+                    <th className="px-4 py-3">Player</th>
                     <th className="px-4 py-3">Solved</th>
-                    <th className="px-4 py-3">Attempts</th>
+                    <th className="px-4 py-3">Guesses</th>
                   </tr>
                 </thead>
                 <tbody className="leaderboard-stagger">
-                  {dailyRows.map((row, i) => {
-                    const challengeTitle = row.title?.trim() || "Untitled";
-                    return (
+                  {dailyRows.map((row, i) => (
                     <tr
-                      key={`${row.id ?? i}-${row.created_at ?? ""}-${i}`}
+                      key={row.user_id}
                       className="lb-stagger-row border-b border-white/5 transition-colors last:border-0 active:bg-white/[0.06]"
                       style={{ "--lb-i": i } as CSSProperties}
                     >
@@ -164,29 +268,21 @@ export default async function LeaderboardPage({
                           <span className="min-w-0">
                             <ProfileUsernameLink
                               username={row.username ?? undefined}
-                              fallbackDisplay={shortUsername(
-                                row.user_id ?? ""
-                              )}
+                              fallbackDisplay={shortUsername(row.user_id)}
                             />
                           </span>
                         </div>
                       </td>
-                      <td className="max-w-[10rem] truncate px-4 py-3 text-white/80">
-                        {challengeTitle}
+                      <td className="px-4 py-3 text-white/80">
+                        <span className="font-bold text-white">
+                          {row.solved_count}/{DAILY_CHALLENGE_TOTAL}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-white/80">
-                        {row.solved === true
-                          ? "Yes"
-                          : row.solved === false
-                            ? "No"
-                            : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-white/80">
-                        {row.attempts_used ?? "—"}
+                        {row.total_guesses} guesses
                       </td>
                     </tr>
-                    );
-                  })}
+                  ))}
                 </tbody>
               </table>
             </div>

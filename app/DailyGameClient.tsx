@@ -796,16 +796,8 @@ export function DailyGameClient({
       const solved = guesses.some((x) => x.verdict === "correct");
       const attempts_used = guesses.length;
 
-      const { data: existing, error: existingError } = await sb
-        .from("results")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("challenge_id", challengeId)
-        .maybeSingle();
-      if (existingError) {
-        console.error("[results] error checking existing", existingError);
-      }
-      if (existing) return;
+      const positionVal =
+        typeof position === "number" ? position : fallbackIndex + 1;
 
       console.log("[results] saving result", {
         user_id: user.id,
@@ -814,16 +806,16 @@ export function DailyGameClient({
         attempts_used,
       });
 
-      const positionVal =
-        typeof position === "number" ? position : fallbackIndex + 1;
-
-      const { error } = await sb.from("results").insert({
-        user_id: user.id,
-        challenge_id: challengeId,
-        solved,
-        attempts_used,
-        position: positionVal,
-      });
+      const { error } = await sb.from("results").upsert(
+        {
+          user_id: user.id,
+          challenge_id: challengeId,
+          solved,
+          attempts_used,
+          position: positionVal,
+        },
+        { onConflict: "user_id,challenge_id" }
+      );
       if (error) {
         console.error(
           "[results] error saving - full details:",
