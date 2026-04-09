@@ -824,7 +824,16 @@ export function DailyGameClient({
         attempts_used,
         position: positionVal,
       });
-      if (error) console.error("[results] error saving", error);
+      if (error) {
+        console.error(
+          "[results] error saving - full details:",
+          JSON.stringify(error)
+        );
+        console.error("[results] error code:", error.code);
+        console.error("[results] error message:", error.message);
+        console.error("[results] error details:", error.details);
+        console.error("[results] error hint:", error.hint);
+      }
     },
     []
   );

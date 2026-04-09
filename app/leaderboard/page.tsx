@@ -77,20 +77,22 @@ export default async function LeaderboardPage({
     timeZone: "America/New_York",
   });
 
-  const { data: dailyRowsRaw, error: dailyError } = await supabase
+  const { data: dailyData, error: dailyError } = await supabase
     .from("results")
     .select(
       `
-      id,
-      user_id,
-      solved,
-      attempts_used,
-      created_at,
-      profiles (username, avatar_url),
-      challenges (title, active_date)
-    `,
+    id,
+    solved,
+    attempts_used,
+    created_at,
+    user_id,
+    challenge_id,
+    profiles!inner (username, avatar_url),
+    challenges!inner (title, active_date)
+  `
     )
     .eq("challenges.active_date", today)
+    .eq("solved", true)
     .order("attempts_used", { ascending: true })
     .order("created_at", { ascending: true });
 
@@ -98,10 +100,11 @@ export default async function LeaderboardPage({
     console.error("[leaderboard] daily results", dailyError);
   }
 
-  const dailyRows: DailyLeaderboardRow[] = (dailyRowsRaw ?? []).map((r) => {
+  const dailyRows: DailyLeaderboardRow[] = (dailyData ?? []).map((r) => {
     const row = r as {
       id: string | number;
       user_id: string;
+      challenge_id?: string;
       solved: boolean | null;
       attempts_used: number | null;
       created_at: string | null;
