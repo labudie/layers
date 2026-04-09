@@ -14,31 +14,18 @@ import {
   ProfileUsernameLink,
 } from "@/lib/profile-handle-link";
 
-type DailyProfileEmbed = {
+/** Row shape from `daily_leaderboard` view (`select('*')`). */
+type DailyLeaderboardRow = {
+  id?: string | number;
+  user_id?: string | null;
+  created_at?: string | null;
+  active_date?: string | null;
   username: string | null;
   avatar_url: string | null;
-};
-
-type DailyChallengeEmbed = {
   title: string | null;
-  active_date: string | null;
-};
-
-/** Normalized `results` row with embedded profile + challenge (Supabase may return a 1-item array per FK). */
-type DailyLeaderboardRow = {
-  id: string | number;
-  user_id: string;
   solved: boolean | null;
   attempts_used: number | null;
-  created_at: string | null;
-  profiles: DailyProfileEmbed | null;
-  challenges: DailyChallengeEmbed | null;
 };
-
-function unwrapOne<T>(v: T | T[] | null | undefined): T | null {
-  if (v == null) return null;
-  return Array.isArray(v) ? (v[0] ?? null) : v;
-}
 
 type ProfileRow = {
   id: string;
@@ -78,21 +65,9 @@ export default async function LeaderboardPage({
   });
 
   const { data: dailyData, error: dailyError } = await supabase
-    .from("results")
-    .select(
-      `
-    id,
-    solved,
-    attempts_used,
-    created_at,
-    user_id,
-    challenge_id,
-    profiles!inner (username, avatar_url),
-    challenges!inner (title, active_date)
-  `
-    )
-    .eq("challenges.active_date", today)
-    .eq("solved", true)
+    .from("daily_leaderboard")
+    .select("*")
+    .eq("active_date", today)
     .order("attempts_used", { ascending: true })
     .order("created_at", { ascending: true });
 
@@ -101,24 +76,20 @@ export default async function LeaderboardPage({
   }
 
   const dailyRows: DailyLeaderboardRow[] = (dailyData ?? []).map((r) => {
-    const row = r as {
-      id: string | number;
-      user_id: string;
-      challenge_id?: string;
-      solved: boolean | null;
-      attempts_used: number | null;
-      created_at: string | null;
-      profiles: DailyProfileEmbed | DailyProfileEmbed[] | null;
-      challenges: DailyChallengeEmbed | DailyChallengeEmbed[] | null;
-    };
+    const row = r as Record<string, unknown>;
     return {
-      id: row.id,
-      user_id: row.user_id,
-      solved: row.solved,
-      attempts_used: row.attempts_used,
-      created_at: row.created_at,
-      profiles: unwrapOne(row.profiles),
-      challenges: unwrapOne(row.challenges),
+      id: row.id as string | number | undefined,
+      user_id: (row.user_id as string | null | undefined) ?? null,
+      created_at: (row.created_at as string | null | undefined) ?? null,
+      active_date: (row.active_date as string | null | undefined) ?? null,
+      username: (row.username as string | null | undefined) ?? null,
+      avatar_url: (row.avatar_url as string | null | undefined) ?? null,
+      title: (row.title as string | null | undefined) ?? null,
+      solved: (row.solved as boolean | null | undefined) ?? null,
+      attempts_used:
+        row.attempts_used === null || row.attempts_used === undefined
+          ? null
+          : Number(row.attempts_used),
     };
   });
   const empty = !dailyRows.length;
@@ -170,12 +141,10 @@ export default async function LeaderboardPage({
                 </thead>
                 <tbody className="leaderboard-stagger">
                   {dailyRows.map((row, i) => {
-                    const username = row.profiles?.username ?? null;
-                    const avatarUrl = row.profiles?.avatar_url ?? null;
-                    const challengeTitle = row.challenges?.title ?? "Untitled";
+                    const challengeTitle = row.title?.trim() || "Untitled";
                     return (
                     <tr
-                      key={`${row.id}-${row.created_at ?? ""}-${i}`}
+                      key={`${row.id ?? i}-${row.created_at ?? ""}-${i}`}
                       className="lb-stagger-row border-b border-white/5 transition-colors last:border-0 active:bg-white/[0.06]"
                       style={{ "--lb-i": i } as CSSProperties}
                     >
@@ -184,18 +153,20 @@ export default async function LeaderboardPage({
                       </td>
                       <td className="px-4 py-3 text-sm text-white/90">
                         <div className="flex min-w-0 items-center gap-2">
-                          {avatarUrl ? (
+                          {row.avatar_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={avatarUrl}
+                              src={row.avatar_url}
                               alt=""
                               className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-white/15"
                             />
                           ) : null}
                           <span className="min-w-0">
                             <ProfileUsernameLink
-                              username={username ?? undefined}
-                              fallbackDisplay={shortUsername(row.user_id)}
+                              username={row.username ?? undefined}
+                              fallbackDisplay={shortUsername(
+                                row.user_id ?? ""
+                              )}
                             />
                           </span>
                         </div>
