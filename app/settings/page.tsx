@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
-import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { BADGE_DEFS, type BadgeId } from "@/lib/badges";
@@ -209,16 +208,20 @@ export default function SettingsPage() {
   }, [editingName]);
 
   return (
-    <AppSiteChrome title="Settings">
-      <PullToRefresh
-        className="flex min-h-0 min-w-0 flex-1 flex-col"
-        scrollAreaClassName="min-h-0 max-h-full overscroll-y-contain"
-        disabled={loading}
-        onRefresh={async () => {
-          await load({ silent: true });
+    <AppSiteChrome
+      title="Settings"
+      className="min-h-0 overflow-visible"
+      contentClassName="min-h-0 overflow-visible"
+    >
+      <div
+        style={{
+          height: "100dvh",
+          overflowY: "scroll",
+          WebkitOverflowScrolling: "touch",
+          position: "relative",
         }}
       >
-      <div className="mx-auto w-full min-w-0 max-w-2xl px-4 pt-5 pb-[100px] md:px-5 md:pt-6 md:pb-[100px]">
+        <div className="mx-auto w-full min-w-0 max-w-2xl px-4 pt-5 pb-[100px] md:px-5 md:pt-6 md:pb-[100px]">
         {loading ? (
           <div className="mt-10 text-white/70">Loading…</div>
         ) : (
@@ -226,14 +229,14 @@ export default function SettingsPage() {
             <section className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)] p-5">
               <div className="flex flex-col items-center text-center">
                 <label className="group relative cursor-pointer">
-                  <div className="h-20 w-20 overflow-hidden rounded-full border-2 border-[var(--accent)]/55 bg-black/40 p-[2px]">
-                    <div className="h-full w-full overflow-hidden rounded-full bg-black/40">
+                  <div className="h-20 w-20 rounded-full border-2 border-[var(--accent)]/55 bg-black/40 p-[2px]">
+                    <div className="h-full w-full rounded-full bg-black/40">
                       {avatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={avatarUrl}
                           alt=""
-                          className="h-full w-full object-cover"
+                          className="h-full w-full rounded-full object-cover"
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-2xl text-white/35">
@@ -366,7 +369,7 @@ export default function SettingsPage() {
                 <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-white/45">
                   Account
                 </div>
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
+                <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
                   <div className="flex items-center justify-between px-4 py-3">
                     <span className="text-sm text-white/85">Email</span>
                     <span className="max-w-[60%] truncate text-sm text-white/55">
@@ -380,7 +383,7 @@ export default function SettingsPage() {
                 <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-white/45">
                   Gameplay
                 </div>
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
+                <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
                   <label className="flex items-center justify-between px-4 py-3">
                     <span className="text-sm text-white/85">Guess sounds</span>
                     <button
@@ -410,7 +413,7 @@ export default function SettingsPage() {
                 <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-white/45">
                   Notifications
                 </div>
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
+                <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
                   <label className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                     <span className="text-sm text-white/85">Email notifications</span>
                     <button
@@ -455,7 +458,7 @@ export default function SettingsPage() {
                   Legal
                 </div>
                 <div
-                  className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]"
+                  className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]"
                   data-no-tap-haptic
                 >
                   <Link
@@ -479,7 +482,7 @@ export default function SettingsPage() {
                 <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-white/45">
                   Support
                 </div>
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
+                <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
                   <button
                     type="button"
                     onClick={comingSoon}
@@ -525,8 +528,8 @@ export default function SettingsPage() {
 
           </div>
         )}
+        </div>
       </div>
-      </PullToRefresh>
     </AppSiteChrome>
   );
 }

@@ -23,6 +23,8 @@ export type AppSiteChromeProps = {
   belowHeader?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** Classes for the main content wrapper below the header (default flex-1 column). */
+  contentClassName?: string;
 };
 
 const drawerNavClass =
@@ -36,6 +38,7 @@ export function AppSiteChrome({
   belowHeader,
   children,
   className = "",
+  contentClassName = "",
 }: AppSiteChromeProps) {
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -283,7 +286,11 @@ export function AppSiteChrome({
 
       {belowHeader}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
+      <div
+        className={`flex min-h-0 min-w-0 flex-1 flex-col ${contentClassName}`.trim()}
+      >
+        {children}
+      </div>
     </div>
   );
 }
