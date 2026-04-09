@@ -768,6 +768,67 @@ export function DailyGameClient({
     !showNoChallengesHome && !showDailyHome && !showSummary
   );
 
+  const persistChallengeResult = useCallback(
+    async (args: {
+      challengeId: string;
+      guesses: GuessRow[];
+      layerCount: number;
+      position: number | undefined;
+      fallbackIndex: number;
+    }) => {
+      const { challengeId, guesses, layerCount, position, fallbackIndex } =
+        args;
+      if (!layerCount || layerCount <= 0) return;
+      if (guesses.length === 0) return;
+      if (!isChallengeFinished(layerCount, guesses)) return;
+
+      const sb = supabase();
+      const {
+        data: { user },
+        error: authError,
+      } = await sb.auth.getUser();
+      if (authError) {
+        console.error("[results] auth error", authError);
+        return;
+      }
+      if (!user?.id) return;
+
+      const solved = guesses.some((x) => x.verdict === "correct");
+      const attempts_used = guesses.length;
+
+      const { data: existing, error: existingError } = await sb
+        .from("results")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("challenge_id", challengeId)
+        .maybeSingle();
+      if (existingError) {
+        console.error("[results] error checking existing", existingError);
+      }
+      if (existing) return;
+
+      console.log("[results] saving result", {
+        user_id: user.id,
+        challenge_id: challengeId,
+        solved,
+        attempts_used,
+      });
+
+      const positionVal =
+        typeof position === "number" ? position : fallbackIndex + 1;
+
+      const { error } = await sb.from("results").insert({
+        user_id: user.id,
+        challenge_id: challengeId,
+        solved,
+        attempts_used,
+        position: positionVal,
+      });
+      if (error) console.error("[results] error saving", error);
+    },
+    []
+  );
+
   // Restore guesses + resume position / summary
   useEffect(() => {
     const list = challengesRef.current;
@@ -870,40 +931,26 @@ export function DailyGameClient({
     };
   }, [userId, challengeIdsKey]);
 
-  // Insert results per challenge when finished (includes position)
+  // Backfill results per finished challenge (e.g. after hydration); primary path is submitGuess.
   useEffect(() => {
     if (!userId || !challenges.length) return;
 
     let cancelled = false;
 
-    (async () => {
+    void (async () => {
       const list = challengesRef.current;
       for (let idx = 0; idx < list.length; idx++) {
+        if (cancelled) return;
         const ch = list[idx];
         const g = guessesByIndex[idx] ?? [];
         const ans = ch.layer_count ?? 0;
-        if (ans <= 0 || g.length === 0) continue;
-        if (!isChallengeFinished(ans, g)) continue;
-
-        const sb = supabase();
-        const { data: existing } = await sb
-          .from("results")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("challenge_id", ch.id)
-          .maybeSingle();
-
-        if (cancelled || existing) continue;
-
-        const position =
-          typeof ch.position === "number" ? ch.position : idx + 1;
-
-        await sb.from("results").insert({
-          user_id: userId,
-          challenge_id: ch.id,
-          solved: g.some((x) => x.verdict === "correct"),
-          attempts_used: g.length,
-          position,
+        await persistChallengeResult({
+          challengeId: ch.id,
+          guesses: g,
+          layerCount: ans,
+          position:
+            typeof ch.position === "number" ? ch.position : undefined,
+          fallbackIndex: idx,
         });
       }
     })();
@@ -911,7 +958,7 @@ export function DailyGameClient({
     return () => {
       cancelled = true;
     };
-  }, [userId, challengeIdsKey, guessesByIndex]);
+  }, [userId, challengeIdsKey, guessesByIndex, persistChallengeResult]);
 
   // Update profile streak/stats/badges after the user completes today's 5 challenges.
   useEffect(() => {
@@ -945,7 +992,11 @@ export function DailyGameClient({
         .eq("id", userId)
         .maybeSingle();
 
-      if (cancelled || profileErr) return;
+      if (cancelled) return;
+      if (profileErr) {
+        console.error("[profiles] error loading for daily sync", profileErr);
+        return;
+      }
 
       const row = (profile as {
         username?: string | null;
@@ -1037,7 +1088,13 @@ export function DailyGameClient({
       if (handleStored) {
         profilePayload.username = handleStored;
       }
-      await sb.from("profiles").upsert(profilePayload, { onConflict: "id" });
+      const { error: upsertErr } = await sb
+        .from("profiles")
+        .upsert(profilePayload, { onConflict: "id" });
+      if (upsertErr) {
+        console.error("[profiles] error upsert after daily complete", upsertErr);
+        return;
+      }
 
       if (!cancelled) {
         statsSyncKeyRef.current = uniqueKey;
@@ -1295,6 +1352,20 @@ export function DailyGameClient({
       });
     }
 
+    const finishedNext = [...g, nextRow];
+    if (isChallengeFinished(currentAnswer, finishedNext)) {
+      void persistChallengeResult({
+        challengeId: currentChallenge.id,
+        guesses: finishedNext,
+        layerCount: currentAnswer,
+        position:
+          typeof currentChallenge.position === "number"
+            ? currentChallenge.position
+            : undefined,
+        fallbackIndex: idx,
+      });
+    }
+
     setGuessesByIndex((prev) => {
       const next = prev.map((arr, i) =>
         i === idx ? [...arr, nextRow].slice(0, MAX_GUESSES) : arr
@@ -1347,6 +1418,7 @@ export function DailyGameClient({
     currentChallengeIndex,
     guessesByIndex,
     posthog,
+    persistChallengeResult,
   ]);
 
   const vibrateKeyTap = useCallback(() => {
