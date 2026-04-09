@@ -72,6 +72,7 @@ export function PullToRefresh({
   children,
   className = "",
   scrollAreaClassName = "",
+  scrollAreaStyle,
   contentClassName = "",
   disabled = false,
 }: {
@@ -80,6 +81,8 @@ export function PullToRefresh({
   className?: string;
   /** Merged onto the scrollable div (e.g. min-h-dvh for settings). */
   scrollAreaClassName?: string;
+  /** Merged onto the scrollable div (e.g. overscroll-behavior for settings). */
+  scrollAreaStyle?: CSSProperties;
   /** Merged onto the inner content wrapper (e.g. h-full flex flex-col for one-screen layouts). */
   contentClassName?: string;
   disabled?: boolean;
@@ -275,7 +278,13 @@ export function PullToRefresh({
         ref={scrollRef}
         className={`pull-to-refresh-scroll min-h-0 min-w-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-y-contain ${scrollAreaClassName}`.trim()}
         aria-busy={refreshing}
-        style={{ WebkitOverflowScrolling: "touch" } as CSSProperties}
+        style={
+          {
+            WebkitOverflowScrolling: "touch",
+            overscrollBehavior: "contain",
+            ...scrollAreaStyle,
+          } as CSSProperties
+        }
       >
         <div
           className={`min-h-full min-w-0 max-w-full ${contentClassName}`.trim()}

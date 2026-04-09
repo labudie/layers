@@ -212,7 +212,7 @@ export default function SettingsPage() {
     <AppSiteChrome title="Settings">
       <PullToRefresh
         className="flex min-h-0 min-w-0 flex-1 flex-col"
-        scrollAreaClassName="min-h-dvh max-h-none"
+        scrollAreaClassName="min-h-0 max-h-full overscroll-y-contain"
         disabled={loading}
         onRefresh={async () => {
           await load({ silent: true });

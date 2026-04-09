@@ -1,7 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import Link from "next/link";
 import {
   useCallback,
   useEffect,
@@ -230,12 +229,23 @@ export function GameplayProfileSheet({
   const heightVh = snap === "full" ? FULL_VH : PEEK_VH;
 
   return (
-    <div className="fixed inset-0 z-[140]" aria-modal role="dialog" aria-label="Profile preview">
+    <div
+      className="fixed inset-0 z-[140]"
+      aria-modal
+      role="dialog"
+      aria-label="Profile preview"
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
+    >
       <button
         type="button"
         aria-label="Dismiss"
         className="absolute inset-0 bg-black/55"
         onClick={() => closeWithAnimation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
       />
       <div
         className="absolute bottom-0 left-0 right-0 flex flex-col overflow-hidden rounded-t-[20px] bg-[#0f0520] shadow-[0_-12px_48px_rgba(0,0,0,0.55)]"
@@ -245,11 +255,22 @@ export function GameplayProfileSheet({
             transform: `translateY(${dragY}px)`,
             transition:
               dragging || suppressSheetTransition ? "none" : SPRING,
+            overscrollBehavior: "contain",
+            touchAction: "pan-y",
           } as CSSProperties
         }
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
+        onTouchStart={(e) => {
+          e.stopPropagation();
+          onTouchStart(e);
+        }}
+        onTouchMove={(e) => {
+          e.stopPropagation();
+          onTouchMove(e);
+        }}
+        onTouchEnd={(e) => {
+          e.stopPropagation();
+          onTouchEnd();
+        }}
       >
         <div className="flex shrink-0 flex-col items-center pt-2">
           <div className="h-1 w-10 rounded-full bg-white/25" aria-hidden />
@@ -273,6 +294,7 @@ export function GameplayProfileSheet({
           className={`min-h-0 flex-1 overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-1 ${
             snap === "full" ? "" : ""
           }`}
+          style={{ overscrollBehavior: "contain" } as CSSProperties}
         >
           {loading ? (
             <div className="space-y-4 py-2" aria-busy>
@@ -334,91 +356,66 @@ export function GameplayProfileSheet({
                 </div>
               </div>
 
-              {snap === "peek" ? (
-                <button
-                  type="button"
-                  className="tap-press mt-5 w-full rounded-xl border border-white/15 bg-white/[0.06] py-3 text-sm font-bold text-white hover:bg-white/10"
-                  onClick={() => {
-                    setSnap("full");
-                    setDragY(0);
-                  }}
-                >
-                  View Full Profile →
-                </button>
-              ) : null}
+              <div className="mt-6">
+                <p className="text-xs font-bold uppercase tracking-wider text-white/45">Badges</p>
+                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                  {BADGE_DEFS.map((badge) => {
+                    const has = earned.has(badge.id);
+                    return (
+                      <span
+                        key={badge.id}
+                        title={badge.name}
+                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs ${
+                          has
+                            ? "border-[var(--accent)]/45 bg-[var(--accent)]/15 text-white"
+                            : "border-white/10 bg-white/[0.04] text-white/35"
+                        }`}
+                      >
+                        {badge.icon} {badge.name}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
 
-              {snap === "full" ? (
-                <>
-                  <div className="mt-6">
-                    <p className="text-xs font-bold uppercase tracking-wider text-white/45">Badges</p>
-                    <div className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                      {BADGE_DEFS.map((badge) => {
-                        const has = earned.has(badge.id);
-                        return (
-                          <span
-                            key={badge.id}
-                            title={badge.name}
-                            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs ${
-                              has
-                                ? "border-[var(--accent)]/45 bg-[var(--accent)]/15 text-white"
-                                : "border-white/10 bg-white/[0.04] text-white/35"
-                            }`}
-                          >
-                            {badge.icon} {badge.name}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="mt-6">
-                    <p className="text-xs font-bold uppercase tracking-wider text-white/45">
-                      Submitted work
-                    </p>
-                    <div className="mt-3 grid grid-cols-2 gap-3">
-                      {workItems.length === 0 ? (
-                        <p className="col-span-2 text-center text-sm text-white/45">No public work yet</p>
-                      ) : (
-                        workItems.map((w) => (
-                          <div
-                            key={w.id}
-                            className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]"
-                          >
-                            <div className="relative aspect-square w-full bg-black/30">
-                              <img
-                                src={w.image_url}
-                                alt=""
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                            <div className="p-2">
-                              <p className="line-clamp-2 text-xs font-semibold text-white/90">
-                                {w.title ?? "Untitled"}
-                              </p>
-                              {w.software ? (
-                                <p className="mt-0.5 line-clamp-1 text-[11px] text-white/50">
-                                  {w.software}
-                                </p>
-                              ) : null}
-                              <p className="mt-1 text-[11px] text-white/45">
-                                {w.download_count} downloads
-                              </p>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  <Link
-                    href={`/profile/${encodeURIComponent(displayHandle)}`}
-                    className="mt-6 block w-full rounded-xl border border-[var(--accent)]/40 bg-[var(--accent)]/15 py-3 text-center text-sm font-bold text-white hover:bg-[var(--accent)]/25"
-                    onClick={() => onClose()}
-                  >
-                    Open full profile page
-                  </Link>
-                </>
-              ) : null}
+              <div className="mt-6">
+                <p className="text-xs font-bold uppercase tracking-wider text-white/45">
+                  Submitted work
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  {workItems.length === 0 ? (
+                    <p className="col-span-2 text-center text-sm text-white/45">No public work yet</p>
+                  ) : (
+                    workItems.map((w) => (
+                      <div
+                        key={w.id}
+                        className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]"
+                      >
+                        <div className="relative aspect-square w-full bg-black/30">
+                          <img
+                            src={w.image_url}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="p-2">
+                          <p className="line-clamp-2 text-xs font-semibold text-white/90">
+                            {w.title ?? "Untitled"}
+                          </p>
+                          {w.software ? (
+                            <p className="mt-0.5 line-clamp-1 text-[11px] text-white/50">
+                              {w.software}
+                            </p>
+                          ) : null}
+                          <p className="mt-1 text-[11px] text-white/45">
+                            {w.download_count} downloads
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </>
           )}
         </div>

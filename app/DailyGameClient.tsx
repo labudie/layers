@@ -483,7 +483,10 @@ export function DailyGameClient({
   const startedChallengeIdsRef = useRef<Set<string>>(new Set());
   const completedChallengeIdsRef = useRef<Set<string>>(new Set());
   const dailyCompletedKeyRef = useRef<string | null>(null);
-  const modalBackdropTouchStartYRef = useRef<number | null>(null);
+  const modalPullStartYRef = useRef<number | null>(null);
+  const modalScaleRef = useRef(modalScale);
+  const [modalPullDy, setModalPullDy] = useState(0);
+  const [modalPullDragging, setModalPullDragging] = useState(false);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartScaleRef = useRef(1);
   const panStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -589,12 +592,33 @@ export function DailyGameClient({
   }, [currentChallengeIndex, challengeIdsKey]);
 
   useEffect(() => {
+    modalScaleRef.current = modalScale;
+  }, [modalScale]);
+
+  useEffect(() => {
+    if (modalScale > 1) {
+      setModalPullDy(0);
+      modalPullStartYRef.current = null;
+      setModalPullDragging(false);
+    }
+  }, [modalScale]);
+
+  useEffect(() => {
+    if (!modalImageUrl) {
+      setModalPullDy(0);
+      modalPullStartYRef.current = null;
+      setModalPullDragging(false);
+    }
+  }, [modalImageUrl]);
+
+  useEffect(() => {
     if (!modalImageUrl) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setModalImageUrl(null);
         setModalScale(1);
         setModalOffset({ x: 0, y: 0 });
+        setModalPullDy(0);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1586,6 +1610,51 @@ export function DailyGameClient({
     return Math.hypot(dx, dy);
   }, []);
 
+  const MODAL_DISMISS_PULL_PX = 80;
+
+  const resetModalImageViewer = useCallback(() => {
+    setModalImageUrl(null);
+    setModalScale(1);
+    setModalOffset({ x: 0, y: 0 });
+    setModalPullDy(0);
+    modalPullStartYRef.current = null;
+    setModalPullDragging(false);
+  }, []);
+
+  const beginModalPullGesture = useCallback((clientY: number) => {
+    if (modalScaleRef.current > 1) return;
+    modalPullStartYRef.current = clientY;
+    setModalPullDragging(true);
+  }, []);
+
+  const moveModalPullGesture = useCallback((clientY: number) => {
+    if (modalScaleRef.current > 1 || modalPullStartYRef.current == null) return;
+    setModalPullDy(
+      Math.max(0, clientY - modalPullStartYRef.current),
+    );
+  }, []);
+
+  const endModalPullGesture = useCallback(() => {
+    if (modalScaleRef.current > 1) {
+      modalPullStartYRef.current = null;
+      setModalPullDragging(false);
+      return;
+    }
+    modalPullStartYRef.current = null;
+    setModalPullDragging(false);
+    setModalPullDy((dy) => {
+      if (dy > MODAL_DISMISS_PULL_PX) {
+        const h =
+          typeof window !== "undefined" ? window.innerHeight : 800;
+        window.setTimeout(() => {
+          resetModalImageViewer();
+        }, 280);
+        return h;
+      }
+      return 0;
+    });
+  }, [resetModalImageViewer]);
+
   const guessTrackerHeaderRow = useMemo(() => {
     if (
       total === 0 ||
@@ -1666,7 +1735,14 @@ export function DailyGameClient({
       }
       className="h-dvh min-h-0 min-w-0 overflow-x-hidden overflow-y-hidden"
     >
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        className="relative flex min-h-0 flex-1 flex-col"
+        style={
+          profilePreviewHandle != null
+            ? ({ touchAction: "none" } as React.CSSProperties)
+            : undefined
+        }
+      >
         <PullToRefresh
           disabled={Boolean(modalImageUrl) || profilePreviewHandle != null}
           className={`mx-auto flex w-full min-w-0 max-w-3xl flex-1 flex-col px-4 md:px-5 ${
@@ -1941,9 +2017,8 @@ export function DailyGameClient({
                               {ans ?? "—"}
                             </span>
                             {" · "}
-                            {solved ? "Solved" : "Not solved"} · {g.length}/
-                            {MAX_GUESSES}
-                            attempts
+                            {solved ? "Solved" : "Not solved"} ·{" "}
+                            {`${g.length}/${MAX_GUESSES} attempts`}
                           </div>
                           {emojiRow ? (
                             <div className="mt-2 font-mono text-lg tracking-widest">
@@ -2523,26 +2598,25 @@ export function DailyGameClient({
           style={{ touchAction: "none" }}
           onClick={() => {
             if (modalScale <= 1) {
-              setModalImageUrl(null);
-              setModalScale(1);
-              setModalOffset({ x: 0, y: 0 });
+              resetModalImageViewer();
             }
           }}
           onTouchStart={(e) => {
-            if (modalScale <= 1) {
-              modalBackdropTouchStartYRef.current = e.touches[0]?.clientY ?? null;
+            e.stopPropagation();
+            if (modalScale <= 1 && e.touches.length === 1) {
+              beginModalPullGesture(e.touches[0].clientY);
+            }
+          }}
+          onTouchMove={(e) => {
+            e.stopPropagation();
+            if (modalScale <= 1 && e.touches.length === 1) {
+              moveModalPullGesture(e.touches[0].clientY);
             }
           }}
           onTouchEnd={(e) => {
-            if (modalScale > 1) return;
-            const startY = modalBackdropTouchStartYRef.current;
-            const endY = e.changedTouches[0]?.clientY ?? null;
-            modalBackdropTouchStartYRef.current = null;
-            if (startY == null || endY == null) return;
-            if (startY - endY > 50) {
-              setModalImageUrl(null);
-              setModalScale(1);
-              setModalOffset({ x: 0, y: 0 });
+            e.stopPropagation();
+            if (modalScale <= 1) {
+              endModalPullGesture();
             }
           }}
         >
@@ -2552,9 +2626,7 @@ export function DailyGameClient({
             className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/70 text-2xl leading-none text-white hover:bg-white/10"
             onClick={(e) => {
               e.stopPropagation();
-              setModalImageUrl(null);
-              setModalScale(1);
-              setModalOffset({ x: 0, y: 0 });
+              resetModalImageViewer();
             }}
           >
             ×
@@ -2563,15 +2635,22 @@ export function DailyGameClient({
             src={modalImageUrl}
             alt=""
             className="max-h-full max-w-full object-contain"
-            style={{
-              transform: `translate(${modalOffset.x}px, ${modalOffset.y}px) scale(${modalScale})`,
-              transformOrigin: "center center",
-              touchAction: "none",
-            }}
+            style={
+              {
+                transform: `translate(${modalOffset.x}px, ${modalOffset.y + modalPullDy}px) scale(${modalScale})`,
+                transformOrigin: "center center",
+                touchAction: "none",
+                transition: modalPullDragging
+                  ? "none"
+                  : "transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)",
+              } as React.CSSProperties
+            }
             onClick={(e) => e.stopPropagation()}
             onTouchStart={(e) => {
               e.stopPropagation();
               if (e.touches.length === 2) {
+                modalPullStartYRef.current = null;
+                setModalPullDragging(false);
                 const d = distanceBetweenTouches(e.touches);
                 if (d > 0) {
                   pinchStartDistanceRef.current = d;
@@ -2591,6 +2670,9 @@ export function DailyGameClient({
                 ) {
                   setModalScale(1);
                   setModalOffset({ x: 0, y: 0 });
+                  setModalPullDy(0);
+                  modalPullStartYRef.current = null;
+                  setModalPullDragging(false);
                   lastTapRef.current = null;
                   return;
                 }
@@ -2600,6 +2682,7 @@ export function DailyGameClient({
                   panStartOffsetRef.current = { ...modalOffset };
                 } else {
                   panStartRef.current = null;
+                  beginModalPullGesture(t.clientY);
                 }
               }
             }}
@@ -2626,6 +2709,10 @@ export function DailyGameClient({
                   x: panStartOffsetRef.current.x + dx,
                   y: panStartOffsetRef.current.y + dy,
                 });
+                return;
+              }
+              if (e.touches.length === 1 && modalScale <= 1) {
+                moveModalPullGesture(e.touches[0].clientY);
               }
             }}
             onTouchEnd={(e) => {
@@ -2636,8 +2723,12 @@ export function DailyGameClient({
               if (e.touches.length === 0) {
                 panStartRef.current = null;
                 if (modalScale <= 1) {
+                  endModalPullGesture();
                   setModalScale(1);
                   setModalOffset({ x: 0, y: 0 });
+                } else {
+                  modalPullStartYRef.current = null;
+                  setModalPullDragging(false);
                 }
               }
             }}
