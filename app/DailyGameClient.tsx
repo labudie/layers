@@ -487,6 +487,13 @@ export function DailyGameClient({
   const modalScaleRef = useRef(modalScale);
   const [modalPullDy, setModalPullDy] = useState(0);
   const [modalPullDragging, setModalPullDragging] = useState(false);
+  /** After release: spring image/backdrop to rest, or play dismiss exit. */
+  const [modalPullTransition, setModalPullTransition] = useState<
+    null | "spring" | "dismiss"
+  >(null);
+  /** Backdrop alpha (0–1); base 0.95 at rest per Twitter-style modal. */
+  const [modalBackdropOpacity, setModalBackdropOpacity] = useState(0.95);
+  const modalPullDyRef = useRef(0);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartScaleRef = useRef(1);
   const panStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -598,32 +605,28 @@ export function DailyGameClient({
   useEffect(() => {
     if (modalScale > 1) {
       setModalPullDy(0);
+      modalPullDyRef.current = 0;
       modalPullStartYRef.current = null;
       setModalPullDragging(false);
+      setModalPullTransition(null);
+      setModalBackdropOpacity(0.95);
     }
   }, [modalScale]);
 
   useEffect(() => {
     if (!modalImageUrl) {
       setModalPullDy(0);
+      modalPullDyRef.current = 0;
       modalPullStartYRef.current = null;
       setModalPullDragging(false);
+      setModalPullTransition(null);
+      setModalBackdropOpacity(0.95);
     }
   }, [modalImageUrl]);
 
   useEffect(() => {
-    if (!modalImageUrl) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setModalImageUrl(null);
-        setModalScale(1);
-        setModalOffset({ x: 0, y: 0 });
-        setModalPullDy(0);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [modalImageUrl]);
+    modalPullDyRef.current = modalPullDy;
+  }, [modalPullDy]);
 
   useEffect(() => {
     if (!infoPopoverOpen) return;
@@ -1597,6 +1600,11 @@ export function DailyGameClient({
     setModalImageUrl(url);
     setModalScale(1);
     setModalOffset({ x: 0, y: 0 });
+    setModalPullDy(0);
+    setModalPullDragging(false);
+    setModalPullTransition(null);
+    setModalBackdropOpacity(0.95);
+    modalPullStartYRef.current = null;
   }, []);
 
   const clampScale = useCallback((value: number) => {
@@ -1610,7 +1618,17 @@ export function DailyGameClient({
     return Math.hypot(dx, dy);
   }, []);
 
-  const MODAL_DISMISS_PULL_PX = 80;
+  const MODAL_DISMISS_THRESHOLD_PX = 80;
+  const MODAL_BACKDROP_FADE_DISTANCE = 300;
+
+  const MODAL_IMG_TRANSITION_SPRING_BACK =
+    "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)";
+  const MODAL_IMG_TRANSITION_DISMISS =
+    "transform 0.2s cubic-bezier(0.4, 0, 1, 1)";
+  const MODAL_BACKDROP_TRANSITION_SPRING_BACK =
+    "opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1)";
+  const MODAL_BACKDROP_TRANSITION_DISMISS =
+    "opacity 0.2s cubic-bezier(0.4, 0, 1, 1)";
 
   const resetModalImageViewer = useCallback(() => {
     setModalImageUrl(null);
@@ -1619,18 +1637,26 @@ export function DailyGameClient({
     setModalPullDy(0);
     modalPullStartYRef.current = null;
     setModalPullDragging(false);
+    setModalPullTransition(null);
+    setModalBackdropOpacity(0.95);
+    modalPullDyRef.current = 0;
   }, []);
 
   const beginModalPullGesture = useCallback((clientY: number) => {
     if (modalScaleRef.current > 1) return;
     modalPullStartYRef.current = clientY;
     setModalPullDragging(true);
+    setModalPullTransition(null);
   }, []);
 
   const moveModalPullGesture = useCallback((clientY: number) => {
     if (modalScaleRef.current > 1 || modalPullStartYRef.current == null) return;
-    setModalPullDy(
-      Math.max(0, clientY - modalPullStartYRef.current),
+    const dy = clientY - modalPullStartYRef.current;
+    modalPullDyRef.current = dy;
+    setModalPullDy(dy);
+    const dist = Math.abs(dy);
+    setModalBackdropOpacity(
+      0.95 * (1 - Math.min(1, dist / MODAL_BACKDROP_FADE_DISTANCE)),
     );
   }, []);
 
@@ -1640,20 +1666,54 @@ export function DailyGameClient({
       setModalPullDragging(false);
       return;
     }
+    const dy = modalPullDyRef.current;
     modalPullStartYRef.current = null;
     setModalPullDragging(false);
-    setModalPullDy((dy) => {
-      if (dy > MODAL_DISMISS_PULL_PX) {
-        const h =
-          typeof window !== "undefined" ? window.innerHeight : 800;
-        window.setTimeout(() => {
-          resetModalImageViewer();
-        }, 280);
-        return h;
-      }
-      return 0;
-    });
+    const h = typeof window !== "undefined" ? window.innerHeight : 800;
+    if (Math.abs(dy) > MODAL_DISMISS_THRESHOLD_PX) {
+      const exitY = dy > 0 ? h : -h;
+      setModalPullTransition("dismiss");
+      modalPullDyRef.current = exitY;
+      setModalPullDy(exitY);
+      setModalBackdropOpacity(0);
+      window.setTimeout(() => {
+        resetModalImageViewer();
+      }, 210);
+    } else {
+      setModalPullTransition("spring");
+      modalPullDyRef.current = 0;
+      setModalPullDy(0);
+      setModalBackdropOpacity(0.95);
+      window.setTimeout(() => {
+        setModalPullTransition(null);
+      }, 260);
+    }
   }, [resetModalImageViewer]);
+
+  const modalBackdropCssTransition = useMemo(() => {
+    if (modalPullDragging) return "none";
+    if (modalPullTransition === "spring") return MODAL_BACKDROP_TRANSITION_SPRING_BACK;
+    if (modalPullTransition === "dismiss") return MODAL_BACKDROP_TRANSITION_DISMISS;
+    return "none";
+  }, [modalPullDragging, modalPullTransition]);
+
+  const modalImgCssTransition = useMemo(() => {
+    if (modalPullDragging) return "none";
+    if (modalPullTransition === "spring") return MODAL_IMG_TRANSITION_SPRING_BACK;
+    if (modalPullTransition === "dismiss") return MODAL_IMG_TRANSITION_DISMISS;
+    return "none";
+  }, [modalPullDragging, modalPullTransition]);
+
+  useEffect(() => {
+    if (!modalImageUrl) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        resetModalImageViewer();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [modalImageUrl, resetModalImageViewer]);
 
   const guessTrackerHeaderRow = useMemo(() => {
     if (
@@ -2591,39 +2651,50 @@ export function DailyGameClient({
 
       {modalImageUrl ? (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black p-4"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Challenge image"
-          style={{ touchAction: "none" }}
-          onClick={() => {
-            if (modalScale <= 1) {
-              resetModalImageViewer();
-            }
-          }}
-          onTouchStart={(e) => {
-            e.stopPropagation();
-            if (modalScale <= 1 && e.touches.length === 1) {
-              beginModalPullGesture(e.touches[0].clientY);
-            }
-          }}
-          onTouchMove={(e) => {
-            e.stopPropagation();
-            if (modalScale <= 1 && e.touches.length === 1) {
-              moveModalPullGesture(e.touches[0].clientY);
-            }
-          }}
-          onTouchEnd={(e) => {
-            e.stopPropagation();
-            if (modalScale <= 1) {
-              endModalPullGesture();
-            }
-          }}
+          style={{ touchAction: "none" } as CSSProperties}
         >
+          <div
+            className="absolute inset-0 z-0 bg-black"
+            style={
+              {
+                opacity: modalBackdropOpacity,
+                transition: modalBackdropCssTransition,
+              } as CSSProperties
+            }
+            aria-hidden
+            onClick={() => {
+              if (modalScale <= 1) {
+                resetModalImageViewer();
+              }
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              if (modalScale <= 1 && e.touches.length === 1) {
+                beginModalPullGesture(e.touches[0].clientY);
+              }
+            }}
+            onTouchMove={(e) => {
+              e.stopPropagation();
+              if (modalScale <= 1 && e.touches.length === 1) {
+                e.preventDefault();
+                moveModalPullGesture(e.touches[0].clientY);
+              }
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+              if (modalScale <= 1) {
+                endModalPullGesture();
+              }
+            }}
+          />
           <button
             type="button"
             aria-label="Close"
-            className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/70 text-2xl leading-none text-white hover:bg-white/10"
+            className="absolute right-4 top-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/70 text-2xl leading-none text-white hover:bg-white/10"
             onClick={(e) => {
               e.stopPropagation();
               resetModalImageViewer();
@@ -2634,16 +2705,14 @@ export function DailyGameClient({
           <img
             src={modalImageUrl}
             alt=""
-            className="max-h-full max-w-full object-contain"
+            className="relative z-10 max-h-full max-w-full object-contain"
             style={
               {
                 transform: `translate(${modalOffset.x}px, ${modalOffset.y + modalPullDy}px) scale(${modalScale})`,
                 transformOrigin: "center center",
                 touchAction: "none",
-                transition: modalPullDragging
-                  ? "none"
-                  : "transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)",
-              } as React.CSSProperties
+                transition: modalImgCssTransition,
+              } as CSSProperties
             }
             onClick={(e) => e.stopPropagation()}
             onTouchStart={(e) => {
@@ -2671,8 +2740,11 @@ export function DailyGameClient({
                   setModalScale(1);
                   setModalOffset({ x: 0, y: 0 });
                   setModalPullDy(0);
+                  modalPullDyRef.current = 0;
                   modalPullStartYRef.current = null;
                   setModalPullDragging(false);
+                  setModalPullTransition(null);
+                  setModalBackdropOpacity(0.95);
                   lastTapRef.current = null;
                   return;
                 }
@@ -2697,6 +2769,10 @@ export function DailyGameClient({
                 setModalScale(nextScale);
                 if (nextScale <= 1) {
                   setModalOffset({ x: 0, y: 0 });
+                  setModalPullDy(0);
+                  modalPullDyRef.current = 0;
+                  setModalPullTransition(null);
+                  setModalBackdropOpacity(0.95);
                 }
                 return;
               }
@@ -2712,6 +2788,7 @@ export function DailyGameClient({
                 return;
               }
               if (e.touches.length === 1 && modalScale <= 1) {
+                e.preventDefault();
                 moveModalPullGesture(e.touches[0].clientY);
               }
             }}
