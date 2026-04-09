@@ -12,10 +12,16 @@ import { supabase } from "@/lib/supabase";
 import { BADGE_DEFS, type BadgeId } from "@/lib/badges";
 import { stripAtHandle } from "@/lib/username-display";
 
+/** Partial: header + avatar + stats only. */
 const PEEK_VH = 60;
+/** Expanded: adds badges + submitted work (scroll inside lower region). */
 const FULL_VH = 95;
 const SPRING =
   "transform 0.48s cubic-bezier(0.32, 0.72, 0, 1), height 0.48s cubic-bezier(0.32, 0.72, 0, 1)";
+
+const DISMISS_DOWN_PX = 100;
+const EXPAND_UP_PX = 60;
+const COLLAPSE_DOWN_PX = 80;
 
 type ProfileRow = {
   id: string;
@@ -58,8 +64,10 @@ export function GameplayProfileSheet({
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [suppressSheetTransition, setSuppressSheetTransition] = useState(true);
+  const [closing, setClosing] = useState(false);
   const touchStartY = useRef<number | null>(null);
   const sheetStartDragY = useRef(0);
+  const dragYRef = useRef(0);
 
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -67,18 +75,25 @@ export function GameplayProfileSheet({
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
+    dragYRef.current = dragY;
+  }, [dragY]);
+
+  useEffect(() => {
     if (!open) {
       setMounted(false);
       setSnap("peek");
       setDragY(0);
       setSuppressSheetTransition(true);
+      setClosing(false);
       setProfile(null);
       setWorkItems([]);
       setFetchError(null);
+      touchStartY.current = null;
       return;
     }
     setMounted(true);
     setSnap("peek");
+    setClosing(false);
     setSuppressSheetTransition(true);
     const h = typeof window !== "undefined" ? window.innerHeight : 600;
     setDragY(h);
@@ -169,57 +184,62 @@ export function GameplayProfileSheet({
 
   const closeWithAnimation = useCallback(() => {
     setDragging(false);
-    setDragY(typeof window !== "undefined" ? window.innerHeight : 800);
+    touchStartY.current = null;
+    setClosing(true);
     window.setTimeout(() => {
       onClose();
-    }, 420);
+      setClosing(false);
+      setDragY(0);
+      setSnap("peek");
+    }, 400);
   }, [onClose]);
 
-  const onTouchStart = (e: React.TouchEvent) => {
+  const onDragTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length !== 1) return;
     touchStartY.current = e.touches[0].clientY;
-    sheetStartDragY.current = dragY;
+    sheetStartDragY.current = dragYRef.current;
     setDragging(true);
   };
 
-  const onTouchMove = (e: React.TouchEvent) => {
+  const onDragTouchMove = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
     if (touchStartY.current == null) return;
     if (e.touches.length !== 1) return;
     const y = e.touches[0].clientY;
     const start = touchStartY.current;
-    if (start == null) return;
     const delta = y - start;
     let next = sheetStartDragY.current + delta;
     const maxDown =
       typeof window !== "undefined" ? window.innerHeight * 0.5 : 400;
     next = Math.min(maxDown, Math.max(-40, next));
+    dragYRef.current = next;
     setDragY(next);
   };
 
-  const onTouchEnd = () => {
+  const onDragTouchEnd = () => {
     const start = touchStartY.current;
     touchStartY.current = null;
     setDragging(false);
     if (start == null) return;
 
-    const threshold = 100;
-    const upExpand = -55;
+    const y = dragYRef.current;
 
     if (snap === "peek") {
-      if (dragY > threshold) {
+      if (y > DISMISS_DOWN_PX) {
         closeWithAnimation();
         return;
       }
-      if (dragY < upExpand) {
+      if (y < -EXPAND_UP_PX) {
         setSnap("full");
       }
-    } else if (dragY > threshold * 1.85) {
-      closeWithAnimation();
-      return;
-    } else if (dragY > 48) {
-      setSnap("peek");
+    } else {
+      if (y > COLLAPSE_DOWN_PX) {
+        setSnap("peek");
+      }
     }
     setDragY(0);
+    dragYRef.current = 0;
   };
 
   if (!open || !mounted) return null;
@@ -228,14 +248,28 @@ export function GameplayProfileSheet({
   const earned = new Set((profile?.badges ?? []) as BadgeId[]);
   const heightVh = snap === "full" ? FULL_VH : PEEK_VH;
 
+  const sheetTransform = closing
+    ? "translateY(100%)"
+    : `translateY(${dragY}px)`;
+
+  const sheetTransition = closing
+    ? "transform 0.38s cubic-bezier(0.32, 0.72, 0, 1)"
+    : dragging || suppressSheetTransition
+      ? "none"
+      : SPRING;
+
   return (
     <div
-      className="fixed inset-0 z-[140]"
+      className="pointer-events-auto fixed inset-0 z-[140] touch-none"
       aria-modal
       role="dialog"
       aria-label="Profile preview"
+      style={{ touchAction: "none" } as CSSProperties}
       onTouchStart={(e) => e.stopPropagation()}
-      onTouchMove={(e) => e.stopPropagation()}
+      onTouchMove={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+      }}
       onTouchEnd={(e) => e.stopPropagation()}
     >
       <button
@@ -244,60 +278,68 @@ export function GameplayProfileSheet({
         className="absolute inset-0 bg-black/55"
         onClick={() => closeWithAnimation()}
         onTouchStart={(e) => e.stopPropagation()}
-        onTouchMove={(e) => e.stopPropagation()}
+        onTouchMove={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
         onTouchEnd={(e) => e.stopPropagation()}
       />
       <div
-        className="absolute bottom-0 left-0 right-0 flex flex-col overflow-hidden rounded-t-[20px] bg-[#0f0520] shadow-[0_-12px_48px_rgba(0,0,0,0.55)]"
+        className="absolute bottom-0 left-0 right-0 flex min-h-0 max-h-[95dvh] flex-col overflow-hidden rounded-t-[20px] bg-[#0f0520] shadow-[0_-12px_48px_rgba(0,0,0,0.55)]"
         style={
           {
             height: `${heightVh}vh`,
-            transform: `translateY(${dragY}px)`,
-            transition:
-              dragging || suppressSheetTransition ? "none" : SPRING,
+            transform: sheetTransform,
+            transition: sheetTransition,
             overscrollBehavior: "contain",
-            touchAction: "pan-y",
+            touchAction: "manipulation",
           } as CSSProperties
         }
-        onTouchStart={(e) => {
-          e.stopPropagation();
-          onTouchStart(e);
-        }}
-        onTouchMove={(e) => {
-          e.stopPropagation();
-          onTouchMove(e);
-        }}
-        onTouchEnd={(e) => {
-          e.stopPropagation();
-          onTouchEnd();
-        }}
       >
-        <div className="flex shrink-0 flex-col items-center pt-2">
-          <div className="h-1 w-10 rounded-full bg-white/25" aria-hidden />
-        </div>
-        <div className="flex shrink-0 items-center gap-2 px-3 pb-1 pt-2">
-          <button
-            type="button"
-            aria-label="Back"
-            className="tap-press flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg text-white/90 hover:bg-white/10"
-            onClick={() => closeWithAnimation()}
-          >
-            ←
-          </button>
-          <div className="min-w-0 flex-1 truncate text-center text-sm font-semibold text-white/80">
-            Profile
-          </div>
-          <span className="w-10 shrink-0" aria-hidden />
-        </div>
-
         <div
-          className={`min-h-0 flex-1 overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-1 ${
-            snap === "full" ? "" : ""
-          }`}
-          style={{ overscrollBehavior: "contain" } as CSSProperties}
+          className={
+            snap === "peek"
+              ? "flex min-h-0 flex-1 flex-col"
+              : "flex shrink-0 flex-col"
+          }
         >
+          <div
+            className={
+              snap === "peek"
+                ? "flex min-h-0 flex-1 flex-col"
+                : "flex shrink-0 flex-col"
+            }
+            style={{ touchAction: "none" } as CSSProperties}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              onDragTouchStart(e);
+            }}
+            onTouchMove={onDragTouchMove}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+              onDragTouchEnd();
+            }}
+          >
+          <div className="flex shrink-0 flex-col items-center pt-2">
+            <div className="h-1 w-10 rounded-full bg-white/25" aria-hidden />
+          </div>
+          <div className="flex shrink-0 items-center gap-2 px-3 pb-1 pt-2">
+            <button
+              type="button"
+              aria-label="Back"
+              className="tap-press flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg text-white/90 hover:bg-white/10"
+              onClick={() => closeWithAnimation()}
+            >
+              ←
+            </button>
+            <div className="min-w-0 flex-1 truncate text-center text-sm font-semibold text-white/80">
+              Profile
+            </div>
+            <span className="w-10 shrink-0" aria-hidden />
+          </div>
+
           {loading ? (
-            <div className="space-y-4 py-2" aria-busy>
+            <div className="space-y-4 px-4 py-2" aria-busy>
               <div className="mx-auto h-16 w-16 animate-pulse rounded-full bg-white/10" />
               <div className="mx-auto h-5 w-32 animate-pulse rounded-md bg-white/10" />
               <div className="grid grid-cols-3 gap-2">
@@ -307,10 +349,12 @@ export function GameplayProfileSheet({
               </div>
             </div>
           ) : fetchError || !profile ? (
-            <p className="py-8 text-center text-sm text-white/55">{fetchError ?? "Unavailable"}</p>
+            <p className="px-4 py-8 text-center text-sm text-white/55">
+              {fetchError ?? "Unavailable"}
+            </p>
           ) : (
             <>
-              <div className="flex flex-col items-center text-center">
+              <div className="flex flex-col items-center px-4 text-center">
                 <div className="h-16 w-16 overflow-hidden rounded-full border-[3px] border-[var(--accent)] bg-black/40 p-[2px] shadow-[0_0_20px_rgba(124,58,237,0.35)]">
                   <div className="h-full w-full overflow-hidden rounded-full bg-black/40">
                     {profile.avatar_url ? (
@@ -329,7 +373,7 @@ export function GameplayProfileSheet({
                 <p className="mt-3 text-lg font-bold text-white">@{displayHandle}</p>
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+              <div className="mt-4 grid grid-cols-3 gap-2 px-4 pb-3 text-center">
                 <div className="rounded-xl border border-white/10 bg-white/[0.04] px-2 py-2">
                   <div className="text-base font-extrabold text-white">
                     {profile.current_streak ?? 0}
@@ -355,70 +399,87 @@ export function GameplayProfileSheet({
                   </div>
                 </div>
               </div>
-
-              <div className="mt-6">
-                <p className="text-xs font-bold uppercase tracking-wider text-white/45">Badges</p>
-                <div className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                  {BADGE_DEFS.map((badge) => {
-                    const has = earned.has(badge.id);
-                    return (
-                      <span
-                        key={badge.id}
-                        title={badge.name}
-                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs ${
-                          has
-                            ? "border-[var(--accent)]/45 bg-[var(--accent)]/15 text-white"
-                            : "border-white/10 bg-white/[0.04] text-white/35"
-                        }`}
-                      >
-                        {badge.icon} {badge.name}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <p className="text-xs font-bold uppercase tracking-wider text-white/45">
-                  Submitted work
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  {workItems.length === 0 ? (
-                    <p className="col-span-2 text-center text-sm text-white/45">No public work yet</p>
-                  ) : (
-                    workItems.map((w) => (
-                      <div
-                        key={w.id}
-                        className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]"
-                      >
-                        <div className="relative aspect-square w-full bg-black/30">
-                          <img
-                            src={w.image_url}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
-                        <div className="p-2">
-                          <p className="line-clamp-2 text-xs font-semibold text-white/90">
-                            {w.title ?? "Untitled"}
-                          </p>
-                          {w.software ? (
-                            <p className="mt-0.5 line-clamp-1 text-[11px] text-white/50">
-                              {w.software}
-                            </p>
-                          ) : null}
-                          <p className="mt-1 text-[11px] text-white/45">
-                            {w.download_count} downloads
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
             </>
           )}
+          </div>
         </div>
+
+        {!loading && profile && snap === "full" ? (
+          <div
+            className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-1"
+            style={
+              {
+                WebkitOverflowScrolling: "touch",
+                overscrollBehavior: "contain",
+                touchAction: "pan-y",
+              } as CSSProperties
+            }
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            <div className="mt-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-white/45">Badges</p>
+              <div className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                {BADGE_DEFS.map((badge) => {
+                  const has = earned.has(badge.id);
+                  return (
+                    <span
+                      key={badge.id}
+                      title={badge.name}
+                      className={`shrink-0 rounded-full border px-3 py-1.5 text-xs ${
+                        has
+                          ? "border-[var(--accent)]/45 bg-[var(--accent)]/15 text-white"
+                          : "border-white/10 bg-white/[0.04] text-white/35"
+                      }`}
+                    >
+                      {badge.icon} {badge.name}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <p className="text-xs font-bold uppercase tracking-wider text-white/45">
+                Submitted work
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                {workItems.length === 0 ? (
+                  <p className="col-span-2 text-center text-sm text-white/45">No public work yet</p>
+                ) : (
+                  workItems.map((w) => (
+                    <div
+                      key={w.id}
+                      className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]"
+                    >
+                      <div className="relative aspect-square w-full bg-black/30">
+                        <img
+                          src={w.image_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <div className="p-2">
+                        <p className="line-clamp-2 text-xs font-semibold text-white/90">
+                          {w.title ?? "Untitled"}
+                        </p>
+                        {w.software ? (
+                          <p className="mt-0.5 line-clamp-1 text-[11px] text-white/50">
+                            {w.software}
+                          </p>
+                        ) : null}
+                        <p className="mt-1 text-[11px] text-white/45">
+                          {w.download_count} downloads
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
