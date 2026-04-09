@@ -9,6 +9,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePostHog } from "posthog-js/react";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
@@ -48,6 +49,9 @@ type GuessRow = {
 };
 
 const MAX_GUESSES = 3;
+
+/** Image modal scrim at rest; below 1 keeps the live game readable through the overlay. */
+const MODAL_SCRIM_MAX_OPACITY = 0.72;
 
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
@@ -491,8 +495,12 @@ export function DailyGameClient({
   const [modalPullTransition, setModalPullTransition] = useState<
     null | "spring" | "dismiss"
   >(null);
-  /** Backdrop alpha (0–1); base 0.95 at rest per Twitter-style modal. */
-  const [modalBackdropOpacity, setModalBackdropOpacity] = useState(0.95);
+  /** Scrim opacity (0–1); kept below 1 so live gameplay stays visible through the overlay. */
+  const [modalBackdropOpacity, setModalBackdropOpacity] = useState(
+    MODAL_SCRIM_MAX_OPACITY,
+  );
+  const [modalPortalEl, setModalPortalEl] = useState<HTMLElement | null>(null);
+  const modalLayerRef = useRef<HTMLDivElement | null>(null);
   const modalPullDyRef = useRef(0);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartScaleRef = useRef(1);
@@ -609,7 +617,7 @@ export function DailyGameClient({
       modalPullStartYRef.current = null;
       setModalPullDragging(false);
       setModalPullTransition(null);
-      setModalBackdropOpacity(0.95);
+      setModalBackdropOpacity(MODAL_SCRIM_MAX_OPACITY);
     }
   }, [modalScale]);
 
@@ -620,8 +628,26 @@ export function DailyGameClient({
       modalPullStartYRef.current = null;
       setModalPullDragging(false);
       setModalPullTransition(null);
-      setModalBackdropOpacity(0.95);
+      setModalBackdropOpacity(MODAL_SCRIM_MAX_OPACITY);
     }
+  }, [modalImageUrl]);
+
+  useEffect(() => {
+    setModalPortalEl(document.body);
+  }, []);
+
+  useEffect(() => {
+    if (!modalImageUrl) return;
+    const el = modalLayerRef.current;
+    if (!el) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if (modalScaleRef.current > 1) return;
+      if (e.touches.length === 1) e.preventDefault();
+    };
+    el.addEventListener("touchmove", onTouchMove, { capture: true, passive: false });
+    return () => {
+      el.removeEventListener("touchmove", onTouchMove, { capture: true });
+    };
   }, [modalImageUrl]);
 
   useEffect(() => {
@@ -1603,7 +1629,7 @@ export function DailyGameClient({
     setModalPullDy(0);
     setModalPullDragging(false);
     setModalPullTransition(null);
-    setModalBackdropOpacity(0.95);
+    setModalBackdropOpacity(MODAL_SCRIM_MAX_OPACITY);
     modalPullStartYRef.current = null;
   }, []);
 
@@ -1638,7 +1664,7 @@ export function DailyGameClient({
     modalPullStartYRef.current = null;
     setModalPullDragging(false);
     setModalPullTransition(null);
-    setModalBackdropOpacity(0.95);
+    setModalBackdropOpacity(MODAL_SCRIM_MAX_OPACITY);
     modalPullDyRef.current = 0;
   }, []);
 
@@ -1656,7 +1682,8 @@ export function DailyGameClient({
     setModalPullDy(dy);
     const dist = Math.abs(dy);
     setModalBackdropOpacity(
-      0.95 * (1 - Math.min(1, dist / MODAL_BACKDROP_FADE_DISTANCE)),
+      MODAL_SCRIM_MAX_OPACITY *
+        (1 - Math.min(1, dist / MODAL_BACKDROP_FADE_DISTANCE)),
     );
   }, []);
 
@@ -1683,7 +1710,7 @@ export function DailyGameClient({
       setModalPullTransition("spring");
       modalPullDyRef.current = 0;
       setModalPullDy(0);
-      setModalBackdropOpacity(0.95);
+      setModalBackdropOpacity(MODAL_SCRIM_MAX_OPACITY);
       window.setTimeout(() => {
         setModalPullTransition(null);
       }, 260);
@@ -1698,11 +1725,12 @@ export function DailyGameClient({
   }, [modalPullDragging, modalPullTransition]);
 
   const modalImgCssTransition = useMemo(() => {
+    if (modalScale > 1) return "none";
     if (modalPullDragging) return "none";
     if (modalPullTransition === "spring") return MODAL_IMG_TRANSITION_SPRING_BACK;
     if (modalPullTransition === "dismiss") return MODAL_IMG_TRANSITION_DISMISS;
     return "none";
-  }, [modalPullDragging, modalPullTransition]);
+  }, [modalPullDragging, modalPullTransition, modalScale]);
 
   useEffect(() => {
     if (!modalImageUrl) return;
@@ -2649,18 +2677,21 @@ export function DailyGameClient({
           usernameHandle={profilePreviewHandle}
         />
 
-      {modalImageUrl ? (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Challenge image"
-          style={{ touchAction: "none" } as CSSProperties}
-        >
+      {modalPortalEl && modalImageUrl
+        ? createPortal(
+            <div
+              ref={modalLayerRef}
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Challenge image"
+              style={{ touchAction: "none" } as CSSProperties}
+            >
           <div
-            className="absolute inset-0 z-0 bg-black"
+            className="absolute inset-0 z-0"
             style={
               {
+                backgroundColor: "#0f0520",
                 opacity: modalBackdropOpacity,
                 transition: modalBackdropCssTransition,
               } as CSSProperties
@@ -2708,10 +2739,12 @@ export function DailyGameClient({
             className="relative z-10 max-h-full max-w-full object-contain"
             style={
               {
-                transform: `translate(${modalOffset.x}px, ${modalOffset.y + modalPullDy}px) scale(${modalScale})`,
+                transform: `translate3d(${modalOffset.x}px, ${modalOffset.y + modalPullDy}px, 0) scale(${modalScale})`,
                 transformOrigin: "center center",
                 touchAction: "none",
                 transition: modalImgCssTransition,
+                WebkitBackfaceVisibility: "hidden",
+                backfaceVisibility: "hidden",
               } as CSSProperties
             }
             onClick={(e) => e.stopPropagation()}
@@ -2744,7 +2777,7 @@ export function DailyGameClient({
                   modalPullStartYRef.current = null;
                   setModalPullDragging(false);
                   setModalPullTransition(null);
-                  setModalBackdropOpacity(0.95);
+                  setModalBackdropOpacity(MODAL_SCRIM_MAX_OPACITY);
                   lastTapRef.current = null;
                   return;
                 }
@@ -2772,7 +2805,7 @@ export function DailyGameClient({
                   setModalPullDy(0);
                   modalPullDyRef.current = 0;
                   setModalPullTransition(null);
-                  setModalBackdropOpacity(0.95);
+                  setModalBackdropOpacity(MODAL_SCRIM_MAX_OPACITY);
                 }
                 return;
               }
@@ -2810,8 +2843,10 @@ export function DailyGameClient({
               }
             }}
           />
-        </div>
-      ) : null}
+            </div>,
+            modalPortalEl,
+          )
+        : null}
       {confettiBursts.map((burstId) => (
         <div
           key={burstId}
