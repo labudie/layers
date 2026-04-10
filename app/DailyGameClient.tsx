@@ -2222,50 +2222,54 @@ export function DailyGameClient({
                   </div>
                 </div>
 
-                <div
-                  ref={tutorialImageRef}
-                  className="relative left-1/2 mb-4 flex min-h-0 min-w-0 flex-1 items-center justify-center w-dvw -translate-x-1/2"
-                >
-                  <div className="mx-auto flex h-full min-h-0 w-[80%] max-w-full items-center justify-center">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
                   <div
-                    className={`challenge-image-frame box-border flex h-full min-h-0 max-h-full w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
-                    onClick={() => {
-                      if (displayChallengeImageUrl) openImageModal(displayChallengeImageUrl);
-                    }}
+                    ref={tutorialImageRef}
+                    className="relative left-1/2 mb-3 flex min-h-0 min-w-0 flex-1 items-center justify-center w-dvw -translate-x-1/2"
                   >
-                    <div className="flex h-full min-h-0 w-full max-w-full items-center justify-center">
-                      {currentChallenge.image_url ? (
-                        <img
-                          src={displayChallengeImageUrl ?? ""}
-                          alt={currentChallenge.title ?? "Challenge image"}
-                          loading="eager"
-                          decoding="async"
-                          onLoad={() => setChallengeMainImageLoaded(true)}
-                          className={`block h-full w-full object-contain transition-opacity duration-200 [transition-timing-function:var(--smooth)] ${
-                            challengeMainImageLoaded ? "opacity-100" : "opacity-0"
-                          }`}
-                          style={{ background: "#0f0520" }}
-                        />
-                      ) : (
-                        <canvas
-                          ref={canvasRef}
-                          className="block h-full w-full"
-                          style={{ background: "#0f0520" }}
-                        />
-                      )}
+                    <div className="mx-auto flex h-full min-h-0 w-[80%] max-w-full items-center justify-center">
+                      <div
+                        className={`challenge-image-frame box-border flex h-full min-h-0 max-h-full w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                        onClick={() => {
+                          if (displayChallengeImageUrl)
+                            openImageModal(displayChallengeImageUrl);
+                        }}
+                      >
+                        <div className="flex h-full min-h-0 w-full max-w-full items-center justify-center">
+                          {currentChallenge.image_url ? (
+                            <img
+                              src={displayChallengeImageUrl ?? ""}
+                              alt={currentChallenge.title ?? "Challenge image"}
+                              loading="eager"
+                              decoding="async"
+                              onLoad={() => setChallengeMainImageLoaded(true)}
+                              className={`block h-full w-full object-contain transition-opacity duration-200 [transition-timing-function:var(--smooth)] ${
+                                challengeMainImageLoaded
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              }`}
+                              style={{ background: "#0f0520" }}
+                            />
+                          ) : (
+                            <canvas
+                              ref={canvasRef}
+                              className="block h-full w-full"
+                              style={{ background: "#0f0520" }}
+                            />
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  </div>
-                </div>
 
-                <div className="mt-auto flex w-full shrink-0 flex-col gap-0.5 px-1">
-                  <div className="mt-3 flex h-11 items-center justify-center rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.45)] text-center">
-                    <span className="font-mono text-[36px] font-extrabold leading-none tracking-[0.06em] text-white">
-                      {typeof guessInput === "number" ? guessInput : "—"}
-                    </span>
-                  </div>
+                  <div className="flex w-full shrink-0 flex-col px-1">
+                    <div className="mt-0 mb-3 flex h-11 items-center justify-center rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.45)] text-center">
+                      <span className="font-mono text-[36px] font-extrabold leading-none tracking-[0.06em] text-white">
+                        {typeof guessInput === "number" ? guessInput : "—"}
+                      </span>
+                    </div>
 
-                  <div className="grid h-[180px] min-h-[180px] shrink-0 grid-cols-3 grid-rows-4 gap-[4px] pt-0.5">
+                    <div className="grid h-[180px] min-h-[180px] shrink-0 grid-cols-3 grid-rows-4 gap-[4px]">
                   {currentFinished ? (
                     <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
                       <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
@@ -2349,6 +2353,7 @@ export function DailyGameClient({
                     </>
                   )}
                   </div>
+                </div>
                 </div>
               </>
             ) : null}
