@@ -181,7 +181,8 @@ export default function OnboardingPage() {
             </span>
           </div>
           <p className="mt-2 text-xs text-white/45">
-            Only letters, numbers, underscores and hyphens allowed. Lowercase only.
+            Only letters, numbers, underscores and hyphens allowed. Usernames are
+            lowercase only.
           </p>
           {spaceError ? (
             <p className="mt-2 text-sm text-amber-200">{USERNAME_SPACE_ERROR}</p>

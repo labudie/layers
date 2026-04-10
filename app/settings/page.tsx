@@ -303,7 +303,8 @@ export default function SettingsPage() {
                   </div>
                   {editingName ? (
                     <p className="max-w-xs text-center text-xs text-white/45">
-                      Only letters, numbers, underscores and hyphens allowed
+                      Only letters, numbers, underscores and hyphens allowed.
+                      Usernames are lowercase only.
                     </p>
                   ) : null}
                   {usernameFieldError ? (

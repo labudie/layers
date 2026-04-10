@@ -2224,9 +2224,9 @@ export function DailyGameClient({
 
                 <div
                   ref={tutorialImageRef}
-                  className="relative left-1/2 flex min-h-0 min-w-0 flex-1 items-center justify-center w-dvw -translate-x-1/2"
+                  className="relative left-1/2 mb-4 flex min-h-0 min-w-0 flex-1 items-center justify-center w-dvw -translate-x-1/2"
                 >
-                  <div className="mx-auto flex h-full min-h-0 w-[90%] max-w-full items-center justify-center">
+                  <div className="mx-auto flex h-full min-h-0 w-[80%] max-w-full items-center justify-center">
                   <div
                     className={`challenge-image-frame box-border flex h-full min-h-0 max-h-full w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
                     onClick={() => {
@@ -2259,7 +2259,7 @@ export function DailyGameClient({
                 </div>
 
                 <div className="mt-auto flex w-full shrink-0 flex-col gap-0.5 px-1">
-                  <div className="flex h-11 items-center justify-center rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.45)] text-center">
+                  <div className="mt-3 flex h-11 items-center justify-center rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.45)] text-center">
                     <span className="font-mono text-[36px] font-extrabold leading-none tracking-[0.06em] text-white">
                       {typeof guessInput === "number" ? guessInput : "—"}
                     </span>
@@ -2360,20 +2360,20 @@ export function DailyGameClient({
                 <>
                   <div
                     ref={tutorialImageRef}
-                    className="relative w-full max-w-full"
+                    className="relative mb-4 w-full max-w-full"
                   >
-                    <div className="mx-auto w-[90%] max-w-full">
+                    <div className="mx-auto w-[80%] max-w-full">
                     {/* Border + feedback animation live on outer (overflow visible) so red/green
                         strokes are not clipped; inner clips only the bitmap to rounded rect. */}
                     <div
-                      className={`challenge-image-frame box-border flex max-h-[60vh] w-full max-w-full cursor-zoom-in items-center justify-center rounded-[var(--radius-card)] bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                      className={`challenge-image-frame box-border flex max-h-[54vh] w-full max-w-full cursor-zoom-in items-center justify-center rounded-[var(--radius-card)] bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
                       onClick={() => {
                         if (displayChallengeImageUrl) {
                           openImageModal(displayChallengeImageUrl);
                         }
                       }}
                     >
-                      <div className="max-h-[60vh] w-full max-w-full overflow-hidden rounded-[var(--radius-card)]">
+                      <div className="max-h-[54vh] w-full max-w-full overflow-hidden rounded-[var(--radius-card)]">
                         {currentChallenge.image_url ? (
                           <img
                             src={displayChallengeImageUrl ?? ""}
@@ -2381,7 +2381,7 @@ export function DailyGameClient({
                             loading="eager"
                             decoding="async"
                             onLoad={() => setChallengeMainImageLoaded(true)}
-                            className={`block max-h-[60vh] w-full max-w-full cursor-zoom-in object-contain transition-opacity duration-200 [transition-timing-function:var(--smooth)] ${
+                            className={`block max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain transition-opacity duration-200 [transition-timing-function:var(--smooth)] ${
                               challengeMainImageLoaded
                                 ? "opacity-100"
                                 : "opacity-0"
@@ -2391,7 +2391,7 @@ export function DailyGameClient({
                         ) : (
                           <canvas
                             ref={canvasRef}
-                            className="block h-[60vh] w-full max-w-full"
+                            className="block h-[54vh] w-full max-w-full"
                             style={{ background: "#0f0520" }}
                           />
                         )}

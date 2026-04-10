@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { DeleteButton } from "@/app/studio/DeleteButton";
 import { AtCreatorDisplay } from "@/lib/AtHandle";
+import { normalizeUsernameForStorage } from "@/lib/username-input";
 
 type PublishBatchResult = {
   error: string | null;
@@ -57,6 +58,134 @@ export type UpcomingChallengeRow = {
   sponsor_name: string | null;
   image_url: string | null;
 };
+
+function CreatorAutocompleteInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const [query, setQuery] = useState(value);
+  const [results, setResults] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const term = normalizeUsernameForStorage(query);
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    if (!term) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+    debounceRef.current = window.setTimeout(() => {
+      void (async () => {
+        setLoading(true);
+        const { data, error } = await supabase()
+          .from("profiles")
+          .select("username")
+          .ilike("username", `%${term}%`)
+          .order("username", { ascending: true })
+          .limit(8);
+        if (!mountedRef.current) return;
+        if (error) {
+          setResults([]);
+          setLoading(false);
+          return;
+        }
+        const rows = (data ?? []) as Array<{ username?: string | null }>;
+        const uniq = Array.from(
+          new Set(
+            rows
+              .map((r) => normalizeUsernameForStorage(r.username ?? ""))
+              .filter(Boolean),
+          ),
+        );
+        uniq.sort((a, b) => {
+          const aStarts = a.startsWith(term) ? 0 : 1;
+          const bStarts = b.startsWith(term) ? 0 : 1;
+          if (aStarts !== bStarts) return aStarts - bStarts;
+          return a.localeCompare(b);
+        });
+        setResults(uniq);
+        setLoading(false);
+      })();
+    }, 300);
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, [query]);
+
+  const hasTyped = normalizeUsernameForStorage(query).length > 0;
+
+  return (
+    <div className="relative">
+      <div className="mt-1 flex items-stretch overflow-hidden rounded-lg border border-white/15 bg-black/40">
+        <span className="flex items-center border-r border-white/10 bg-white/5 px-3 text-sm font-semibold text-white/70">
+          @
+        </span>
+        <input
+          type="text"
+          value={query}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          onFocus={() => setOpen(true)}
+          onBlur={() => {
+            window.setTimeout(() => setOpen(false), 120);
+          }}
+          onChange={(e) => {
+            const next = normalizeUsernameForStorage(e.target.value);
+            setQuery(next);
+            onChange(next);
+            setOpen(true);
+          }}
+          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-white outline-none"
+          placeholder="creator_username"
+        />
+      </div>
+      {open && hasTyped ? (
+        <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border border-[rgba(167,139,250,0.35)] bg-[linear-gradient(180deg,rgba(40,16,67,0.98)_0%,rgba(22,9,39,0.98)_100%)] shadow-[0_16px_36px_rgba(0,0,0,0.45)] ring-1 ring-white/10 backdrop-blur-xl">
+          {loading ? (
+            <div className="px-3 py-2 text-sm text-white/60">Searching...</div>
+          ) : results.length ? (
+            results.map((username) => (
+              <button
+                key={username}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setQuery(username);
+                  onChange(username);
+                  setOpen(false);
+                }}
+                className="block w-full border-b border-white/10 px-3 py-2 text-left text-sm text-white/90 transition hover:bg-white/10 last:border-b-0"
+              >
+                @{username}
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-sm text-white/60">No users found</div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export function AdminChallengeFormClient({
   today,
@@ -709,13 +838,13 @@ export function AdminChallengeFormClient({
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-white/70">Creator Name</label>
-                    <input
-                      type="text"
+                    <CreatorAutocompleteInput
                       value={card.creator_name}
-                      onChange={(e) =>
-                        updateCard(card.id, { creator_name: e.target.value })
+                      onChange={(next) =>
+                        updateCard(card.id, {
+                          creator_name: normalizeUsernameForStorage(next),
+                        })
                       }
-                      className="at-handle mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
