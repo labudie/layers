@@ -27,7 +27,6 @@ import {
   playDialPadTone,
   playCloseGuessSound,
   playCorrectGuessSound,
-  playJackpotCompletionSound,
   playWrongGuessSound,
   readGameSoundEnabled,
 } from "@/lib/game-sound";
@@ -250,6 +249,138 @@ function applyGuessFeedback(verdict: GuessRow["verdict"]) {
   if (verdict === "wrong") playWrongGuessSound();
   else if (verdict === "correct") playCorrectGuessSound();
   else if (verdict === "close") playCloseGuessSound();
+}
+
+function playStartupReadyChime() {
+  if (typeof window === "undefined" || !readGameSoundEnabled()) return;
+  const Ctx =
+    window.AudioContext ||
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext;
+  if (!Ctx) return;
+  try {
+    const ctx = new Ctx();
+    const startAt = ctx.currentTime + 0.01;
+    const CHIME_GAIN = 0.08;
+    const CHIME_DURATION = 0.15;
+    const CHIME_GAP = 0.08;
+
+    const playOne = (freqHz: number, at: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freqHz, at);
+      gain.gain.setValueAtTime(CHIME_GAIN, at);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + CHIME_DURATION);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + CHIME_DURATION);
+    };
+
+    playOne(600, startAt);
+    playOne(900, startAt + CHIME_DURATION + CHIME_GAP);
+
+    window.setTimeout(() => {
+      void ctx.close().catch(() => {
+        // ignore
+      });
+    }, 650);
+  } catch {
+    // ignore autoplay/gesture-related WebAudio errors
+  }
+}
+
+function playPerfectCompletionChime() {
+  if (typeof window === "undefined" || !readGameSoundEnabled()) return;
+  const Ctx =
+    window.AudioContext ||
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext;
+  if (!Ctx) return;
+  try {
+    const ctx = new Ctx();
+    const startAt = ctx.currentTime + 0.01;
+    const MASTER_GAIN = 0.18;
+
+    const playOne = (freqHz: number, at: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freqHz, at);
+      gain.gain.setValueAtTime(MASTER_GAIN, at);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + duration);
+    };
+
+    const arp = [400, 500, 600, 800, 1000, 1200];
+    const arpDur = 0.08;
+    for (let i = 0; i < arp.length; i++) {
+      playOne(arp[i], startAt + i * arpDur, arpDur);
+    }
+    const triumphantStart = startAt + arp.length * arpDur + 0.1;
+    const triumphant = [1200, 1000, 1200];
+    const triDur = 0.2;
+    for (let i = 0; i < triumphant.length; i++) {
+      playOne(triumphant[i], triumphantStart + i * triDur, triDur);
+    }
+
+    window.setTimeout(() => {
+      void ctx.close().catch(() => {
+        // ignore
+      });
+    }, 1700);
+  } catch {
+    // ignore autoplay/gesture-related WebAudio errors
+  }
+}
+
+function playStandardCompletionChime() {
+  if (typeof window === "undefined" || !readGameSoundEnabled()) return;
+  const Ctx =
+    window.AudioContext ||
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext;
+  if (!Ctx) return;
+  try {
+    const ctx = new Ctx();
+    const startAt = ctx.currentTime + 0.01;
+    const MASTER_GAIN = 0.12;
+
+    const playOne = (freqHz: number, at: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freqHz, at);
+      gain.gain.setValueAtTime(MASTER_GAIN, at);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + duration);
+    };
+
+    const seq = [500, 700, 900];
+    const seqDur = 0.1;
+    for (let i = 0; i < seq.length; i++) {
+      playOne(seq[i], startAt + i * seqDur, seqDur);
+    }
+
+    const chordStart = startAt + seq.length * seqDur;
+    playOne(600, chordStart, 0.3);
+    playOne(900, chordStart, 0.3);
+
+    window.setTimeout(() => {
+      void ctx.close().catch(() => {
+        // ignore
+      });
+    }, 900);
+  } catch {
+    // ignore autoplay/gesture-related WebAudio errors
+  }
 }
 
 function isChallengeFinished(
@@ -507,7 +638,8 @@ export function DailyGameClient({
   const panStartRef = useRef<{ x: number; y: number } | null>(null);
   const panStartOffsetRef = useRef({ x: 0, y: 0 });
   const lastTapRef = useRef<{ ts: number; x: number; y: number } | null>(null);
-  const perfectDayFeedbackFiredRef = useRef(false);
+  const hasPlayedCompletionSoundRef = useRef(false);
+  const hasPlayedStartSoundRef = useRef(false);
   const guessTrackerRef = useRef<{ challengeIdx: number; len: number }>({
     challengeIdx: -1,
     len: 0,
@@ -1174,20 +1306,50 @@ export function DailyGameClient({
 
   useEffect(() => {
     if (!showSummary) {
-      perfectDayFeedbackFiredRef.current = false;
+      hasPlayedCompletionSoundRef.current = false;
       return;
     }
     if (challenges.length !== 5) return;
+    const finishedAllFive = challenges.every((ch, i) =>
+      isChallengeFinished(ch.layer_count, guessesByIndex[i] ?? [])
+    );
+    if (!finishedAllFive) return;
+    if (hasPlayedCompletionSoundRef.current) return;
+
     const solvedCount = guessesByIndex.reduce(
       (acc, g) => acc + (g.some((x) => x.verdict === "correct") ? 1 : 0),
-      0
+      0,
     );
-    if (solvedCount !== 5) return;
-    if (perfectDayFeedbackFiredRef.current) return;
-    perfectDayFeedbackFiredRef.current = true;
-    safeVibrate([50, 30, 50, 30, 50, 30, 200]);
-    playJackpotCompletionSound();
-  }, [showSummary, challenges.length, guessesByIndex]);
+    const totalGuesses = guessesByIndex.reduce((acc, g) => acc + g.length, 0);
+    const isPerfect = solvedCount === 5 && totalGuesses <= 7;
+
+    const timeoutId = window.setTimeout(() => {
+      if (hasPlayedCompletionSoundRef.current) return;
+      hasPlayedCompletionSoundRef.current = true;
+      if (isPerfect) playPerfectCompletionChime();
+      else playStandardCompletionChime();
+    }, 400);
+    return () => window.clearTimeout(timeoutId);
+  }, [showSummary, challenges, guessesByIndex]);
+
+  useEffect(() => {
+    if (hasPlayedStartSoundRef.current) return;
+    if (!gameDataReady || challenges.length < 1) return;
+    // Don't play when user is on completion/results/no-challenges screens.
+    if (showSummary || showDailyHome || showNoChallengesHome) return;
+    const timeoutId = window.setTimeout(() => {
+      if (hasPlayedStartSoundRef.current) return;
+      hasPlayedStartSoundRef.current = true;
+      playStartupReadyChime();
+    }, 500);
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    gameDataReady,
+    challenges.length,
+    showSummary,
+    showDailyHome,
+    showNoChallengesHome,
+  ]);
 
   useEffect(() => {
     const tick = () => {
