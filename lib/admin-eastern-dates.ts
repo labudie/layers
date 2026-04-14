@@ -15,7 +15,7 @@ export function toEasternYmd(iso: string | null | undefined): string | null {
 }
 
 /** UTC instant near local noon on Eastern calendar day `ymd` (YYYY-MM-DD). */
-function easternNoonUtcMs(ymd: string): number {
+export function easternNoonUtcMs(ymd: string): number {
   const [y, m, d] = ymd.split("-").map(Number);
   let lo = Date.UTC(y, m - 1, d - 1);
   let hi = Date.UTC(y, m - 1, d + 1);
@@ -63,4 +63,76 @@ export function nextEasternYmd(ymd: string): string {
     t += 3600 * 1000;
   }
   return ymd;
+}
+
+/** Walk earlier on the US Eastern calendar (non-negative `days`). */
+export function subtractEasternDays(ymd: string, days: number): string {
+  let cur = ymd;
+  for (let i = 0; i < days; i++) cur = previousEasternYmd(cur);
+  return cur;
+}
+
+/** Walk later on the US Eastern calendar (non-negative `days`). */
+export function addEasternDays(ymd: string, days: number): string {
+  let cur = ymd;
+  for (let i = 0; i < days; i++) cur = nextEasternYmd(cur);
+  return cur;
+}
+
+/** Inclusive count of Eastern calendar days from `startYmd` through `endYmd` (expects start <= end). */
+export function easternDaysInclusive(startYmd: string, endYmd: string): number {
+  if (endYmd < startYmd) return 0;
+  let n = 0;
+  let cur = startYmd;
+  for (;;) {
+    n++;
+    if (cur === endYmd) return n;
+    cur = nextEasternYmd(cur);
+  }
+}
+
+const easternWeekdayLong = new Intl.DateTimeFormat("en-US", {
+  timeZone: US_EASTERN_TZ,
+  weekday: "long",
+});
+
+/** Monday-start week: the Eastern YYYY-MM-DD of the Monday on or before `ymd`. */
+export function easternMondayOnOrBefore(ymd: string): string {
+  let cur = ymd;
+  for (let i = 0; i < 7; i++) {
+    const noon = easternNoonUtcMs(cur);
+    const wd = easternWeekdayLong.format(new Date(noon));
+    if (wd === "Monday") return cur;
+    cur = previousEasternYmd(cur);
+  }
+  return ymd;
+}
+
+export type EasternWeekRange = {
+  /** Monday YYYY-MM-DD */
+  start: string;
+  /** Sunday YYYY-MM-DD */
+  end: string;
+  label: string;
+};
+
+/** `weekOffset` 0 = week containing `todayYmd`, -1 = previous, etc. Monday–Sunday Eastern. */
+export function easternWeekRangeContaining(
+  todayYmd: string,
+  weekOffset: number,
+): EasternWeekRange {
+  const monThis = easternMondayOnOrBefore(todayYmd);
+  const monStart = subtractEasternDays(monThis, (-weekOffset) * 7);
+  const sunEnd = addEasternDays(monStart, 6);
+  const label = `Week of ${formatEasternWeekLabel(monStart)}`;
+  return { start: monStart, end: sunEnd, label };
+}
+
+function formatEasternWeekLabel(mondayYmd: string): string {
+  const noon = easternNoonUtcMs(mondayYmd);
+  return new Date(noon).toLocaleDateString("en-US", {
+    timeZone: US_EASTERN_TZ,
+    month: "short",
+    day: "numeric",
+  });
 }

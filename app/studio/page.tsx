@@ -9,10 +9,13 @@ import {
   nextEasternYmd,
   toEasternYmd,
 } from "@/lib/admin-eastern-dates";
+import type { AdvancedAdminAnalytics } from "@/lib/admin-studio-analytics";
+import { loadAdvancedAdminAnalytics } from "@/lib/admin-studio-analytics";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import { AdminChallengeFormClient } from "@/app/studio/AdminChallengeFormClient";
 import { AdminSubmissionImage } from "@/app/studio/AdminSubmissionImage";
+import { AnalyticsExportButton } from "@/app/studio/AnalyticsExportButton";
 import { DeleteButton } from "@/app/studio/DeleteButton";
 import {
   AtCreatorDisplay,
@@ -784,12 +787,23 @@ export default async function AdminPage({
   }
 
   let analytics: AdminAnalytics | null = null;
+  let advancedAnalytics: AdvancedAdminAnalytics | null = null;
   if (tab === "analytics") {
-    try {
-      analytics = await loadAdminAnalytics(sb, today);
-    } catch (err) {
-      console.error("[admin][analytics]", err);
+    const [baseRes, advRes] = await Promise.allSettled([
+      loadAdminAnalytics(sb, today),
+      loadAdvancedAdminAnalytics(sb, today),
+    ]);
+    if (baseRes.status === "fulfilled") {
+      analytics = baseRes.value;
+    } else {
+      console.error("[admin][analytics]", baseRes.reason);
       analytics = null;
+    }
+    if (advRes.status === "fulfilled") {
+      advancedAnalytics = advRes.value;
+    } else {
+      console.error("[admin][advanced analytics]", advRes.reason);
+      advancedAnalytics = null;
     }
   }
 
@@ -1188,11 +1202,16 @@ export default async function AdminPage({
             </div>
           ) : (
             <div className="space-y-10">
-              <div>
-                <div className="text-lg font-extrabold text-white">Analytics</div>
-                <p className="mt-1 text-sm text-white/55">
-                  &quot;Today&quot; and signup buckets use US Eastern ({today}). Data refreshes on each page load.
-                </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="text-lg font-extrabold text-white">Analytics</div>
+                  <p className="mt-1 text-sm text-white/55">
+                    &quot;Today&quot; and signup buckets use US Eastern ({today}). Data refreshes on each page load.
+                  </p>
+                </div>
+                {advancedAnalytics ? (
+                  <AnalyticsExportButton rows={advancedAnalytics.exportRows} />
+                ) : null}
               </div>
 
               <section>
@@ -1237,9 +1256,244 @@ export default async function AdminPage({
                 </div>
               </section>
 
+              {advancedAnalytics ? (
+                <>
+                  <section>
+                    <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
+                      Retention metrics
+                    </div>
+                    <p className="mb-3 text-xs text-white/45">
+                      Uses <span className="font-mono">last_played_date</span> plus consecutive-day{" "}
+                      <span className="font-mono">current_streak</span> to infer who also played on the cohort day
+                      (single-field snapshot).
+                    </p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                          Day 1
+                        </div>
+                        <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                          {advancedAnalytics.retentionDay1Pct == null
+                            ? "—"
+                            : `${advancedAnalytics.retentionDay1Pct}%`}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                          Day 7
+                        </div>
+                        <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                          {advancedAnalytics.retentionDay7Pct == null
+                            ? "—"
+                            : `${advancedAnalytics.retentionDay7Pct}%`}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                          Day 30
+                        </div>
+                        <div className="mt-2 text-2xl font-extrabold tabular-nums text-white">
+                          {advancedAnalytics.retentionDay30Pct == null
+                            ? "—"
+                            : `${advancedAnalytics.retentionDay30Pct}%`}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section>
+                    <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
+                      MAU / DAU
+                    </div>
+                    <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                        Stickiness (last_played)
+                      </div>
+                      <div className="mt-2 text-lg font-extrabold tabular-nums text-white sm:text-xl">
+                        DAU: {advancedAnalytics.dauLastPlayed.toLocaleString()} | MAU:{" "}
+                        {advancedAnalytics.mauLastPlayed.toLocaleString()} | Stickiness:{" "}
+                        {advancedAnalytics.stickinessPct == null
+                          ? "—"
+                          : `${Math.round(advancedAnalytics.stickinessPct)}%`}
+                      </div>
+                      <div className="mt-1 text-xs text-white/45">
+                        DAU = profiles with <span className="font-mono">last_played_date</span> = today. MAU =
+                        distinct users with <span className="font-mono">last_played_date</span> in the last 30 Eastern
+                        days (inclusive).
+                      </div>
+                    </div>
+                  </section>
+
+                  <section>
+                    <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
+                      Weekly growth
+                    </div>
+                    <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                        New signups (US Eastern weeks, Mon–Sun)
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-lg font-extrabold tabular-nums text-white sm:text-xl">
+                        <span>
+                          New users this week: {advancedAnalytics.weeklyNewUsersThisWeek.toLocaleString()}
+                        </span>
+                        {advancedAnalytics.weeklyGrowthPct == null &&
+                        advancedAnalytics.weeklyNewUsersLastWeek === 0 &&
+                        advancedAnalytics.weeklyNewUsersThisWeek > 0 ? (
+                          <span className="text-sm font-semibold text-emerald-200/90">(new vs last week)</span>
+                        ) : advancedAnalytics.weeklyGrowthPct == null ? (
+                          <span className="text-sm font-semibold text-white/50">(— vs last week)</span>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center gap-1 text-sm font-bold ${
+                              advancedAnalytics.weeklyGrowthPct >= 0
+                                ? "text-emerald-300"
+                                : "text-rose-300"
+                            }`}
+                          >
+                            {advancedAnalytics.weeklyGrowthPct >= 0 ? (
+                              <span aria-hidden>↑</span>
+                            ) : (
+                              <span aria-hidden>↓</span>
+                            )}
+                            ({advancedAnalytics.weeklyGrowthPct >= 0 ? "+" : ""}
+                            {advancedAnalytics.weeklyGrowthPct}% vs last week)
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1 text-xs text-white/45">
+                        Last week: {advancedAnalytics.weeklyNewUsersLastWeek.toLocaleString()} new users
+                      </div>
+                    </div>
+                  </section>
+
+                  <section>
+                    <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
+                      Sponsor Performance Report
+                    </div>
+                    <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)]">
+                      <table className="min-w-[960px] w-full text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
+                            <th className="px-4 py-3">Date</th>
+                            <th className="px-4 py-3">Position</th>
+                            <th className="px-4 py-3">Title</th>
+                            <th className="px-4 py-3">Sponsor</th>
+                            <th className="px-4 py-3 text-right">Guesses</th>
+                            <th className="px-4 py-3 text-right">Unique players</th>
+                            <th className="px-4 py-3 text-right">Downloads</th>
+                            <th className="px-4 py-3 text-right">Solve rate</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {advancedAnalytics.sponsorRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} className="px-4 py-6 text-center text-white/60">
+                                No sponsored challenges yet
+                              </td>
+                            </tr>
+                          ) : (
+                            advancedAnalytics.sponsorRows.map((r) => (
+                              <tr key={r.id} className="border-b border-white/5 last:border-0">
+                                <td className="px-4 py-3 font-mono text-white/80">
+                                  {formatAdminDate(r.active_date)}
+                                </td>
+                                <td className="px-4 py-3 font-mono text-white/80">{r.position ?? "—"}</td>
+                                <td className="px-4 py-3 text-white/90">{r.title ?? "—"}</td>
+                                <td className="px-4 py-3 text-white/80">{r.sponsor_name ?? "—"}</td>
+                                <td className="px-4 py-3 text-right tabular-nums text-white/90">
+                                  {r.totalGuesses.toLocaleString()}
+                                </td>
+                                <td className="px-4 py-3 text-right tabular-nums text-white/90">
+                                  {r.uniquePlayers.toLocaleString()}
+                                </td>
+                                <td className="px-4 py-3 text-right tabular-nums text-white/90">
+                                  {r.downloads.toLocaleString()}
+                                </td>
+                                <td className="px-4 py-3 text-right tabular-nums text-white/90">
+                                  {r.solveRatePct == null ? "—" : `${r.solveRatePct}%`}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  <section>
+                    <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
+                      Cohort activity (weekly)
+                    </div>
+                    <p className="mb-3 text-xs text-white/45">
+                      Rows = users who joined that Eastern week (Mon–Sun). Columns = share of that cohort whose{" "}
+                      <span className="font-mono">last_played_date</span> falls in the column week. “—” = before signup.
+                    </p>
+                    <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)]">
+                      <table className="min-w-[720px] w-full text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
+                            <th className="px-4 py-3">Cohort</th>
+                            {advancedAnalytics.cohortWeekLabels.map((lab) => (
+                              <th key={lab} className="px-3 py-3 text-right">
+                                {lab}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {advancedAnalytics.cohortMatrix.map((row, ri) => (
+                            <tr key={ri} className="border-b border-white/5 last:border-0">
+                              <td className="px-4 py-3 text-white/90">
+                                <div className="font-semibold">{advancedAnalytics.cohortWeekLabels[ri]}</div>
+                                <div className="text-xs tabular-nums text-white/50">
+                                  {advancedAnalytics.cohortJoinCounts[ri].toLocaleString()} joined
+                                </div>
+                              </td>
+                              {row.map((cell, ci) => (
+                                <td
+                                  key={`${ri}-${ci}`}
+                                  className="px-3 py-3 text-right tabular-nums text-white/90"
+                                >
+                                  {cell.na ? "—" : cell.pct == null ? "—" : `${cell.pct}%`}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  <section>
+                    <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
+                      Share rate
+                    </div>
+                    <a
+                      href="https://posthog.com"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm transition hover:border-[var(--accent)]/45 hover:bg-[rgba(26,10,46,0.9)]"
+                    >
+                      <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
+                        PostHog
+                      </div>
+                      <div className="mt-2 text-lg font-extrabold text-white">
+                        Share Rate: Track in PostHog →
+                      </div>
+                    </a>
+                  </section>
+                </>
+              ) : (
+                <section>
+                  <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                    Advanced analytics could not be loaded. Core metrics below are still shown when available.
+                  </div>
+                </section>
+              )}
+
               <section>
                 <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
-                  Retention
+                  Streak distribution
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="rounded-2xl border border-[var(--accent)]/25 bg-[rgba(26,10,46,0.75)] px-4 py-4 shadow-sm">
