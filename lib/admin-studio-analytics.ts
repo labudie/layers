@@ -185,7 +185,7 @@ export async function loadAdvancedAdminAnalytics(
     return n;
   });
 
-  const cohortMatrix: CohortMatrixCell[][] = weekRanges.map((cohortW) => {
+  const cohortMatrix: CohortMatrixCell[][] = weekRanges.map((cohortW, rowIdx) => {
     return weekRanges.map((actW) => {
       if (actW.end < cohortW.start) return { pct: null, na: true };
       const denom = cohortJoinCounts[rowIdx];
