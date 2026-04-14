@@ -13,6 +13,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePostHog } from "posthog-js/react";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
+import { BadgeUnlockSheet } from "@/app/components/BadgeUnlockSheet";
 import { GameplayProfileSheet } from "@/app/components/GameplayProfileSheet";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import type { Challenge } from "./page";
@@ -22,7 +23,7 @@ import {
   TUTORIAL_SEEN_KEY,
 } from "@/app/FirstPlayTutorial";
 import { supabase } from "@/lib/supabase";
-import type { BadgeId } from "@/lib/badges";
+import { BADGE_UNLOCK_ORDER, type BadgeId } from "@/lib/badges";
 import {
   playDialPadTone,
   playCloseGuessSound,
@@ -83,6 +84,16 @@ function easternYMD(date: Date = new Date()) {
   const m = parts.find((p) => p.type === "month")?.value;
   const d = parts.find((p) => p.type === "day")?.value;
   return `${y}-${m}-${d}`;
+}
+
+/** Hour 0–23 in US Eastern for the given instant. */
+function easternHour24(now: Date = new Date()) {
+  const hourStr = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    hour12: false,
+  }).format(now);
+  return Math.min(23, Math.max(0, parseInt(hourStr, 10) || 0));
 }
 
 function ymdDaysAgo(days: number, from: Date = new Date()) {
@@ -615,6 +626,7 @@ export function DailyGameClient({
   const imageFeedbackTimeoutRef = useRef<number | null>(null);
   const confettiTimeoutsRef = useRef<number[]>([]);
   const statsSyncKeyRef = useRef<string | null>(null);
+  const [badgeUnlockQueue, setBadgeUnlockQueue] = useState<BadgeId[]>([]);
   const startedChallengeIdsRef = useRef<Set<string>>(new Set());
   const completedChallengeIdsRef = useRef<Set<string>>(new Set());
   const dailyCompletedKeyRef = useRef<string | null>(null);
@@ -1160,6 +1172,9 @@ export function DailyGameClient({
       0
     );
     const allFiveSolved = solvedTodayCount === 5;
+    const allFiveFinished = challenges.every((ch, i) =>
+      isChallengeFinished(ch.layer_count, guessesByIndex[i] ?? [])
+    );
     const sharpEye = guessesByIndex.some(
       (g) => g.length === 1 && g[0]?.verdict === "correct"
     );
@@ -1199,6 +1214,23 @@ export function DailyGameClient({
         return;
       }
 
+      const { data: badgeRows, error: badgeRowsErr } = await sb
+        .from("user_badges")
+        .select("badge_id")
+        .eq("user_id", userId);
+      if (badgeRowsErr) {
+        console.error("[user_badges] error loading for daily sync", badgeRowsErr);
+      }
+
+      const prevBadges = new Set<BadgeId>();
+      for (const b of row.badges ?? []) {
+        if (typeof b === "string" && b.length) prevBadges.add(b as BadgeId);
+      }
+      for (const r of badgeRows ?? []) {
+        const id = (r as { badge_id?: string }).badge_id;
+        if (id) prevBadges.add(id as BadgeId);
+      }
+
       const yesterday = ymdDaysAgo(1, new Date());
       const prevStreak = row.current_streak ?? 0;
       const nextStreak = row.last_played_date === yesterday ? prevStreak + 1 : 1;
@@ -1207,12 +1239,30 @@ export function DailyGameClient({
       const nextPerfectDays =
         (row.perfect_days ?? 0) + (allFiveSolved ? 1 : 0);
 
-      const currentBadges = new Set<BadgeId>((row.badges ?? []) as BadgeId[]);
-      currentBadges.add("first_play");
-      if (sharpEye) currentBadges.add("sharp_eye");
-      if (allFiveSolved) currentBadges.add("perfect_day");
-      if (nextStreak >= 7) currentBadges.add("week_streak");
-      if (nextStreak >= 30) currentBadges.add("month_streak");
+      const nextBadges = new Set<BadgeId>(prevBadges);
+      nextBadges.add("first_play");
+      if (sharpEye) nextBadges.add("sharp_eye");
+      if (allFiveSolved) nextBadges.add("perfect_day");
+      if (allFiveFinished) nextBadges.add("layer_up");
+      if (allFiveFinished && easternHour24() < 12) {
+        nextBadges.add("early_bird");
+      }
+      if (nextStreak >= 3) nextBadges.add("on_a_roll");
+      if (nextStreak >= 5) nextBadges.add("hot_streak");
+      if (nextStreak >= 7) nextBadges.add("week_streak");
+      if (nextStreak >= 30) nextBadges.add("month_streak");
+
+      const { count: lifetimeGuessCount, error: guessCountErr } = await sb
+        .from("guesses")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId);
+      if (guessCountErr) {
+        console.error("[guesses] count for badges", guessCountErr);
+      } else {
+        const n = lifetimeGuessCount ?? 0;
+        if (n >= 50) nextBadges.add("guessing_game");
+        if (n >= 100) nextBadges.add("century");
+      }
 
       const challengeIds = challenges.map((c) => c.id);
       const { data: topDaily } = await sb
@@ -1224,7 +1274,7 @@ export function DailyGameClient({
         .limit(1)
         .maybeSingle();
       if ((topDaily as { user_id?: string } | null)?.user_id === userId) {
-        currentBadges.add("top_of_stack");
+        nextBadges.add("top_of_stack");
       }
 
       const username = row.username?.trim() ?? "";
@@ -1240,7 +1290,7 @@ export function DailyGameClient({
           .select("id", { count: "exact", head: true })
           .in("creator_name", creatorNameVariants);
         if ((creatorCount ?? 0) > 0) {
-          currentBadges.add("creator");
+          nextBadges.add("creator");
         }
 
         const { data: createdChallenges } = await sb
@@ -1256,8 +1306,26 @@ export function DailyGameClient({
             .select("id", { count: "exact", head: true })
             .in("challenge_id", createdIds);
           if ((downloadsCount ?? 0) >= 10) {
-            currentBadges.add("popular_work");
+            nextBadges.add("popular_work");
           }
+        }
+      }
+
+      const newlyEarned = BADGE_UNLOCK_ORDER.filter(
+        (id) => nextBadges.has(id) && !prevBadges.has(id)
+      );
+
+      for (const badgeId of newlyEarned) {
+        const { error: insErr } = await sb.from("user_badges").insert({
+          user_id: userId,
+          badge_id: badgeId,
+        });
+        if (
+          insErr &&
+          insErr.code !== "23505" &&
+          !String(insErr.message ?? "").includes("duplicate")
+        ) {
+          console.error("[user_badges] insert after daily complete", insErr);
         }
       }
 
@@ -1269,7 +1337,7 @@ export function DailyGameClient({
         total_solved: nextTotalSolved,
         perfect_days: nextPerfectDays,
         last_played_date: today,
-        badges: Array.from(currentBadges),
+        badges: Array.from(nextBadges),
       };
       if (handleStored) {
         profilePayload.username = handleStored;
@@ -1284,6 +1352,9 @@ export function DailyGameClient({
 
       if (!cancelled) {
         statsSyncKeyRef.current = uniqueKey;
+        if (newlyEarned.length) {
+          setBadgeUnlockQueue(newlyEarned);
+        }
       }
     })();
 
@@ -2842,6 +2913,11 @@ export function DailyGameClient({
           open={profilePreviewHandle != null}
           onClose={() => setProfilePreviewHandle(null)}
           usernameHandle={profilePreviewHandle}
+        />
+
+        <BadgeUnlockSheet
+          badgeId={badgeUnlockQueue[0] ?? null}
+          onDismiss={() => setBadgeUnlockQueue((q) => q.slice(1))}
         />
 
       {modalPortalEl && modalImageUrl

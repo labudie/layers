@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { redirect } from "next/navigation";
@@ -38,10 +37,10 @@ export default async function BadgesPage() {
             return (
               <div
                 key={badge.id}
-                className={`rounded-2xl border p-4 transition ${
+                className={`relative overflow-hidden rounded-2xl border p-4 transition ${
                   isEarned
                     ? "border-[var(--accent)]/40 bg-[var(--accent)]/12 text-white"
-                    : "border-white/10 bg-white/5 text-white/45 grayscale"
+                    : "border-white/10 bg-white/5 text-white/40 grayscale"
                 }`}
               >
                 <div className="text-2xl">{badge.icon}</div>
@@ -50,6 +49,25 @@ export default async function BadgesPage() {
                 <div className="mt-3 text-xs font-semibold uppercase tracking-wider">
                   {isEarned ? "Earned" : "Locked"}
                 </div>
+                {!isEarned ? (
+                  <div
+                    className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl bg-black/35 backdrop-blur-[1px]"
+                    aria-hidden
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      className="h-11 w-11 text-white/55 drop-shadow-md"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M12 1.5a5.25 5.25 0 0 0-5.25 5.25v3a3 3 0 0 0-3 3v6.75A3.75 3.75 0 0 0 7.5 23.25h9a3.75 3.75 0 0 0 3.75-3.75V12.75a3 3 0 0 0-3-3v-3A5.25 5.25 0 0 0 12 1.5Zm3.75 8.25v-3a3.75 3.75 0 1 0-7.5 0v3h7.5Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                ) : null}
               </div>
             );
           })}

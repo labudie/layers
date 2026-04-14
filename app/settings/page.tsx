@@ -88,7 +88,7 @@ export default function SettingsPage() {
             total_solved: row?.total_solved ?? 0,
             perfect_days: row?.perfect_days ?? 0,
           });
-          setEarnedBadges(((row?.badges ?? []) as BadgeId[]).slice(0, 12));
+          setEarnedBadges(((row?.badges ?? []) as BadgeId[]).slice(0, 32));
         }
       } finally {
         if (!silent) setLoading(false);

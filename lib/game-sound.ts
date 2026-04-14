@@ -232,3 +232,27 @@ export function playDialPadTone(key: string) {
     playSoftTap(ctx, now, 1200, 0.03, 0.15);
   });
 }
+
+/** Achievement-style unlock: quick 800 → 1000 → 1200, then held 1000 Hz. */
+export function playBadgeUnlockSound() {
+  if (!readGameSoundEnabled()) return;
+  const vol = 0.15;
+  withAudio((ctx, now) => {
+    const step = 0.06;
+    playChime(ctx, now, 800, step, vol, "sine");
+    playChime(ctx, now + step, 1000, step, vol, "sine");
+    playChime(ctx, now + 2 * step, 1200, step, vol, "sine");
+    const tHold = now + 3 * step;
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(1000, tHold);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, tHold);
+    g.gain.exponentialRampToValueAtTime(vol, tHold + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, tHold + 0.3);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start(tHold);
+    osc.stop(tHold + 0.32);
+  });
+}
