@@ -5,21 +5,18 @@ import { supabase } from "@/lib/supabase";
 import { DeleteButton } from "@/app/studio/DeleteButton";
 import { AtCreatorDisplay } from "@/lib/AtHandle";
 import { normalizeUsernameForStorage } from "@/lib/username-input";
+import { parsePsdLayerCount } from "@/lib/psd-layer-count";
+import {
+  SOFTWARE_OPTIONS,
+  type SoftwareOption,
+  layerCountGuidanceForSoftware,
+} from "@/lib/software-options";
 
 type PublishBatchResult = {
   error: string | null;
   publishedCount?: number;
   publishedTitles?: string[];
 };
-
-const SOFTWARE_OPTIONS = [
-  "Photoshop",
-  "Illustrator",
-  "Figma",
-  "After Effects",
-  "Cinema 4D",
-  "Other",
-] as const;
 
 const CATEGORY_OPTIONS = [
   "Branding",
@@ -31,18 +28,168 @@ const CATEGORY_OPTIONS = [
   "Other",
 ] as const;
 
+type LayerCountHint = "none" | "psd-auto" | "psd-failed";
+
 type UploadCard = {
   id: string;
-  file: File;
-  previewUrl: string;
+  /** PNG/JPG for Supabase (required before publish). */
+  file: File | null;
+  /** PSD used only for layer counting; never uploaded. */
+  psdFile: File | null;
+  /** Object URL for raster preview; null when only PSD is present. */
+  previewUrl: string | null;
   title: string;
   creator_name: string;
-  software: (typeof SOFTWARE_OPTIONS)[number];
+  software: SoftwareOption;
   category: (typeof CATEGORY_OPTIONS)[number];
   layer_count: string;
+  layerCountHint: LayerCountHint;
   is_sponsored: boolean;
   sponsor_name: string;
 };
+
+function isPsdFile(file: File) {
+  const name = file.name.toLowerCase();
+  const mime = (file.type || "").toLowerCase();
+  return (
+    name.endsWith(".psd") ||
+    mime === "image/vnd.adobe.photoshop" ||
+    mime === "application/x-photoshop" ||
+    mime === "application/vnd.adobe.photoshop" ||
+    mime === "application/photoshop"
+  );
+}
+
+function isRasterGameImage(file: File) {
+  return file.type === "image/png" || file.type === "image/jpeg";
+}
+
+function basenameWithoutExt(filename: string): string {
+  const n = filename.trim();
+  const i = n.lastIndexOf(".");
+  if (i <= 0) return n;
+  return n.slice(0, i);
+}
+
+/** Case-insensitive pairing key: alphanumeric only from stem (spaces & specials stripped). */
+function pairingKeyFromFile(file: File): string {
+  const stem = basenameWithoutExt(file.name);
+  const raw = stem.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (raw) return raw;
+  return `__uniq_${file.name}_${file.size}_${file.lastModified}`;
+}
+
+function formatTitleFromStem(stem: string): string {
+  const spaced = stem.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!spaced) return "";
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
+}
+
+type FilePairSpec = {
+  key: string;
+  /** Original stem (before pairing normalization) for display title. */
+  displayStem: string;
+  psd: File | null;
+  raster: File | null;
+};
+
+function buildPairSpecs(files: File[]): FilePairSpec[] {
+  const buckets = new Map<string, { psd: File | null; raster: File | null }>();
+
+  for (const f of files) {
+    const key = pairingKeyFromFile(f);
+    let b = buckets.get(key);
+    if (!b) {
+      b = { psd: null, raster: null };
+      buckets.set(key, b);
+    }
+    if (isPsdFile(f)) {
+      if (!b.psd) b.psd = f;
+    } else if (isRasterGameImage(f)) {
+      if (!b.raster) {
+        b.raster = f;
+      } else {
+        const nextIsPng =
+          f.name.toLowerCase().endsWith(".png") || f.type === "image/png";
+        const curIsPng =
+          b.raster.name.toLowerCase().endsWith(".png") ||
+          b.raster.type === "image/png";
+        if (nextIsPng && !curIsPng) b.raster = f;
+      }
+    }
+  }
+
+  const specs: FilePairSpec[] = Array.from(buckets.entries()).map(([key, b]) => {
+    const displayStem = b.psd
+      ? basenameWithoutExt(b.psd.name)
+      : b.raster
+        ? basenameWithoutExt(b.raster.name)
+        : key;
+    return { key, displayStem, psd: b.psd, raster: b.raster };
+  });
+
+  specs.sort((a, b) =>
+    a.displayStem.localeCompare(b.displayStem, undefined, { sensitivity: "base" }),
+  );
+  return specs;
+}
+
+function IconPsdDoc({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="28"
+      height="28"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <path
+        d="M7 3h8l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"
+        fill="rgba(139,92,246,0.2)"
+        stroke="#c4b5fd"
+        strokeWidth="1.25"
+      />
+      <path d="M15 3v4h4" stroke="#a78bfa" strokeOpacity="0.75" strokeWidth="1.25" />
+      <text
+        x="12"
+        y="16"
+        textAnchor="middle"
+        fill="#ddd6fe"
+        fontSize="7"
+        fontWeight="700"
+        fontFamily="system-ui, sans-serif"
+      >
+        PSD
+      </text>
+    </svg>
+  );
+}
+
+function IconImage({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="26"
+      height="26"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <rect x="3" y="5" width="18" height="14" rx="2" stroke="rgba(255,255,255,0.35)" strokeWidth="1.25" />
+      <circle cx="8.5" cy="10" r="1.5" fill="rgba(255,255,255,0.4)" />
+      <path
+        d="M3 17l5-4 4 3 4-5 5 6"
+        stroke="rgba(255,255,255,0.3)"
+        strokeWidth="1.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 export type UpcomingChallengeRow = {
   id: string;
@@ -207,8 +354,13 @@ export function AdminChallengeFormClient({
   const [progressStep, setProgressStep] = useState(0);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [warningText, setWarningText] = useState<string | null>(null);
+  const [pairingSuccessText, setPairingSuccessText] = useState<string | null>(null);
   const [successSummary, setSuccessSummary] = useState<string[] | null>(null);
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
+  const [cardDropHighlight, setCardDropHighlight] = useState<{
+    id: string;
+    zone: "psd" | "png";
+  } | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const d = new Date(`${today}T00:00:00`);
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -248,7 +400,9 @@ export function AdminChallengeFormClient({
 
   useEffect(() => {
     return () => {
-      cards.forEach((c) => URL.revokeObjectURL(c.previewUrl));
+      cards.forEach((c) => {
+        if (c.previewUrl) URL.revokeObjectURL(c.previewUrl);
+      });
     };
   }, [cards]);
 
@@ -275,58 +429,168 @@ export function AdminChallengeFormClient({
     return { year, month, cells };
   }, [calendarMonth]);
 
-  function normalizeFiles(files: File[]) {
-    const imageFiles = files.filter((f) =>
-      ["image/png", "image/jpeg"].includes(f.type)
-    );
+  async function normalizeFiles(files: File[]) {
+    setPairingSuccessText(null);
+    const accepted = files.filter((f) => isRasterGameImage(f) || isPsdFile(f));
+    if (accepted.length === 0) return;
+
     const availableSlots = Math.max(0, maxCardsForBatch - cards.length);
-    if (cards.length >= maxCardsForBatch || imageFiles.length > availableSlots) {
+    const specsAll = buildPairSpecs(accepted);
+
+    if (availableSlots <= 0) {
       setWarningText(
-        `Maximum ${maxCardsForBatch} image(s) for positions ${batchStartPosition}–5`
+        `Maximum ${maxCardsForBatch} card(s) for positions ${batchStartPosition}–5`,
+      );
+      return;
+    }
+
+    const specs = specsAll.slice(0, availableSlots);
+    if (specsAll.length > availableSlots) {
+      setWarningText(
+        `Only ${availableSlots} more card slot(s) available (${specsAll.length} file group(s) from drop; extras not added).`,
       );
     } else {
       setWarningText(null);
     }
-    const picked = imageFiles.slice(0, Math.max(0, availableSlots));
-    if (picked.length === 0) return;
 
-    const nextCards = picked.map((file, idx) => ({
-      id: `${Date.now()}-${idx}-${Math.random().toString(16).slice(2)}`,
-      file,
-      previewUrl: URL.createObjectURL(file),
-      title: "",
-      creator_name: "",
-      software: SOFTWARE_OPTIONS[0],
-      category: CATEGORY_OPTIONS[0],
-      layer_count: "",
-      is_sponsored: false,
-      sponsor_name: "",
-    }));
+    const nextCards: UploadCard[] = [];
+    let idx = 0;
+    for (const spec of specs) {
+      const id = `${Date.now()}-${idx}-${Math.random().toString(16).slice(2)}`;
+      idx++;
+      const title = formatTitleFromStem(spec.displayStem);
+
+      if (spec.psd && spec.raster) {
+        let count: number | null = null;
+        try {
+          const ab = await spec.psd.arrayBuffer();
+          count = parsePsdLayerCount(ab);
+        } catch {
+          count = null;
+        }
+        nextCards.push({
+          id,
+          file: spec.raster,
+          psdFile: spec.psd,
+          previewUrl: URL.createObjectURL(spec.raster),
+          title,
+          creator_name: "",
+          software: SOFTWARE_OPTIONS[0],
+          category: CATEGORY_OPTIONS[0],
+          layer_count: count != null ? String(count) : "",
+          layerCountHint: count != null ? "psd-auto" : "psd-failed",
+          is_sponsored: false,
+          sponsor_name: "",
+        });
+      } else if (spec.psd) {
+        let count: number | null = null;
+        try {
+          const ab = await spec.psd.arrayBuffer();
+          count = parsePsdLayerCount(ab);
+        } catch {
+          count = null;
+        }
+        nextCards.push({
+          id,
+          file: null,
+          psdFile: spec.psd,
+          previewUrl: null,
+          title,
+          creator_name: "",
+          software: SOFTWARE_OPTIONS[0],
+          category: CATEGORY_OPTIONS[0],
+          layer_count: count != null ? String(count) : "",
+          layerCountHint: count != null ? "psd-auto" : "psd-failed",
+          is_sponsored: false,
+          sponsor_name: "",
+        });
+      } else if (spec.raster) {
+        nextCards.push({
+          id,
+          file: spec.raster,
+          psdFile: null,
+          previewUrl: URL.createObjectURL(spec.raster),
+          title,
+          creator_name: "",
+          software: SOFTWARE_OPTIONS[0],
+          category: CATEGORY_OPTIONS[0],
+          layer_count: "",
+          layerCountHint: "none",
+          is_sponsored: false,
+          sponsor_name: "",
+        });
+      }
+    }
+
+    const addedPairs = nextCards.filter((c) => c.psdFile && c.file).length;
     setCards((prev) => [...prev, ...nextCards]);
     setErrorText(null);
     setSuccessSummary(null);
+    if (addedPairs > 0) {
+      setPairingSuccessText(
+        `${addedPairs} pair${addedPairs === 1 ? "" : "s"} detected and matched automatically`,
+      );
+    }
   }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
-    normalizeFiles(files);
+    void normalizeFiles(files);
     e.target.value = "";
   }
 
-  function updateCard(
-    id: string,
-    patch: Partial<Omit<UploadCard, "id" | "file" | "previewUrl">>
-  ) {
+  function updateCard(id: string, patch: Partial<Omit<UploadCard, "id">>) {
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }
+
+  function setCardRasterImage(cardId: string, file: File) {
     setCards((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...patch } : c))
+      prev.map((c) => {
+        if (c.id !== cardId) return c;
+        if (c.previewUrl) URL.revokeObjectURL(c.previewUrl);
+        return {
+          ...c,
+          file,
+          previewUrl: URL.createObjectURL(file),
+        };
+      }),
     );
+    setErrorText(null);
+    setSuccessSummary(null);
+  }
+
+  async function setCardPsdFile(cardId: string, file: File) {
+    let count: number | null = null;
+    try {
+      const ab = await file.arrayBuffer();
+      count = parsePsdLayerCount(ab);
+    } catch {
+      count = null;
+    }
+    setCards((prev) =>
+      prev.map((c) => {
+        if (c.id !== cardId) return c;
+        return {
+          ...c,
+          psdFile: file,
+          layer_count: count != null ? String(count) : "",
+          layerCountHint: count != null ? "psd-auto" : "psd-failed",
+        };
+      }),
+    );
+    setErrorText(null);
+    setSuccessSummary(null);
   }
 
   function removeCard(id: string) {
     setCards((prev) => {
       const target = prev.find((c) => c.id === id);
-      if (target) URL.revokeObjectURL(target.previewUrl);
-      return prev.filter((c) => c.id !== id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      const next = prev.filter((c) => c.id !== id);
+      if (next.length === 0) {
+        queueMicrotask(() => setPairingSuccessText(null));
+      }
+      return next;
     });
   }
 
@@ -344,10 +608,32 @@ export function AdminChallengeFormClient({
     setDraggingCardId(null);
   }
 
+  function handleCardPsdDrop(cardId: string, e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setCardDropHighlight(null);
+    const f = Array.from(e.dataTransfer.files).find((file) => isPsdFile(file));
+    if (f) void setCardPsdFile(cardId, f);
+  }
+
+  function handleCardPngDrop(cardId: string, e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setCardDropHighlight(null);
+    const f = Array.from(e.dataTransfer.files).find((file) => isRasterGameImage(file));
+    if (f) setCardRasterImage(cardId, f);
+  }
+
+  function zoneDragLeave(e: React.DragEvent) {
+    const rel = e.relatedTarget as Node | null;
+    if (rel && e.currentTarget.contains(rel)) return;
+    setCardDropHighlight(null);
+  }
+
   function onDrop(e: React.DragEvent<HTMLButtonElement>) {
     e.preventDefault();
     setIsDragOver(false);
-    normalizeFiles(Array.from(e.dataTransfer.files ?? []));
+    void normalizeFiles(Array.from(e.dataTransfer.files ?? []));
   }
 
   async function onPublishAll() {
@@ -360,7 +646,14 @@ export function AdminChallengeFormClient({
       return;
     }
     if (cards.length === 0) {
-      setErrorText("Add at least one image (up to 5).");
+      setErrorText("Add at least one image or PSD (up to 5).");
+      return;
+    }
+    const missingImageIdx = cards.findIndex((c) => !c.file);
+    if (missingImageIdx >= 0) {
+      setErrorText(
+        `Card ${missingImageIdx + 1}: add a PNG or JPG export for the game image (PSD is not uploaded).`,
+      );
       return;
     }
     if (cards.some((c) => !c.title.trim() || !c.layer_count.trim())) {
@@ -384,7 +677,7 @@ export function AdminChallengeFormClient({
     const publishCards: Array<{
       title: string;
       creator_name: string;
-      software: string;
+      software: SoftwareOption;
       category: string;
       layer_count: string;
       is_sponsored: boolean;
@@ -404,6 +697,11 @@ export function AdminChallengeFormClient({
 
     for (let i = 0; i < cards.length; i++) {
       const card = cards[i];
+      if (!card.file) {
+        setSubmitting(false);
+        setErrorText(`Card ${i + 1}: missing game image file.`);
+        return;
+      }
       setProgressStep(i + 1);
       const ext = card.file.type === "image/jpeg" ? "jpg" : "png";
       const pos = batchStartPosition + i;
@@ -467,9 +765,12 @@ export function AdminChallengeFormClient({
       ...prev,
       [activeDate]: (prev[activeDate] ?? 0) + cards.length,
     }));
-    cards.forEach((c) => URL.revokeObjectURL(c.previewUrl));
+    cards.forEach((c) => {
+      if (c.previewUrl) URL.revokeObjectURL(c.previewUrl);
+    });
     setCards([]);
     setBatchStartPosition(1);
+    setPairingSuccessText(null);
   }
 
   return (
@@ -715,8 +1016,8 @@ export function AdminChallengeFormClient({
               {Math.min(5, batchStartPosition + Math.max(0, cards.length - 1))}
             </span>
             {cards.length === 0
-              ? " (add images below)"
-              : ` (${cards.length} image${cards.length === 1 ? "" : "s"})`}
+              ? " (add challenges below)"
+              : ` (${cards.length} card${cards.length === 1 ? "" : "s"})`}
           </div>
           <div>
             <label className="text-sm font-semibold text-white/80">Active Date</label>
@@ -765,13 +1066,19 @@ export function AdminChallengeFormClient({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <label className="text-sm font-semibold text-white/80">Challenge Image (PNG or JPG)</label>
+        <div className="rounded-2xl border border-violet-500/20 bg-[rgba(26,10,46,0.45)] p-4">
+          <div className="text-sm font-bold text-violet-100/95">Quick add (optional)</div>
+          <p className="mt-1 text-xs leading-relaxed text-white/50">
+            Drop many files at once: matching <span className="font-mono text-white/65">.psd</span> +{" "}
+            <span className="font-mono text-white/65">.png</span> /{" "}
+            <span className="font-mono text-white/65">.jpg</span> with the same base name merge into one card (case
+            insensitive). Or use the drop zones on each card.
+          </p>
           <input
             ref={fileInputRef}
             name="image"
             type="file"
-            accept="image/*"
+            accept="image/png,image/jpeg,.psd,image/vnd.adobe.photoshop,application/x-photoshop,application/vnd.adobe.photoshop"
             multiple
             onChange={onFileChange}
             className="hidden"
@@ -785,169 +1092,397 @@ export function AdminChallengeFormClient({
             }}
             onDragLeave={() => setIsDragOver(false)}
             onDrop={onDrop}
-            className={`mt-2 flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-8 text-center transition ${
+            className={`mt-3 flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed px-3 py-6 text-center transition ${
               isDragOver
-                ? "border-[var(--accent)] bg-[var(--accent)]/10"
-                : "border-white/20 bg-black/30 hover:bg-black/40"
+                ? "border-violet-400 bg-violet-500/15"
+                : "border-violet-400/35 bg-black/25 hover:border-violet-400/55 hover:bg-violet-950/20"
             }`}
           >
-            <div className="text-2xl">⬆️</div>
-            <div className="mt-2 text-sm font-semibold text-white/90">
-              Drop up to 5 images here
-            </div>
-            <div className="mt-1 text-xs text-white/55">
-              or click to browse files
-            </div>
+            <div className="text-lg text-violet-200/90">⬆</div>
+            <div className="mt-1.5 text-xs font-semibold text-white/90">Browse or drop up to 5 files</div>
+            <div className="mt-0.5 text-[11px] text-white/45">PNG · JPG · PSD</div>
           </button>
-          <div className="mt-2 text-xs text-white/55">
-            Upload limit: 5 images total.
-          </div>
+          {pairingSuccessText ? (
+            <p className="mt-3 rounded-lg border border-emerald-400/35 bg-emerald-500/15 px-3 py-2 text-center text-xs font-semibold text-emerald-100">
+              {pairingSuccessText}
+            </p>
+          ) : null}
         </div>
 
         {cards.length > 0 ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {cards.map((card, idx) => (
-              <div
-                key={card.id}
-                draggable
-                onDragStart={() => setDraggingCardId(card.id)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => handleCardDrop(card.id)}
-                className="overflow-hidden rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)]"
-              >
-                <div className="relative h-36 w-full bg-black/30">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={card.previewUrl}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                  <div className="absolute left-3 top-3 rounded-full border border-white/25 bg-black/55 px-2.5 py-1 text-xs font-bold text-white">
-                    Position {batchStartPosition + idx}
-                  </div>
-                </div>
-                <div className="space-y-3 p-3">
-                  <div>
-                    <label className="text-xs font-semibold text-white/70">Title</label>
-                    <input
-                      type="text"
-                      value={card.title}
-                      onChange={(e) => updateCard(card.id, { title: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-white/70">Creator Name</label>
-                    <CreatorAutocompleteInput
-                      value={card.creator_name}
-                      onChange={(next) =>
-                        updateCard(card.id, {
-                          creator_name: normalizeUsernameForStorage(next),
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs font-semibold text-white/70">Software</label>
-                      <select
-                        value={card.software}
-                        onChange={(e) =>
-                          updateCard(card.id, {
-                            software: e.target.value as (typeof SOFTWARE_OPTIONS)[number],
-                          })
-                        }
-                        className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+            {cards.map((card, idx) => {
+              const pos = batchStartPosition + idx;
+              const psdHighlight =
+                cardDropHighlight?.id === card.id && cardDropHighlight.zone === "psd";
+              const pngHighlight =
+                cardDropHighlight?.id === card.id && cardDropHighlight.zone === "png";
+              const layerParsed =
+                card.layerCountHint === "psd-auto" && card.layer_count.trim() !== ""
+                  ? Math.max(0, Math.floor(Number(card.layer_count) || 0))
+                  : null;
+              const missingGameImage = !card.file;
+              const missingLayerCount = !String(card.layer_count).trim();
+
+              return (
+                <div
+                  key={card.id}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                  }}
+                  onDrop={() => handleCardDrop(card.id)}
+                  className="flex flex-col overflow-hidden rounded-2xl border border-violet-500/20 bg-[linear-gradient(180deg,rgba(46,16,78,0.92)_0%,rgba(26,10,46,0.98)_100%)] shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
+                >
+                  <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-black/25 px-2.5 py-1.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggingCardId(card.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", card.id);
+                        }}
+                        onDragEnd={() => setDraggingCardId(null)}
+                        className="shrink-0 cursor-grab select-none rounded-md border border-white/15 bg-white/5 px-1.5 py-1 text-[10px] font-bold leading-none text-white/45 hover:bg-white/10 active:cursor-grabbing"
+                        title="Drag to reorder cards"
+                        aria-label="Drag to reorder cards"
                       >
-                        {SOFTWARE_OPTIONS.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-white/70">Category</label>
-                      <select
-                        value={card.category}
-                        onChange={(e) =>
-                          updateCard(card.id, {
-                            category: e.target.value as (typeof CATEGORY_OPTIONS)[number],
-                          })
-                        }
-                        className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                      >
-                        {CATEGORY_OPTIONS.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-white/70">Layer Count</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={card.layer_count}
-                      onChange={(e) =>
-                        updateCard(card.id, { layer_count: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="flex cursor-pointer items-center justify-between gap-3">
-                      <span className="text-xs font-semibold text-white/75">Is Sponsored</span>
-                      <span
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full border transition ${
-                          card.is_sponsored
-                            ? "border-[var(--accent)] bg-[var(--accent)]/70"
-                            : "border-white/20 bg-white/10"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                            card.is_sponsored ? "translate-x-5" : "translate-x-1"
-                          }`}
-                        />
+                        ⋮⋮
+                      </div>
+                      <span className="truncate text-[10px] font-bold uppercase tracking-wider text-violet-300/80">
+                        Step 1 · Files
                       </span>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                      {card.psdFile && card.file ? (
+                        <span className="rounded-full border border-emerald-400/45 bg-emerald-600/25 px-2 py-0.5 text-[9px] font-bold text-emerald-100">
+                          ✓ Paired
+                        </span>
+                      ) : card.psdFile && !card.file ? (
+                        <span className="rounded-full border border-orange-400/45 bg-orange-500/20 px-2 py-0.5 text-[9px] font-bold text-orange-100">
+                          ⚠ Missing PNG
+                        </span>
+                      ) : card.file && !card.psdFile ? (
+                        <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[9px] font-bold text-white/45">
+                          No PSD
+                        </span>
+                      ) : null}
+                      <span className="rounded-full border border-violet-400/30 bg-violet-600/25 px-2 py-0.5 text-[10px] font-bold text-violet-100">
+                        Pos {pos}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="relative h-28 w-full shrink-0 bg-black/40">
+                    {card.previewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={card.previewUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center">
+                        <IconImage className="opacity-40" />
+                        <span className="text-[10px] font-medium text-white/40">Game image preview</span>
+                        <span className="text-[9px] text-white/30">Drop PNG/JPG below</span>
+                      </div>
+                    )}
+                    {card.file ? (
+                      <div className="absolute bottom-1.5 right-1.5 rounded-full border border-emerald-400/40 bg-emerald-600/90 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                        PNG ✓
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="h-px bg-gradient-to-r from-transparent via-violet-500/25 to-transparent" />
+
+                  <div className="space-y-2 p-2.5">
+                    <label
+                      htmlFor={`psd-${card.id}`}
+                      draggable={false}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setCardDropHighlight({ id: card.id, zone: "psd" });
+                      }}
+                      onDragLeave={zoneDragLeave}
+                      onDrop={(e) => handleCardPsdDrop(card.id, e)}
+                      className={`block cursor-pointer rounded-xl border-2 border-dashed px-2.5 py-2.5 transition ${
+                        psdHighlight
+                          ? "border-violet-400 bg-violet-500/20"
+                          : "border-violet-500/50 bg-violet-950/30 hover:border-violet-400/70"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <IconPsdDoc className="mt-0.5 shrink-0 opacity-95" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[11px] font-bold uppercase tracking-wide text-violet-200/95">
+                            Drop PSD for layer count
+                          </div>
+                          <div className="mt-0.5 text-[10px] font-medium text-violet-300/70">Tap to browse</div>
+                          {card.psdFile ? (
+                            <div className="mt-1.5 space-y-1">
+                              <div className="truncate text-[10px] font-medium text-white/80" title={card.psdFile.name}>
+                                {card.psdFile.name}
+                              </div>
+                              {card.layerCountHint === "psd-auto" && layerParsed != null ? (
+                                <>
+                                  <div className="text-[11px] font-semibold text-emerald-400">
+                                    ✓ {layerParsed} visible layers
+                                  </div>
+                                  <div className="inline-flex w-fit rounded-full border border-violet-400/50 bg-violet-600/85 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                                    PSD ✓ {layerParsed} visible
+                                  </div>
+                                </>
+                              ) : card.layerCountHint === "psd-failed" ? (
+                                <div className="text-[11px] font-medium text-white/50">Enter manually</div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <div className="mt-1 text-[10px] text-white/35">No PSD yet</div>
+                          )}
+                          <p className="mt-1.5 text-[9px] leading-snug text-white/40">
+                            Used for layer counting only, not stored
+                          </p>
+                          {card.psdFile && !card.file ? (
+                            <p className="mt-1.5 text-[10px] font-medium leading-snug text-orange-200/95">
+                              Add matching PNG with same filename
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
                       <input
-                        type="checkbox"
+                        id={`psd-${card.id}`}
+                        type="file"
+                        accept=".psd,image/vnd.adobe.photoshop,application/x-photoshop,application/vnd.adobe.photoshop"
                         className="sr-only"
-                        checked={card.is_sponsored}
-                        onChange={(e) =>
-                          updateCard(card.id, { is_sponsored: e.target.checked })
-                        }
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = "";
+                          if (f && isPsdFile(f)) void setCardPsdFile(card.id, f);
+                        }}
+                      />
+                    </label>
+
+                    <label
+                      htmlFor={`png-${card.id}`}
+                      draggable={false}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setCardDropHighlight({ id: card.id, zone: "png" });
+                      }}
+                      onDragLeave={zoneDragLeave}
+                      onDrop={(e) => handleCardPngDrop(card.id, e)}
+                      className={`block cursor-pointer rounded-xl border-2 border-dashed px-2.5 py-2.5 transition ${
+                        pngHighlight
+                          ? "border-white/50 bg-white/10"
+                          : "border-white/20 bg-black/20 hover:border-white/35"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <IconImage className="mt-0.5 shrink-0 opacity-70" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[11px] font-bold uppercase tracking-wide text-white/75">
+                            Drop PNG/JPG for game image
+                          </div>
+                          <div className="mt-0.5 text-[10px] font-medium text-white/45">Tap to browse</div>
+                          <p className="mt-1.5 text-[9px] leading-snug text-white/40">
+                            This is what players will see — 1080×1350px recommended
+                          </p>
+                        </div>
+                      </div>
+                      <input
+                        id={`png-${card.id}`}
+                        type="file"
+                        accept="image/png,image/jpeg"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = "";
+                          if (f && isRasterGameImage(f)) setCardRasterImage(card.id, f);
+                        }}
                       />
                     </label>
                   </div>
-                  <div
-                    className={`overflow-hidden transition-all duration-300 ${
-                      card.is_sponsored ? "max-h-24 opacity-100" : "max-h-0 opacity-0"
-                    }`}
-                  >
-                    <label className="text-xs font-semibold text-white/70">Sponsor Name</label>
-                    <input
-                      type="text"
-                      value={card.sponsor_name}
-                      onChange={(e) =>
-                        updateCard(card.id, { sponsor_name: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                    />
+
+                  <div className="h-px bg-gradient-to-r from-transparent via-violet-500/20 to-transparent" />
+
+                  <div className="space-y-2 px-2.5 pb-2 pt-1.5">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-violet-300/75">
+                        Step 2 · Details
+                      </span>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        {missingGameImage ? (
+                          <span className="rounded-md border border-orange-400/35 bg-orange-500/15 px-1.5 py-0.5 text-[9px] font-bold text-orange-200">
+                            Game image required
+                          </span>
+                        ) : null}
+                        {missingLayerCount ? (
+                          <span className="rounded-md border border-red-400/35 bg-red-500/15 px-1.5 py-0.5 text-[9px] font-bold text-red-200">
+                            Layer count required
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
+                        Layer count
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={card.layer_count}
+                        onChange={(e) =>
+                          updateCard(card.id, {
+                            layer_count: e.target.value,
+                            layerCountHint: "none",
+                          })
+                        }
+                        className="mt-0.5 w-full rounded-lg border border-white/15 bg-black/45 px-2.5 py-1.5 text-sm text-white outline-none focus:border-violet-400/50"
+                      />
+                      {card.layerCountHint === "psd-auto" ? (
+                        <div className="mt-0.5 text-[10px] font-semibold text-emerald-400">
+                          Auto-detected (visible layers only)
+                        </div>
+                      ) : null}
+                      {card.layerCountHint === "psd-failed" ? (
+                        <div className="mt-0.5 text-[10px] text-white/45">Could not auto-detect — enter manually</div>
+                      ) : null}
+                      <p className="mt-1 text-[10px] italic text-white/45">
+                        {layerCountGuidanceForSoftware(card.software)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-semibold uppercase tracking-wide text-white/55">Title</label>
+                      <input
+                        type="text"
+                        value={card.title}
+                        onChange={(e) => updateCard(card.id, { title: e.target.value })}
+                        className="mt-0.5 w-full rounded-lg border border-white/15 bg-black/45 px-2.5 py-1.5 text-sm text-white outline-none focus:border-violet-400/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
+                        Creator name
+                      </label>
+                      <CreatorAutocompleteInput
+                        value={card.creator_name}
+                        onChange={(next) =>
+                          updateCard(card.id, {
+                            creator_name: normalizeUsernameForStorage(next),
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
+                          Software
+                        </label>
+                        <select
+                          value={card.software}
+                          onChange={(e) =>
+                            updateCard(card.id, {
+                              software: e.target.value as SoftwareOption,
+                            })
+                          }
+                          className="mt-0.5 w-full rounded-lg border border-white/15 bg-black/45 px-2 py-1.5 text-xs text-white outline-none focus:border-violet-400/50"
+                        >
+                          {SOFTWARE_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
+                          Category
+                        </label>
+                        <select
+                          value={card.category}
+                          onChange={(e) =>
+                            updateCard(card.id, {
+                              category: e.target.value as (typeof CATEGORY_OPTIONS)[number],
+                            })
+                          }
+                          className="mt-0.5 w-full rounded-lg border border-white/15 bg-black/45 px-2 py-1.5 text-xs text-white outline-none focus:border-violet-400/50"
+                        >
+                          {CATEGORY_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
+                        Schedule position
+                      </label>
+                      <div className="mt-0.5 rounded-lg border border-violet-500/25 bg-violet-950/40 px-2.5 py-1.5 text-sm font-semibold tabular-nums text-violet-100">
+                        {pos}
+                        <span className="ml-1.5 text-[10px] font-normal text-white/40">(batch slot)</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="flex cursor-pointer items-center justify-between gap-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
+                          Sponsored
+                        </span>
+                        <span
+                          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition ${
+                            card.is_sponsored
+                              ? "border-violet-400 bg-violet-600/70"
+                              : "border-white/20 bg-white/10"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition ${
+                              card.is_sponsored ? "translate-x-4" : "translate-x-1"
+                            }`}
+                          />
+                        </span>
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={card.is_sponsored}
+                          onChange={(e) => updateCard(card.id, { is_sponsored: e.target.checked })}
+                        />
+                      </label>
+                    </div>
+                    <div
+                      className={`overflow-hidden transition-all duration-300 ${
+                        card.is_sponsored ? "max-h-20 opacity-100" : "max-h-0 opacity-0"
+                      }`}
+                    >
+                      <label className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
+                        Sponsor name
+                      </label>
+                      <input
+                        type="text"
+                        value={card.sponsor_name}
+                        onChange={(e) => updateCard(card.id, { sponsor_name: e.target.value })}
+                        className="mt-0.5 w-full rounded-lg border border-white/15 bg-black/45 px-2.5 py-1.5 text-sm text-white outline-none focus:border-violet-400/50"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeCard(card.id)}
+                      className="w-full rounded-lg border border-red-400/35 bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-200 hover:bg-red-500/20"
+                    >
+                      Remove card
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeCard(card.id)}
-                    className="w-full rounded-lg border border-red-400/35 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/20"
-                  >
-                    Remove
-                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : null}
 
@@ -964,7 +1499,7 @@ export function AdminChallengeFormClient({
 
         {submitting ? (
           <p className="text-center text-sm font-semibold text-white/75">
-            Uploading image {Math.min(progressStep, cards.length)} of {cards.length}...
+            Uploading file {Math.min(progressStep, cards.length)} of {cards.length}...
           </p>
         ) : null}
 

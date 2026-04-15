@@ -13,15 +13,11 @@ import {
   sanitizeCreatorNameLiveInput,
   USERNAME_SPACE_ERROR,
 } from "@/lib/username-input";
-
-const SOFTWARE_OPTIONS = [
-  "Photoshop",
-  "Illustrator",
-  "Figma",
-  "After Effects",
-  "Cinema 4D",
-  "Other",
-] as const;
+import {
+  SOFTWARE_OPTIONS,
+  type SoftwareOption,
+  layerCountGuidanceForSoftware,
+} from "@/lib/software-options";
 
 const CATEGORY_OPTIONS = [
   "Branding",
@@ -45,9 +41,7 @@ export default function SubmitPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [creatorName, setCreatorName] = useState("");
   const [title, setTitle] = useState("");
-  const [software, setSoftware] = useState<(typeof SOFTWARE_OPTIONS)[number]>(
-    SOFTWARE_OPTIONS[0]
-  );
+  const [software, setSoftware] = useState<SoftwareOption>(SOFTWARE_OPTIONS[0]);
   const [category, setCategory] = useState<(typeof CATEGORY_OPTIONS)[number]>(
     CATEGORY_OPTIONS[0]
   );
@@ -262,7 +256,7 @@ export default function SubmitPage() {
                 <select
                   value={software}
                   onChange={(e) =>
-                    setSoftware(e.target.value as (typeof SOFTWARE_OPTIONS)[number])
+                    setSoftware(e.target.value as SoftwareOption)
                   }
                   className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
                 >
@@ -301,6 +295,9 @@ export default function SubmitPage() {
                 onChange={(e) => setLayerCount(e.target.value === "" ? "" : Number(e.target.value))}
                 className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-white outline-none"
               />
+              <p className="mt-1.5 text-xs italic text-white/45">
+                {layerCountGuidanceForSoftware(software)}
+              </p>
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
