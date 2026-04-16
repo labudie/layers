@@ -1755,28 +1755,22 @@ export function DailyGameClient({
     if (downloadBusyId === ch.id) return;
     setDownloadBusyId(ch.id);
     try {
-      const res = await fetch(ch.image_url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
+      const response = await fetch(ch.image_url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
-
-      const extRaw = ch.image_url.split("?")[0].split(".").pop() || "png";
-      const ext = extRaw.length <= 5 ? extRaw : "png";
       const safeTitle = (ch.title ?? "challenge")
-        .trim()
-        .replace(/[^a-z0-9]+/gi, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 40)
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-_]/gi, "")
         .toLowerCase();
-      const filename = `${safeTitle || "challenge"}.${ext}`;
-
+      const filename = `${safeTitle || "challenge"}.png`;
       const a = document.createElement("a");
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
-      a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (e) {
       console.error("[downloadChallengeImage] failed", e);
     } finally {
@@ -1975,6 +1969,15 @@ export function DailyGameClient({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [modalImageUrl, resetModalImageViewer]);
+
+  useEffect(() => {
+    if (!modalImageUrl) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [modalImageUrl]);
 
   const guessTrackerHeaderRow = useMemo(() => {
     if (
@@ -2929,9 +2932,14 @@ export function DailyGameClient({
               aria-modal="true"
               aria-label="Challenge image"
               style={{ touchAction: "none" } as CSSProperties}
+              onClick={(e) => {
+                if (e.target === e.currentTarget && modalScale <= 1) {
+                  resetModalImageViewer();
+                }
+              }}
             >
           <div
-            className="absolute inset-0 z-0"
+            className="pointer-events-none absolute inset-0 z-0"
             style={
               {
                 backgroundColor: "#0f0520",
@@ -2940,30 +2948,6 @@ export function DailyGameClient({
               } as CSSProperties
             }
             aria-hidden
-            onClick={() => {
-              if (modalScale <= 1) {
-                resetModalImageViewer();
-              }
-            }}
-            onTouchStart={(e) => {
-              e.stopPropagation();
-              if (modalScale <= 1 && e.touches.length === 1) {
-                beginModalPullGesture(e.touches[0].clientY);
-              }
-            }}
-            onTouchMove={(e) => {
-              e.stopPropagation();
-              if (modalScale <= 1 && e.touches.length === 1) {
-                e.preventDefault();
-                moveModalPullGesture(e.touches[0].clientY);
-              }
-            }}
-            onTouchEnd={(e) => {
-              e.stopPropagation();
-              if (modalScale <= 1) {
-                endModalPullGesture();
-              }
-            }}
           />
           <button
             type="button"
