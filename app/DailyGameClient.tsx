@@ -611,7 +611,7 @@ export function DailyGameClient({
   const [modalOffset, setModalOffset] = useState({ x: 0, y: 0 });
   const [imageFeedbackClassName, setImageFeedbackClassName] = useState("");
   const [confettiBursts, setConfettiBursts] = useState<number[]>([]);
-  const [downloadBusyId, setDownloadBusyId] = useState<string | null>(null);
+  const [shareBusyId, setShareBusyId] = useState<string | null>(null);
   const [tutorialStep, setTutorialStep] = useState<1 | 2 | 3 | null>(null);
   const [creatorAvatars, setCreatorAvatars] = useState<
     Map<string, string | null>
@@ -1750,33 +1750,55 @@ export function DailyGameClient({
     void submitGuess();
   }, [canSubmitGuess, guessInput, submitGuess, vibrateKeyTap]);
 
-  const downloadChallengeImage = useCallback(async (ch: Challenge) => {
+  const shareChallengeImage = useCallback(async (ch: Challenge) => {
     if (!ch.image_url) return;
-    if (downloadBusyId === ch.id) return;
-    setDownloadBusyId(ch.id);
+    if (shareBusyId === ch.id) return;
+    setShareBusyId(ch.id);
     try {
       const response = await fetch(ch.image_url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
       const safeTitle = (ch.title ?? "challenge")
         .replace(/\s+/g, "-")
         .replace(/[^a-z0-9-_]/gi, "")
         .toLowerCase();
       const filename = `${safeTitle || "challenge"}.png`;
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const shareTitle = ch.title?.trim() || "Challenge";
+      const imageFile = new File([blob], filename, { type: "image/png" });
+
+      if (
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [imageFile] })
+      ) {
+        await navigator.share({
+          files: [imageFile],
+          title: `Layers — ${shareTitle}`,
+          text: "Can you guess how many layers this design has? Play Layers daily 🎨",
+          url: "https://layersgame.com",
+        });
+      } else if (typeof navigator.share === "function") {
+        await navigator.share({
+          title: `Layers — ${shareTitle}`,
+          text: "Can you guess how many layers this design has? Play Layers daily 🎨",
+          url: "https://layersgame.com",
+        });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
     } catch (e) {
-      console.error("[downloadChallengeImage] failed", e);
+      console.error("[shareChallengeImage] failed", e);
     } finally {
-      setDownloadBusyId(null);
+      setShareBusyId(null);
     }
-  }, [downloadBusyId]);
+  }, [shareBusyId]);
 
   const shareDaily = useCallback(async () => {
     if (!challenges.length) return;
@@ -2295,30 +2317,37 @@ export function DailyGameClient({
 
                               <button
                                 type="button"
-                                aria-label="Download image"
-                                disabled={downloadBusyId === ch.id}
+                                aria-label="Share image"
+                                disabled={shareBusyId === ch.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   e.preventDefault();
-                                  void downloadChallengeImage(ch);
+                                  void shareChallengeImage(ch);
                                 }}
                                 className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white/90 backdrop-blur-sm transition hover:bg-black/55 disabled:opacity-40"
                               >
-                                <svg
-                                  width={16}
-                                  height={16}
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth={2}
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  aria-hidden
-                                >
-                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                  <polyline points="7 10 12 15 17 10" />
-                                  <line x1="12" y1="15" x2="12" y2="3" />
-                                </svg>
+                                {shareBusyId === ch.id ? (
+                                  <span
+                                    className="h-4 w-4 animate-spin rounded-full border-2 border-white/75 border-t-transparent"
+                                    aria-hidden
+                                  />
+                                ) : (
+                                  <svg
+                                    width={20}
+                                    height={20}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    aria-hidden
+                                  >
+                                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                                    <polyline points="16 6 12 2 8 6" />
+                                    <line x1="12" y1="2" x2="12" y2="15" />
+                                  </svg>
+                                )}
                               </button>
                             </div>
                           </div>
