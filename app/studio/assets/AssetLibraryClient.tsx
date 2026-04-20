@@ -142,7 +142,7 @@ export function AssetLibraryClient({
   const router = useRouter();
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("assets");
   const [leftTab, setLeftTab] = useState<LeftTab>("ready");
-  const [assets] = useState(initialAssets);
+  const [assets, setAssets] = useState(initialAssets);
   const [pending, setPending] = useState(pendingSubmissions);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [viewMonth, setViewMonth] = useState(() => {
@@ -155,8 +155,11 @@ export function AssetLibraryClient({
   const [draftPairs, setDraftPairs] = useState<DraftPairLocal[]>([]);
   const [editAsset, setEditAsset] = useState<AssetRow | null>(null);
   const [dragAssetId, setDragAssetId] = useState<string | null>(null);
+  const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
+  const [slotPopKey, setSlotPopKey] = useState<string | null>(null);
   const [publishBusy, setPublishBusy] = useState(false);
+  const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = () => router.refresh();
@@ -262,17 +265,73 @@ export function AssetLibraryClient({
       image_url: pub.publicUrl,
     };
     const res = await insertReadyAssetAction(payload);
-    if (!res.ok) return;
+    if (!res.ok) {
+      setToast({ type: "error", text: res.error ?? "Failed to save asset." });
+      return;
+    }
+    const newAsset: AssetRow = {
+      id: res.id ?? `temp-${row.key}`,
+      title: payload.title,
+      creator_name: payload.creator_name || null,
+      software: payload.software,
+      category: payload.category,
+      layer_count: payload.layer_count,
+      is_sponsored: payload.is_sponsored,
+      sponsor_name: payload.is_sponsored ? payload.sponsor_name || null : null,
+      image_url: payload.image_url,
+      status: "ready",
+      scheduled_date: null,
+      scheduled_position: null,
+      challenge_id: null,
+      source: "admin",
+      uploaded_by: adminUserId || null,
+      submission_id: null,
+    };
+    setAssets((prev) => [newAsset, ...prev]);
     setDraftPairs((list) => list.filter((r) => r.key !== row.key));
+    setToast({ type: "success", text: "Saved to Ready." });
+    window.setTimeout(() => setToast(null), 2200);
     refresh();
   };
 
   const onDropToSlot = async (slotIndex: number) => {
     if (!selectedDate || !dragAssetId) return;
+    const previousAssets = assets;
+    setAssets((prev) =>
+      prev.map((a) => {
+        if (a.id === dragAssetId) {
+          return {
+            ...a,
+            status: "scheduled",
+            scheduled_date: selectedDate,
+            scheduled_position: slotIndex + 1,
+          };
+        }
+        if (
+          a.status === "scheduled" &&
+          a.scheduled_date === selectedDate &&
+          a.scheduled_position === slotIndex + 1
+        ) {
+          return {
+            ...a,
+            status: "ready",
+            scheduled_date: null,
+            scheduled_position: null,
+          };
+        }
+        return a;
+      }),
+    );
+    setSlotPopKey(`${selectedDate}-${slotIndex}-${dragAssetId}`);
+    window.setTimeout(() => setSlotPopKey(null), 420);
     const res = await scheduleAssetAction(dragAssetId, selectedDate, slotIndex + 1);
     setDragOverSlot(null);
     setDragAssetId(null);
+    setDraggingCardId(null);
     if (!res.ok) {
+      setAssets(previousAssets);
+      setToast({ type: "error", text: res.error ?? "Could not schedule asset." });
+      window.setTimeout(() => setToast(null), 2600);
       window.alert(res.error ?? "Could not schedule asset.");
       return;
     }
@@ -370,9 +429,19 @@ export function AssetLibraryClient({
                 key={a.id}
                 type="button"
                 draggable
-                onDragStart={() => setDragAssetId(a.id)}
+                onDragStart={() => {
+                  setDragAssetId(a.id);
+                  setDraggingCardId(a.id);
+                }}
+                onDragEnd={() => {
+                  setDraggingCardId(null);
+                  setDragOverSlot(null);
+                }}
                 onClick={() => setEditAsset(a)}
-                className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 p-2 text-left hover:bg-black/35"
+                title="Drag to schedule"
+                className={`group relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 p-2 text-left hover:bg-black/35 transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
+                  draggingCardId === a.id ? "scale-105 rotate-2 shadow-[0_10px_24px_rgba(124,58,237,0.25)]" : "hover:shadow-[0_0_0_1px_rgba(124,58,237,0.5),0_0_18px_rgba(124,58,237,0.25)]"
+                }`}
               >
                 <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-black/40">
                   {a.image_url ? <Image src={a.image_url} alt="" fill className="object-cover" sizes="56px" unoptimized /> : null}
@@ -388,6 +457,9 @@ export function AssetLibraryClient({
                     <span className="text-[10px] text-white/45">{a.layer_count} layers</span>
                   </div>
                 </div>
+                <span className="pointer-events-none absolute -top-2 right-2 rounded bg-[#7c3aed] px-1.5 py-0.5 text-[10px] font-semibold text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                  Drag to schedule
+                </span>
               </button>
             ))}
           </div>
@@ -461,14 +533,31 @@ export function AssetLibraryClient({
             {selectedSlots.map((slot, idx) => (
               <div
                 key={idx}
-                className={`min-h-[118px] rounded-lg border border-dashed p-2 ${dragOverSlot === idx ? "border-[#7c3aed] bg-[#7c3aed]/15" : "border-white/20 bg-black/20"}`}
+                className={`min-h-[118px] rounded-lg border border-dashed p-2 transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
+                  dragOverSlot === idx
+                    ? "scale-[1.02] border-[#7c3aed] bg-[#7c3aed]/15 shadow-[0_0_0_1px_rgba(124,58,237,0.65),0_0_20px_rgba(124,58,237,0.35)]"
+                    : "border-white/20 bg-black/20"
+                }`}
                 onDragOver={(e) => { e.preventDefault(); setDragOverSlot(idx); }}
                 onDragLeave={() => setDragOverSlot(null)}
                 onDrop={() => void onDropToSlot(idx)}
               >
                 <p className="mb-1 text-center text-[10px] font-bold text-white/45">Slot {idx + 1}</p>
                 {slot ? (
-                  <div draggable onDragStart={() => setDragAssetId(slot.id)} className="space-y-1">
+                  <div
+                    draggable
+                    onDragStart={() => {
+                      setDragAssetId(slot.id);
+                      setDraggingCardId(slot.id);
+                    }}
+                    onDragEnd={() => {
+                      setDraggingCardId(null);
+                      setDragOverSlot(null);
+                    }}
+                    className={`space-y-1 transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] ${
+                      slotPopKey === `${selectedDate}-${idx}-${slot.id}` ? "scale-100" : "scale-95"
+                    } ${draggingCardId === slot.id ? "scale-105 rotate-2 shadow-[0_10px_24px_rgba(124,58,237,0.25)]" : ""}`}
+                  >
                     <div className="relative mx-auto h-12 w-12 overflow-hidden rounded bg-black/40">
                       {slot.image_url ? <Image src={slot.image_url} alt="" fill className="object-cover" sizes="48px" unoptimized /> : null}
                     </div>
@@ -489,6 +578,17 @@ export function AssetLibraryClient({
 
   return (
     <div className="mx-auto w-full max-w-[1280px] px-4 py-4 md:px-5 md:py-6">
+      {toast ? (
+        <div
+          className={`mb-3 rounded-xl border px-3 py-2 text-sm font-semibold transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
+            toast.type === "success"
+              ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
+              : "border-red-400/40 bg-red-500/15 text-red-100"
+          }`}
+        >
+          {toast.text}
+        </div>
+      ) : null}
       <div className="mb-3 flex items-center justify-between">
         <Link href="/studio" className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white/85 hover:bg-white/10">← Back</Link>
         <div className="flex gap-2 md:hidden">

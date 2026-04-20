@@ -109,6 +109,15 @@ export async function insertReadyAssetAction(
   if (err) return { ok: false, error: err };
 
   const { sb } = gate;
+  console.log("[assets][insertReady][before]", {
+    title: fields.title,
+    creator_name: fields.creator_name,
+    software: fields.software,
+    category: fields.category,
+    layer_count: fields.layer_count,
+    is_sponsored: fields.is_sponsored,
+    has_image_url: Boolean(fields.image_url),
+  });
   const { data, error } = await sb
     .from("assets")
     .insert({
@@ -128,9 +137,11 @@ export async function insertReadyAssetAction(
     .maybeSingle();
 
   if (error) {
+    console.log("[assets][insertReady][after][error]", error);
     console.error("[assets] insertReady", error);
     return { ok: false, error: error.message };
   }
+  console.log("[assets][insertReady][after][success]", data);
   const id = (data as { id?: string } | null)?.id;
   revalidatePath("/studio/assets");
   return { ok: true, id };
