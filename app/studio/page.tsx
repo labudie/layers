@@ -826,6 +826,12 @@ export default async function AdminPage({
 
         <div className="mb-4 flex flex-wrap gap-2">
           <Link
+            href="/studio/assets"
+            className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/10"
+          >
+            Asset Library
+          </Link>
+          <Link
             href="/studio?tab=schedule"
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
               tab === "schedule"
