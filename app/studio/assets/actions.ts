@@ -100,7 +100,7 @@ function validateAssetFields(f: AssetUpsertFields): string | null {
   return null;
 }
 
-export async function insertDraftAssetAction(
+export async function insertReadyAssetAction(
   fields: AssetUpsertFields,
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
   const gate = await getAdminSupabase();
@@ -120,13 +120,15 @@ export async function insertDraftAssetAction(
       is_sponsored: Boolean(fields.is_sponsored),
       sponsor_name: fields.is_sponsored ? fields.sponsor_name.trim() || null : null,
       image_url: fields.image_url.trim(),
-      status: "draft",
+      status: "ready",
+      source: "admin",
+      uploaded_by: (await gate.sb.auth.getUser()).data.user?.id ?? null,
     })
     .select("id")
     .maybeSingle();
 
   if (error) {
-    console.error("[assets] insertDraft", error);
+    console.error("[assets] insertReady", error);
     return { ok: false, error: error.message };
   }
   const id = (data as { id?: string } | null)?.id;
@@ -178,6 +180,91 @@ export async function updateAssetAction(
     return { ok: false, error: error.message };
   }
   revalidatePath("/studio/assets");
+  return { ok: true };
+}
+
+export async function approveSubmissionToAssetAction(
+  submissionId: number,
+): Promise<{ ok: boolean; error?: string }> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { sb } = gate;
+  if (!Number.isFinite(submissionId)) return { ok: false, error: "Invalid submission." };
+
+  const { data: sub, error: subErr } = await sb
+    .from("submissions")
+    .select("*")
+    .eq("id", submissionId)
+    .maybeSingle();
+  if (subErr || !sub) return { ok: false, error: "Submission not found." };
+  const row = sub as Record<string, unknown>;
+  if (String(row.status ?? "") !== "pending") {
+    return { ok: false, error: "Submission is already reviewed." };
+  }
+
+  const baseFields: AssetUpsertFields = {
+    title: String(row.title ?? "").trim(),
+    creator_name: String(row.creator_name ?? "").trim(),
+    software: String(row.software ?? "").trim(),
+    category: String(row.category ?? "").trim(),
+    layer_count: Math.trunc(Number(row.layer_count ?? 0)),
+    is_sponsored: Boolean(row.is_sponsored),
+    sponsor_name: String(row.sponsor_name ?? "").trim(),
+    image_url: String(row.image_url ?? "").trim(),
+  };
+  const err = validateAssetFields(baseFields);
+  if (err) return { ok: false, error: err };
+
+  const userId = (await sb.auth.getUser()).data.user?.id ?? null;
+  const { error: insertErr } = await sb.from("assets").insert({
+    ...baseFields,
+    creator_name: baseFields.creator_name || null,
+    sponsor_name: baseFields.is_sponsored ? baseFields.sponsor_name || null : null,
+    status: "ready",
+    source: "community",
+    submission_id: submissionId,
+    uploaded_by: userId,
+  });
+  if (insertErr) return { ok: false, error: insertErr.message };
+
+  const { error: updErr } = await sb
+    .from("submissions")
+    .update({
+      status: "approved",
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: userId,
+      review_note: null,
+    })
+    .eq("id", submissionId);
+  if (updErr) return { ok: false, error: updErr.message };
+
+  revalidatePath("/studio/assets");
+  revalidatePath("/studio");
+  return { ok: true };
+}
+
+export async function rejectSubmissionAction(
+  submissionId: number,
+  note: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { sb } = gate;
+  if (!Number.isFinite(submissionId)) return { ok: false, error: "Invalid submission." };
+  const userId = (await sb.auth.getUser()).data.user?.id ?? null;
+  const { error } = await sb
+    .from("submissions")
+    .update({
+      status: "rejected",
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: userId,
+      review_note: note.trim() || null,
+    })
+    .eq("id", submissionId)
+    .eq("status", "pending");
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/studio/assets");
+  revalidatePath("/studio");
   return { ok: true };
 }
 
@@ -239,7 +326,9 @@ export async function scheduleAssetAction(
 
   const { data: asset } = await sb.from("assets").select("*").eq("id", assetId).maybeSingle();
   const a = asset as { status?: string; id?: string } | null;
-  if (!a || a.status !== "ready") return { ok: false, error: "Only ready assets can be scheduled." };
+  if (!a || (a.status !== "ready" && a.status !== "scheduled")) {
+    return { ok: false, error: "Only ready/scheduled assets can be assigned." };
+  }
 
   const { data: occupant } = await sb
     .from("assets")
@@ -294,12 +383,38 @@ export async function unscheduleAssetAction(assetId: string): Promise<{ ok: bool
   if (!gate.ok) return { ok: false, error: gate.error };
   const { sb } = gate;
 
+  const { data: asset } = await sb
+    .from("assets")
+    .select("id, challenge_id, status")
+    .eq("id", assetId)
+    .maybeSingle();
+  const row = asset as { challenge_id?: string | null; status?: string } | null;
+  if (!row || row.status !== "scheduled") return { ok: false, error: "Asset is not scheduled." };
+
+  if (row.challenge_id) {
+    const { data: challenge } = await sb
+      .from("challenges")
+      .select("id, active_date")
+      .eq("id", row.challenge_id)
+      .maybeSingle();
+    const ch = challenge as { id?: string; active_date?: string | null } | null;
+    if (ch?.id) {
+      const today = todayYYYYMMDDUSEastern();
+      if (String(ch.active_date ?? "") <= today) {
+        return { ok: false, error: "Cannot unschedule a live/past challenge." };
+      }
+      const { error: delErr } = await sb.from("challenges").delete().eq("id", ch.id);
+      if (delErr) return { ok: false, error: delErr.message };
+    }
+  }
+
   const { error } = await sb
     .from("assets")
     .update({
       scheduled_date: null,
       scheduled_position: null,
       status: "ready",
+      challenge_id: null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", assetId)
@@ -358,9 +473,6 @@ export async function publishScheduledDayAction(
   if (!gate.ok) return { ok: false, error: gate.error };
   const { sb } = gate;
 
-  const today = todayYYYYMMDDUSEastern();
-  if (scheduledDate <= today) return { ok: false, error: "Pick a future date to publish." };
-
   const { data: existing } = await sb.from("challenges").select("id").eq("active_date", scheduledDate).limit(1);
   if ((existing ?? []).length > 0) {
     return { ok: false, error: "Challenges already exist for that date." };
@@ -374,17 +486,13 @@ export async function publishScheduledDayAction(
     .order("scheduled_position", { ascending: true });
 
   const list = (slots as Array<Record<string, unknown>> | null) ?? [];
-  if (list.length < 5) return { ok: false, error: "All five positions must be filled before publishing." };
+  if (list.length === 0) return { ok: false, error: "No assets are scheduled for this date." };
 
   const byPos = new Map<number, (typeof list)[number]>();
   for (const row of list) {
     const p = Number(row.scheduled_position);
     if (p >= 1 && p <= 5) byPos.set(p, row);
   }
-  for (let p = 1; p <= 5; p++) {
-    if (!byPos.has(p)) return { ok: false, error: `Missing asset at position ${p}.` };
-  }
-
   const dayNumber = await computeDayNumberForDate(sb, scheduledDate);
 
   const insertPayload: Array<{
@@ -402,6 +510,7 @@ export async function publishScheduledDayAction(
   }> = [];
 
   for (let p = 1; p <= 5; p++) {
+    if (!byPos.has(p)) continue;
     const row = byPos.get(p)!;
     if (!String(row.image_url ?? "").trim()) {
       return { ok: false, error: `Position ${p} is missing an image URL.` };
@@ -437,6 +546,7 @@ export async function publishScheduledDayAction(
   }
 
   for (let p = 1; p <= 5; p++) {
+    if (!byPos.has(p)) continue;
     const assetRow = byPos.get(p)!;
     const challengeId = idByPosition.get(p);
     if (!challengeId) {
@@ -446,10 +556,10 @@ export async function publishScheduledDayAction(
       .from("assets")
       .update({
         challenge_id: challengeId,
-        status: "published",
-        published_at: new Date().toISOString(),
-        scheduled_date: null,
-        scheduled_position: null,
+        status: "scheduled",
+        published_at: null,
+        scheduled_date: scheduledDate,
+        scheduled_position: p,
         updated_at: new Date().toISOString(),
       })
       .eq("id", String(assetRow.id));

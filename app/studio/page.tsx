@@ -13,7 +13,6 @@ import type { AdvancedAdminAnalytics } from "@/lib/admin-studio-analytics";
 import { loadAdvancedAdminAnalytics } from "@/lib/admin-studio-analytics";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 import { createSupabaseServerClient } from "@/lib/supabase";
-import { AdminChallengeFormClient } from "@/app/studio/AdminChallengeFormClient";
 import { AdminSubmissionImage } from "@/app/studio/AdminSubmissionImage";
 import { AnalyticsExportButton } from "@/app/studio/AnalyticsExportButton";
 import { DeleteButton } from "@/app/studio/DeleteButton";
@@ -345,6 +344,8 @@ async function getScheduleOverview(today: string) {
   return { scheduledCounts, readyAheadDays };
 }
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
+// Legacy batch action kept for backward compatibility; scheduling now lives in /studio/assets.
 async function addChallengeAction(formData: FormData): Promise<AddChallengeState> {
   "use server";
 
@@ -502,6 +503,7 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
   }
 }
 
+/* eslint-enable @typescript-eslint/no-unused-vars */
 async function computeDayNumberForDate(targetDate: string) {
   const sb = createSupabaseServerClient(await cookies());
   const { data: rows } = await sb
@@ -740,7 +742,7 @@ export default async function AdminPage({
     redirect("/");
   }
 
-  const { scheduledCounts, readyAheadDays } = await getScheduleOverview(today);
+  const { readyAheadDays } = await getScheduleOverview(today);
   const challenges =
     tab === "schedule" ? await getUpcomingChallenges(today) : [];
   const sb = createSupabaseServerClient(await cookies());
@@ -875,12 +877,12 @@ export default async function AdminPage({
 
         {tab === "schedule" ? (
           <>
-            <AdminChallengeFormClient
-              today={today}
-              action={addChallengeAction}
-              scheduledCounts={scheduledCounts}
-              upcomingChallenges={challenges}
-            />
+            <div className="rounded-2xl border border-violet-400/25 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
+              Batch uploading has moved to the unified asset management page.
+              <Link href="/studio/assets" className="ml-2 font-bold text-violet-200 underline underline-offset-2">
+                Open Asset Library
+              </Link>
+            </div>
 
             <div className="mt-10">
               <div className="text-lg font-extrabold">Upcoming challenges</div>
