@@ -731,16 +731,14 @@ export default async function AdminPage({
   const isAdmin = await assertAdminOrNull();
   const today = todayYYYYMMDDUSEastern();
   const params = (await searchParams) ?? {};
-  const hasTabParam = typeof params.tab === "string" && params.tab.trim().length > 0;
-  if (!hasTabParam) {
-    redirect("/studio/assets");
-  }
   const tab =
+    params.tab === "asset-library" ||
+    params.tab === "schedule" ||
     params.tab === "submissions" ||
     params.tab === "users" ||
     params.tab === "analytics"
       ? params.tab
-      : "schedule";
+      : "asset-library";
 
   if (!isAdmin) {
     redirect("/");
@@ -842,7 +840,11 @@ export default async function AdminPage({
         <div className="mb-4 flex flex-wrap gap-2">
           <Link
             href="/studio/assets"
-            className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/10"
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              tab === "asset-library"
+                ? "bg-[var(--accent)] text-white"
+                : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
           >
             Asset Library
           </Link>
@@ -888,7 +890,14 @@ export default async function AdminPage({
           </Link>
         </div>
 
-        {tab === "schedule" ? (
+        {tab === "asset-library" ? (
+          <div className="rounded-2xl border border-violet-400/25 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
+            Manage uploads, ready assets, and calendar scheduling in the unified asset library.
+            <Link href="/studio/assets" className="ml-2 font-bold text-violet-200 underline underline-offset-2">
+              Open Asset Library
+            </Link>
+          </div>
+        ) : tab === "schedule" ? (
           <>
             <div className="mt-10">
               <div className="text-lg font-extrabold">Upcoming challenges</div>
