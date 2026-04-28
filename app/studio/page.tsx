@@ -580,7 +580,7 @@ async function approveAndScheduleSubmissionAction(formData: FormData) {
   const today = todayYYYYMMDDUSEastern();
   if (!Number.isFinite(submissionId) || !activeDate) return;
   if (!Number.isFinite(position) || position < 1 || position > 5) return;
-  if (activeDate <= today) return;
+  if (activeDate < today) return;
 
   const sb = createSupabaseServerClient(await cookies());
   const { data: sub } = await sb
@@ -646,7 +646,7 @@ async function assignApprovedSubmissionAction(formData: FormData) {
   const today = todayYYYYMMDDUSEastern();
   if (!Number.isFinite(submissionId) || !activeDate) return;
   if (!Number.isFinite(position) || position < 1 || position > 5) return;
-  if (activeDate <= today) return;
+  if (activeDate < today) return;
 
   const sb = createSupabaseServerClient(await cookies());
   const { data: sub } = await sb
@@ -868,7 +868,7 @@ export default async function AdminPage({
     }
   }
 
-  const minScheduleDate = nextEasternYmd(today);
+  const minScheduleDate = today;
 
   return (
     <AppSiteChrome

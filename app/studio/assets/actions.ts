@@ -333,7 +333,7 @@ export async function scheduleAssetAction(
   }
 
   const today = todayYYYYMMDDUSEastern();
-  if (scheduledDate <= today) return { ok: false, error: "Pick a future date." };
+  if (scheduledDate < today) return { ok: false, error: "Pick today or a future date." };
 
   const { data: asset } = await sb.from("assets").select("*").eq("id", assetId).maybeSingle();
   const a = asset as { status?: string; id?: string } | null;
