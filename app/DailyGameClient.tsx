@@ -2475,7 +2475,7 @@ export function DailyGameClient({
                       }}
                     >
                       <div
-                        className={`challenge-image-frame box-border flex h-full min-h-0 max-h-full w-full cursor-zoom-in items-center justify-center rounded-none ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                        className={`box-border flex h-full min-h-0 max-h-full w-full cursor-zoom-in items-center justify-center rounded-[14px] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
                         style={{
                           background: "transparent",
                           backgroundColor: "transparent",
@@ -2535,9 +2535,6 @@ export function DailyGameClient({
                           )}
                         </div>
                       </div>
-                    </div>
-                    <div className="mt-1 text-right text-[10px] text-[#a0a0b0]">
-                      tap to zoom
                     </div>
                   </div>
 
@@ -2704,7 +2701,7 @@ export function DailyGameClient({
                     {/* Border + feedback animation live on outer (overflow visible) so red/green
                         strokes are not clipped; inner clips only the bitmap to rounded rect. */}
                     <div
-                      className={`challenge-image-frame box-border flex max-h-[54vh] w-full max-w-full cursor-zoom-in items-center justify-center rounded-[var(--radius-card)] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                      className={`box-border flex max-h-[54vh] w-full max-w-full cursor-zoom-in items-center justify-center rounded-[14px] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
                       style={{
                         background: "transparent",
                         backgroundColor: "transparent",
@@ -2764,9 +2761,6 @@ export function DailyGameClient({
                           />
                         )}
                       </div>
-                    </div>
-                    <div className="mt-1 text-right text-[10px] text-[#a0a0b0]">
-                      tap to zoom
                     </div>
                     </div>
                   </div>
