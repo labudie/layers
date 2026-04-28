@@ -10,26 +10,17 @@ import { usePathname } from "next/navigation";
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const settingsScrollShell = pathname === "/settings";
-  const isDrillTransition =
-    pathname.startsWith("/profile/") && pathname !== "/profile";
 
-  const initial = isDrillTransition
-    ? { opacity: 0, x: 40 }
-    : { opacity: 0, y: 8 };
-  const animate = isDrillTransition
-    ? { opacity: 1, x: 0 }
-    : { opacity: 1, y: 0 };
-  const exit = isDrillTransition
-    ? { opacity: 0, x: -40 }
-    : { opacity: 0, y: -8 };
-  const transition = isDrillTransition
-    ? { duration: 0.22, ease: "easeInOut" as const }
-    : { duration: 0.2, ease: "easeInOut" as const };
+  const initial = { opacity: 0 };
+  const animate = { opacity: 1 };
+  const exit = { opacity: 0 };
+  const transition = { duration: 0.15, ease: "easeInOut" as const };
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence mode="sync" initial={false}>
       <motion.div
         key={pathname}
+        layout="position"
         initial={initial}
         animate={animate}
         exit={exit}
