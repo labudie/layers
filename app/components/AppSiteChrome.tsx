@@ -345,7 +345,11 @@ export function AppSiteChrome({
           ☰
         </button>
         <div className="pointer-events-none max-w-[min(16rem,calc(100%-6.5rem))] truncate text-center text-xl font-extrabold tracking-tight">
-          {title}
+          {title === "Layers" ? (
+            <img src="/layers-lockup.svg" alt="Layers" height="22" />
+          ) : (
+            title
+          )}
         </div>
         <div className="absolute right-4 top-1/2 z-10 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-end md:right-5">
           {right ?? (
