@@ -883,7 +883,7 @@ export default async function AdminPage({
       <div className="mx-auto w-full max-w-6xl px-4 py-4 md:px-5 md:py-6">
         {readyAheadDays < 14 ? (
           <div className="mb-4 rounded-2xl border border-amber-400/35 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-amber-100">
-            Content buffer low: {readyAheadDays} day{readyAheadDays === 1 ? "" : "s"} ready (target: 14+ days)
+            ⚠ {readyAheadDays} day{readyAheadDays === 1 ? "" : "s"} scheduled — target is 14 days minimum
           </div>
         ) : (
           <div className="mb-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100">

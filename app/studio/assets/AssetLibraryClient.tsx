@@ -382,7 +382,7 @@ export function AssetLibraryClient({
   };
 
   const leftPanel = (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4">
+    <div className="h-fit w-full rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4">
       <div
         role="button"
         tabIndex={0}
@@ -392,10 +392,14 @@ export function AssetLibraryClient({
           e.preventDefault();
           if (e.dataTransfer.files?.length) void ingestFiles(e.dataTransfer.files);
         }}
-        className="mb-3 flex min-h-[110px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#7c3aed]/50 bg-[#1a0a2e] px-4 text-center"
+        className="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#7c3aed]/50 bg-[#1a0a2e] p-4 text-center"
       >
-        <p className="text-sm font-semibold text-white">Upload PSD + PNG pairs (max 50 files)</p>
-        <p className="mt-1 text-xs text-white/55">Auto-pair, auto-layer count, save as Ready.</p>
+        <span aria-hidden className="text-sm leading-none text-white/80">
+          ⬆
+        </span>
+        <p className="text-sm font-semibold text-white">
+          Upload PSD + PNG pairs (max 50 files)
+        </p>
         <input
           ref={fileInputRef}
           type="file"
@@ -525,7 +529,7 @@ export function AssetLibraryClient({
   );
 
   const rightPanel = (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4">
+    <div className="h-fit w-full rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4">
       <div className="mb-2 flex items-center justify-between">
         <button type="button" className="rounded border border-white/15 px-2 py-1 text-sm text-white/80" onClick={() => setViewMonth((v) => { const d = new Date(v.y, v.m - 1, 1); return { y: d.getFullYear(), m: d.getMonth() }; })}>←</button>
         <p className="text-sm font-semibold text-white">{monthLabel}</p>
@@ -587,22 +591,23 @@ export function AssetLibraryClient({
                       setDraggingCardId(null);
                       setDragOverSlot(null);
                     }}
-                    className={`space-y-1 transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] ${
+                    className={`relative space-y-1 transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] ${
                       slotPopKey === `${selectedDate}-${idx}-${slot.id}` ? "scale-100" : "scale-95"
                     } ${draggingCardId === slot.id ? "scale-105 rotate-2 shadow-[0_10px_24px_rgba(124,58,237,0.25)]" : ""}`}
                   >
+                    <button
+                      type="button"
+                      aria-label="Unschedule"
+                      className="absolute right-1 top-1 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[rgba(0,0,0,0.5)] text-[12px] leading-none text-[#ef4444]"
+                      onClick={() => void unscheduleSlot(slot.id)}
+                    >
+                      ✕
+                    </button>
                     <div className="relative mx-auto h-12 w-12 overflow-hidden rounded bg-black/40">
                       {slot.image_url ? <Image src={slot.image_url} alt="" fill className="object-cover" sizes="48px" unoptimized /> : null}
                     </div>
                     <p className="line-clamp-2 text-center text-[11px] text-white">{slot.title}</p>
                     <div className="flex justify-center"><DifficultyBadge layerCount={slot.layer_count} /></div>
-                    <button
-                      type="button"
-                      className="w-full rounded bg-white/10 py-1 text-[10px] text-white/80"
-                      onClick={() => void unscheduleSlot(slot.id)}
-                    >
-                      ✕ Unschedule
-                    </button>
                   </div>
                 ) : (
                   <div className="flex h-[84px] items-center justify-center rounded bg-white/[0.03] text-[11px] text-white/40">Drop asset here</div>
@@ -628,7 +633,11 @@ export function AssetLibraryClient({
           {toast.text}
         </div>
       ) : null}
-      <div className="mb-3 flex items-center justify-between">
+      <div
+        className={`mb-3 flex items-center justify-between ${
+          showBackLink ? "" : "md:hidden"
+        }`}
+      >
         {showBackLink ? (
           <Link
             href="/studio"
@@ -644,9 +653,9 @@ export function AssetLibraryClient({
           <button type="button" onClick={() => setMobilePanel("calendar")} className={`rounded-full px-3 py-1 text-xs ${mobilePanel === "calendar" ? "bg-[#7c3aed] text-white" : "border border-white/20 text-white/70"}`}>Calendar</button>
         </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-12">
-        <div className={`${mobilePanel === "calendar" ? "hidden md:block" : "block"} md:col-span-7`}>{leftPanel}</div>
-        <div className={`${mobilePanel === "assets" ? "hidden md:block" : "block"} md:col-span-5`}>{rightPanel}</div>
+      <div className="grid items-start gap-4 md:grid-cols-12">
+        <div className={`${mobilePanel === "calendar" ? "hidden md:block" : "block"} self-start md:col-span-7`}>{leftPanel}</div>
+        <div className={`${mobilePanel === "assets" ? "hidden md:block" : "block"} self-start md:col-span-5`}>{rightPanel}</div>
       </div>
 
       {editAsset && (
