@@ -51,8 +51,8 @@ type GuessRow = {
 
 const MAX_GUESSES = 3;
 
-/** Image modal scrim at rest; below 1 keeps the live game readable through the overlay. */
-const MODAL_SCRIM_MAX_OPACITY = 0.72;
+/** Image modal scrim at rest; near-opaque for fullscreen focus. */
+const MODAL_SCRIM_MAX_OPACITY = 0.95;
 
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
@@ -2032,55 +2032,6 @@ export function DailyGameClient({
     };
   }, [refreshTodayChallenges]);
 
-  const guessTrackerHeaderRow = useMemo(() => {
-    if (
-      total === 0 ||
-      showSummary ||
-      !gameDataReady ||
-      showNoChallengesHome ||
-      !currentChallenge ||
-      modalImageUrl
-    ) {
-      return null;
-    }
-    return (
-      <div
-        className={`flex min-h-[36px] items-center justify-center gap-2 py-1.5 ${challengeVisualFadeClassName}`}
-        role="img"
-        aria-label={`Guesses used ${currentGuesses.length} of ${MAX_GUESSES}`}
-      >
-        {Array.from({ length: MAX_GUESSES }).map((_, i) => {
-          const g = currentGuesses[i];
-          let cellClass = "border border-white/35 bg-transparent";
-          if (g?.verdict === "correct") {
-            cellClass = "border-transparent bg-emerald-500";
-          } else if (g?.verdict === "close") {
-            cellClass = "border-transparent bg-amber-500";
-          } else if (g?.verdict === "wrong") {
-            cellClass = "border-transparent bg-red-500";
-          }
-          const anim = guessSlotAnimIndex === i ? "guess-slot-enter" : "";
-          return (
-            <div
-              key={`${currentChallenge.id}-hdr-slot-${i}`}
-              className={`h-5 w-5 shrink-0 rounded-[4px] ${cellClass} ${anim}`}
-            />
-          );
-        })}
-      </div>
-    );
-  }, [
-    total,
-    showSummary,
-    gameDataReady,
-    showNoChallengesHome,
-    currentChallenge,
-    modalImageUrl,
-    currentGuesses,
-    guessSlotAnimIndex,
-    challengeVisualFadeClassName,
-  ]);
-
   return (
     <AppSiteChrome
       title="Layers"
@@ -2093,11 +2044,6 @@ export function DailyGameClient({
       }
       belowHeader={
         <>
-          {guessTrackerHeaderRow ? (
-            <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-1 pt-1 md:px-5">
-              {guessTrackerHeaderRow}
-            </div>
-          ) : null}
           {total > 0 && !showSummary && gameDataReady && !compactGameplayMode ? (
             <div className="flex shrink-0 items-center justify-center px-4 pb-2 pt-1 md:px-5">
               <div className="rounded-full border border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.1)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-sm">
@@ -2460,20 +2406,9 @@ export function DailyGameClient({
             {currentChallenge ? (
               <>
                 <div
-                  className={`flex h-11 shrink-0 min-w-0 items-center justify-between gap-2 ${challengeVisualFadeClassName}`}
+                  className={`flex h-11 shrink-0 min-w-0 items-center justify-end gap-2 ${challengeVisualFadeClassName}`}
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-white">
-                      {currentChallenge.title ?? "Untitled"}
-                    </p>
-                    {isSponsored ? (
-                      <p className="mt-0.5 text-[11px] text-[rgba(255,255,255,0.4)]">Sponsored</p>
-                    ) : null}
-                  </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <span className="font-mono text-xs text-white/75">
-                      {currentChallengeIndex + 1}/{total}
-                    </span>
                     <div className="relative">
                       <button
                         ref={infoButtonRef}
@@ -2549,7 +2484,7 @@ export function DailyGameClient({
                             openImageModal(displayChallengeImageUrl);
                         }}
                       >
-                        <div className="flex h-full min-h-0 w-full max-w-full items-center justify-center">
+                        <div className="relative flex h-full min-h-0 w-full max-w-full items-center justify-center">
                           {currentChallenge.image_url ? (
                             <AnimatePresence mode="wait" initial={false}>
                               <motion.img
@@ -2580,15 +2515,58 @@ export function DailyGameClient({
                               style={{ background: "#0f0520" }}
                             />
                           )}
+                          <span className="pointer-events-none absolute bottom-2 right-2 rounded-[5px] bg-[rgba(0,0,0,0.5)] px-[7px] py-[3px] text-[10px] text-[rgba(255,255,255,0.6)]">
+                            tap to zoom
+                          </span>
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`mb-2 flex min-w-0 items-start justify-between gap-3 ${challengeVisualFadeClassName}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">
+                        {currentChallenge.title ?? "Untitled"}
+                      </p>
+                      <p className="mt-1 text-[11px] font-mono text-white/60">
+                        Challenge {currentChallengeIndex + 1} of {total}
+                      </p>
+                    </div>
+                    <div
+                      className="flex shrink-0 items-center gap-1.5"
+                      role="img"
+                      aria-label={`Guesses used ${currentGuesses.length} of ${MAX_GUESSES}`}
+                    >
+                      {Array.from({ length: MAX_GUESSES }).map((_, i) => {
+                        const isUsed = i < currentGuesses.length;
+                        const isActive =
+                          !isUsed &&
+                          i === currentGuesses.length &&
+                          roundActive &&
+                          currentGuesses.length < MAX_GUESSES;
+                        return (
+                          <span
+                            key={`${currentChallenge.id}-compact-pip-${i}`}
+                            className="inline-block h-[5px] w-[28px] rounded-[3px]"
+                            style={{
+                              backgroundColor: isActive
+                                ? "#7c3aed"
+                                : isUsed
+                                  ? "#ef4444"
+                                  : "#ffffff15",
+                            }}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
 
                   <div className="flex w-full shrink-0 flex-col px-1">
                     <div className="mt-0 mb-3 flex h-11 items-center justify-center rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.45)] text-center">
                       <span className="font-mono text-[36px] font-extrabold leading-none tracking-[0.06em] text-white">
-                        {typeof guessInput === "number" ? guessInput : "—"}
+                        {typeof guessInput === "number" ? guessInput : "_ _"}
                       </span>
                     </div>
 
@@ -2624,7 +2602,7 @@ export function DailyGameClient({
                           type="button"
                           onClick={() => appendGuessDigit(digit)}
                           disabled={!roundActive}
-                          className="tap-press h-[42px] rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
+                          className="tap-press rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] px-0 py-[11px] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
                         >
                           {digit}
                         </button>
@@ -2633,7 +2611,7 @@ export function DailyGameClient({
                         type="button"
                         onClick={backspaceGuessDigit}
                         disabled={!roundActive || typeof guessInput !== "number"}
-                        className="tap-press flex h-[42px] items-center justify-center rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
+                        className="tap-press flex items-center justify-center rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] px-0 py-[11px] text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
                         aria-label="Delete"
                       >
                         <svg
@@ -2661,7 +2639,7 @@ export function DailyGameClient({
                         type="button"
                         onClick={() => appendGuessDigit(0)}
                         disabled={!roundActive}
-                        className="tap-press h-[42px] rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
+                        className="tap-press rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] px-0 py-[11px] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
                       >
                         0
                       </button>
@@ -2669,7 +2647,7 @@ export function DailyGameClient({
                         type="button"
                         onClick={submitGuessFromPad}
                         disabled={!canSubmitGuess || typeof guessInput !== "number"}
-                        className="tap-press h-[42px] rounded-[var(--radius-card)] border border-emerald-300/35 bg-emerald-500/85 text-xl font-extrabold text-white shadow-sm transition-[transform,filter,background-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-40"
+                        className="tap-press rounded-[var(--radius-card)] border border-emerald-300/35 bg-emerald-500/85 px-0 py-[11px] text-xl font-extrabold text-white shadow-sm transition-[transform,filter,background-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-40"
                       >
                         ✓
                       </button>
@@ -2701,7 +2679,7 @@ export function DailyGameClient({
                         }
                       }}
                     >
-                      <div className="max-h-[54vh] w-full max-w-full overflow-hidden rounded-[var(--radius-card)]">
+                      <div className="relative max-h-[54vh] w-full max-w-full overflow-hidden rounded-[var(--radius-card)]">
                         {currentChallenge.image_url ? (
                           <AnimatePresence mode="wait" initial={false}>
                             <motion.img
@@ -2732,6 +2710,9 @@ export function DailyGameClient({
                             style={{ background: "#0f0520" }}
                           />
                         )}
+                        <span className="pointer-events-none absolute bottom-2 right-2 rounded-[5px] bg-[rgba(0,0,0,0.5)] px-[7px] py-[3px] text-[10px] text-[rgba(255,255,255,0.6)]">
+                          tap to zoom
+                        </span>
                       </div>
                     </div>
                     </div>
@@ -2748,10 +2729,38 @@ export function DailyGameClient({
                         <p className="mt-0.5 text-[11px] text-[rgba(255,255,255,0.4)]">Sponsored</p>
                       ) : null}
                       <p className="mt-1 text-sm font-mono text-white/60">
-                        {currentChallengeIndex + 1}/{total}
+                        Challenge {currentChallengeIndex + 1} of {total}
                       </p>
                     </div>
-                    <div className="relative shrink-0 pt-0.5">
+                    <div className="flex shrink-0 items-center gap-2 pt-0.5">
+                      <div
+                        className="flex items-center gap-1.5"
+                        role="img"
+                        aria-label={`Guesses used ${currentGuesses.length} of ${MAX_GUESSES}`}
+                      >
+                        {Array.from({ length: MAX_GUESSES }).map((_, i) => {
+                          const isUsed = i < currentGuesses.length;
+                          const isActive =
+                            !isUsed &&
+                            i === currentGuesses.length &&
+                            roundActive &&
+                            currentGuesses.length < MAX_GUESSES;
+                          return (
+                            <span
+                              key={`${currentChallenge.id}-pip-${i}`}
+                              className="inline-block h-[5px] w-[28px] rounded-[3px]"
+                              style={{
+                                backgroundColor: isActive
+                                  ? "#7c3aed"
+                                  : isUsed
+                                    ? "#ef4444"
+                                    : "#ffffff15",
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                      <div className="relative">
                       <button
                         ref={infoButtonRef}
                         type="button"
@@ -2809,6 +2818,7 @@ export function DailyGameClient({
                           </div>
                         </div>
                       ) : null}
+                      </div>
                     </div>
                   </div>
 
@@ -3038,7 +3048,7 @@ export function DailyGameClient({
             className="pointer-events-none absolute inset-0 z-0"
             style={
               {
-                backgroundColor: "#0f0520",
+                backgroundColor: "rgba(0,0,0,0.95)",
                 opacity: modalBackdropOpacity,
                 transition: modalBackdropCssTransition,
               } as CSSProperties
@@ -3059,7 +3069,7 @@ export function DailyGameClient({
           <img
             src={modalImageUrl}
             alt=""
-            className="relative z-10 max-h-full max-w-full object-contain"
+            className="relative z-10 max-h-[90dvh] max-w-full object-contain"
             style={
               {
                 transform: `translate3d(${modalOffset.x}px, ${modalOffset.y + modalPullDy}px, 0) scale(${modalScale})`,
