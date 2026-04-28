@@ -2463,6 +2463,19 @@ export function DailyGameClient({
                 </div>
 
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
+                  {isSponsored ? (
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        color: "#6b7280",
+                        fontWeight: "400",
+                        letterSpacing: "0.02em",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Sponsored
+                    </div>
+                  ) : null}
                   <div
                     ref={tutorialImageRef}
                     className="relative left-1/2 mb-3 flex min-h-0 min-w-0 flex-1 items-center justify-center w-dvw -translate-x-1/2"
@@ -2687,6 +2700,19 @@ export function DailyGameClient({
             <div className="mt-3 flex min-h-0 min-w-0 flex-1 flex-col gap-2">
               {currentChallenge && (
                 <>
+                  {isSponsored ? (
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        color: "#6b7280",
+                        fontWeight: "400",
+                        letterSpacing: "0.02em",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Sponsored
+                    </div>
+                  ) : null}
                   <div
                     ref={tutorialImageRef}
                     className="relative mb-4 w-full max-w-full"
