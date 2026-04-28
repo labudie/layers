@@ -2309,7 +2309,13 @@ export function DailyGameClient({
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                         {ch.image_url ? (
-                          <div className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-[12px] border border-white/10 bg-[rgba(26,10,46,0.6)] sm:w-32">
+                          <div
+                            className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-[12px] border border-white/10 sm:w-32"
+                            style={{
+                              background: "transparent",
+                              backgroundColor: "transparent",
+                            }}
+                          >
                             <button
                               type="button"
                               aria-label="Open result image fullscreen"
@@ -2461,7 +2467,13 @@ export function DailyGameClient({
                     ref={tutorialImageRef}
                     className="relative left-1/2 mb-3 flex min-h-0 min-w-0 flex-1 items-center justify-center w-dvw -translate-x-1/2"
                   >
-                    <div className="mx-auto flex h-full min-h-0 w-[80%] max-w-full items-center justify-center">
+                    <div
+                      className="mx-auto flex h-full min-h-0 w-[80%] max-w-full items-center justify-center"
+                      style={{
+                        background: "transparent",
+                        backgroundColor: "transparent",
+                      }}
+                    >
                       <div
                         className={`challenge-image-frame box-border flex h-full min-h-0 max-h-full w-full cursor-zoom-in items-center justify-center rounded-none ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
                         style={{
@@ -2682,7 +2694,13 @@ export function DailyGameClient({
                     ref={tutorialImageRef}
                     className="relative mb-4 w-full max-w-full"
                   >
-                    <div className="mx-auto w-[80%] max-w-full">
+                    <div
+                      className="mx-auto w-[80%] max-w-full"
+                      style={{
+                        background: "transparent",
+                        backgroundColor: "transparent",
+                      }}
+                    >
                     {/* Border + feedback animation live on outer (overflow visible) so red/green
                         strokes are not clipped; inner clips only the bitmap to rounded rect. */}
                     <div
