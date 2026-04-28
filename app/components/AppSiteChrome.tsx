@@ -346,7 +346,7 @@ export function AppSiteChrome({
         </button>
         <div className="pointer-events-none max-w-[min(16rem,calc(100%-6.5rem))] truncate text-center text-xl font-extrabold tracking-tight">
           {title === "Layers" ? (
-            <img src="/layers-lockup.svg" alt="Layers" height="22" />
+            <img src="/Layers App Logo.svg" alt="Layers" height="22" />
           ) : (
             title
           )}
