@@ -479,15 +479,16 @@ export async function reorderScheduledDayAction(
 
 export async function publishScheduledDayAction(
   scheduledDate: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  publishedCount?: number;
+  existingCount?: number;
+  message?: string;
+}> {
   const gate = await getAdminSupabase();
   if (!gate.ok) return { ok: false, error: gate.error };
   const { sb } = gate;
-
-  const { data: existing } = await sb.from("challenges").select("id").eq("active_date", scheduledDate).limit(1);
-  if ((existing ?? []).length > 0) {
-    return { ok: false, error: "Challenges already exist for that date." };
-  }
 
   const { data: slots } = await sb
     .from("assets")
@@ -505,6 +506,20 @@ export async function publishScheduledDayAction(
     if (p >= 1 && p <= 5) byPos.set(p, row);
   }
   const dayNumber = await computeDayNumberForDate(sb, scheduledDate);
+  const slotPositions = Array.from(byPos.keys()).sort((a, b) => a - b);
+  const { data: existingChallengesAtDate, error: existingErr } = await sb
+    .from("challenges")
+    .select("id, position")
+    .eq("active_date", scheduledDate)
+    .in("position", slotPositions);
+  if (existingErr) return { ok: false, error: existingErr.message };
+  const existingByPosition = new Map<number, string>();
+  for (const row of (existingChallengesAtDate ?? []) as Array<{
+    id: string;
+    position: number | null;
+  }>) {
+    if (typeof row.position === "number") existingByPosition.set(row.position, row.id);
+  }
 
   const insertPayload: Array<{
     title: string;
@@ -526,6 +541,7 @@ export async function publishScheduledDayAction(
     if (!String(row.image_url ?? "").trim()) {
       return { ok: false, error: `Position ${p} is missing an image URL.` };
     }
+    if (existingByPosition.has(p)) continue;
     insertPayload.push({
       title: String(row.title ?? "").trim() || "Untitled",
       creator_name: row.creator_name ? String(row.creator_name) : null,
@@ -541,18 +557,25 @@ export async function publishScheduledDayAction(
     });
   }
 
-  const { data: inserted, error: insErr } = await sb
-    .from("challenges")
-    .insert(insertPayload)
-    .select("id, position");
-
-  if (insErr || !inserted) {
-    console.error("[assets] publish insert challenges", insErr);
-    return { ok: false, error: insErr?.message ?? "Insert failed." };
+  if (insertPayload.length > 0) {
+    const { error: upsertErr } = await sb
+      .from("challenges")
+      .upsert(insertPayload, { onConflict: "active_date,position" });
+    if (upsertErr) {
+      console.error("[assets] publish upsert challenges", upsertErr);
+      return { ok: false, error: upsertErr.message };
+    }
   }
 
+  const { data: challengesAfter, error: challengesAfterErr } = await sb
+    .from("challenges")
+    .select("id, position")
+    .eq("active_date", scheduledDate)
+    .in("position", slotPositions);
+  if (challengesAfterErr) return { ok: false, error: challengesAfterErr.message };
+
   const idByPosition = new Map<number, string>();
-  for (const ch of inserted as Array<{ id: string; position: number | null }>) {
+  for (const ch of (challengesAfter ?? []) as Array<{ id: string; position: number | null }>) {
     if (typeof ch.position === "number") idByPosition.set(ch.position, ch.id);
   }
 
@@ -576,7 +599,14 @@ export async function publishScheduledDayAction(
       .eq("id", String(assetRow.id));
   }
 
+  const publishedCount = insertPayload.length;
+  const existingCount = Math.max(0, slotPositions.length - publishedCount);
   revalidatePath("/studio/assets");
   revalidatePath("/studio");
-  return { ok: true };
+  return {
+    ok: true,
+    publishedCount,
+    existingCount,
+    message: `${publishedCount} new challenge${publishedCount === 1 ? "" : "s"} published, ${existingCount} already existed`,
+  };
 }

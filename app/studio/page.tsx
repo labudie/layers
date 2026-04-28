@@ -757,6 +757,8 @@ export default async function AdminPage({
 
   let workspaceAssets: AssetRow[] = [];
   let workspacePendingSubmissions: PendingSubmissionRow[] = [];
+  let workspaceLiveCountsByDate: Record<string, number> = {};
+  let workspaceLiveChallengeIdByDatePosition: Record<string, Record<number, string>> = {};
   if (tab === "workspace") {
     const { data: assetRows, error: assetsError } = await sb
       .from("assets")
@@ -804,6 +806,28 @@ export default async function AdminPage({
       sponsor_name: String(r.sponsor_name ?? ""),
       created_at: String(r.created_at ?? ""),
     }));
+
+    const { data: publishedChallengeRows, error: publishedErr } = await sb
+      .from("challenges")
+      .select("id, active_date, position")
+      .order("active_date", { ascending: true });
+    if (publishedErr) {
+      console.error("[studio][workspace] published challenges fetch", publishedErr);
+    }
+    for (const row of (publishedChallengeRows ?? []) as Array<{
+      id: string;
+      active_date: string | null;
+      position: number | null;
+    }>) {
+      const date = row.active_date ?? "";
+      const pos = row.position ?? 0;
+      if (!date || pos < 1 || pos > 5) continue;
+      workspaceLiveCountsByDate[date] = (workspaceLiveCountsByDate[date] ?? 0) + 1;
+      if (!workspaceLiveChallengeIdByDatePosition[date]) {
+        workspaceLiveChallengeIdByDatePosition[date] = {};
+      }
+      workspaceLiveChallengeIdByDatePosition[date][pos] = row.id;
+    }
   }
 
   let submissions: SubmissionAdminRow[] = [];
@@ -940,6 +964,8 @@ export default async function AdminPage({
             pendingSubmissions={workspacePendingSubmissions}
             adminUserId={adminUserId}
             showBackLink={false}
+            liveCountsByDate={workspaceLiveCountsByDate}
+            liveChallengeIdByDatePosition={workspaceLiveChallengeIdByDatePosition}
           />
         ) : tab === "submissions" ? (
           <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)] p-5">

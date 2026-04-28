@@ -61,6 +61,29 @@ export default async function StudioAssetsPage() {
   }
 
   const assets = (assetRows ?? []) as AssetRow[];
+  const { data: publishedChallengeRows, error: publishedErr } = await sb
+    .from("challenges")
+    .select("id, active_date, position")
+    .order("active_date", { ascending: true });
+  if (publishedErr) {
+    console.error("[assets page] published challenges fetch", publishedErr);
+  }
+  const liveCountsByDate: Record<string, number> = {};
+  const liveChallengeIdByDatePosition: Record<string, Record<number, string>> = {};
+  for (const row of (publishedChallengeRows ?? []) as Array<{
+    id: string;
+    active_date: string | null;
+    position: number | null;
+  }>) {
+    const date = row.active_date ?? "";
+    const pos = row.position ?? 0;
+    if (!date || pos < 1 || pos > 5) continue;
+    liveCountsByDate[date] = (liveCountsByDate[date] ?? 0) + 1;
+    if (!liveChallengeIdByDatePosition[date]) {
+      liveChallengeIdByDatePosition[date] = {};
+    }
+    liveChallengeIdByDatePosition[date][pos] = row.id;
+  }
   const { data: pendingRows, error: pErr } = await sb
     .from("submissions")
     .select(
@@ -113,6 +136,8 @@ export default async function StudioAssetsPage() {
         initialAssets={assets}
         pendingSubmissions={pendingSubmissions}
         adminUserId={adminUserId}
+        liveCountsByDate={liveCountsByDate}
+        liveChallengeIdByDatePosition={liveChallengeIdByDatePosition}
       />
     </AppSiteChrome>
   );

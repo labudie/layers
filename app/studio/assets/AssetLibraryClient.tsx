@@ -142,11 +142,15 @@ export function AssetLibraryClient({
   pendingSubmissions,
   adminUserId,
   showBackLink = true,
+  liveCountsByDate,
+  liveChallengeIdByDatePosition,
 }: {
   initialAssets: AssetRow[];
   pendingSubmissions: PendingSubmissionRow[];
   adminUserId: string;
   showBackLink?: boolean;
+  liveCountsByDate: Record<string, number>;
+  liveChallengeIdByDatePosition: Record<string, Record<number, string>>;
 }) {
   const router = useRouter();
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("assets");
@@ -169,6 +173,8 @@ export function AssetLibraryClient({
   const [slotPopKey, setSlotPopKey] = useState<string | null>(null);
   const [publishBusy, setPublishBusy] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [liveCounts, setLiveCounts] = useState(liveCountsByDate);
+  const [liveChallengeMap, setLiveChallengeMap] = useState(liveChallengeIdByDatePosition);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = () => router.refresh();
@@ -356,6 +362,25 @@ export function AssetLibraryClient({
       window.alert(r.error ?? "Failed to go live.");
       return;
     }
+    const daySlots = (scheduledByDate.slots[selectedDate] ?? []).filter(
+      Boolean,
+    ) as AssetRow[];
+    const optimisticLive = { ...(liveChallengeMap[selectedDate] ?? {}) };
+    for (const asset of daySlots) {
+      const pos = Number(asset.scheduled_position ?? 0);
+      if (pos >= 1 && pos <= 5 && !optimisticLive[pos]) {
+        optimisticLive[pos] = `live-${selectedDate}-${pos}`;
+      }
+    }
+    setLiveChallengeMap((prev) => ({ ...prev, [selectedDate]: optimisticLive }));
+    setLiveCounts((prev) => ({ ...prev, [selectedDate]: Object.keys(optimisticLive).length }));
+    setToast({
+      type: "success",
+      text:
+        r.message ??
+        `${r.publishedCount ?? 0} new challenges published, ${r.existingCount ?? 0} already existed`,
+    });
+    window.setTimeout(() => setToast(null), 2600);
     refresh();
   };
   const unscheduleSlot = async (assetId: string) => {
@@ -540,6 +565,9 @@ export function AssetLibraryClient({
           if (!cell) return <div key={`empty-${idx}`} className="aspect-square" />;
           const ymd = toYmd(cell);
           const count = scheduledByDate.counts[ymd] ?? 0;
+          const liveCount = liveCounts[ymd] ?? 0;
+          const liveIcon =
+            liveCount >= 5 ? "✅" : liveCount > 0 ? "⚠️" : null;
           const dot = count >= 5 ? "bg-emerald-400" : count > 0 ? "bg-amber-400" : "bg-white/0";
           const thumbs = (scheduledByDate.slots[ymd] ?? []).filter(Boolean).slice(0, 3) as AssetRow[];
           return (
@@ -551,6 +579,10 @@ export function AssetLibraryClient({
                     {t.image_url ? <Image src={t.image_url} alt="" fill className="object-cover" sizes="16px" unoptimized /> : null}
                   </div>
                 ))}
+              </div>
+              <div className="mt-1 flex items-center gap-1 text-[10px] text-white/75">
+                {liveIcon ? <span aria-hidden>{liveIcon}</span> : null}
+                <span>{liveCount}/5 live</span>
               </div>
             </button>
           );
@@ -607,6 +639,20 @@ export function AssetLibraryClient({
                     </div>
                     <p className="line-clamp-2 text-center text-[11px] text-white">{slot.title}</p>
                     <div className="flex justify-center"><DifficultyBadge layerCount={slot.layer_count} /></div>
+                    <div className="flex justify-center">
+                      {Boolean(
+                        selectedDate &&
+                          liveChallengeMap[selectedDate]?.[idx + 1],
+                      ) ? (
+                        <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
+                          Live
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-[#7c3aed]/25 px-2 py-0.5 text-[10px] font-semibold text-[#d8b4fe]">
+                          Scheduled
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="flex h-[84px] items-center justify-center rounded bg-white/[0.03] text-[11px] text-white/40">Drop asset here</div>
