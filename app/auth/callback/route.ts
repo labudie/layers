@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase";
-import { needsUsernameOnboarding } from "@/lib/profile-onboarding";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -17,13 +16,21 @@ export async function GET(request: Request) {
   const { data: authData } = await supabase.auth.getUser();
   const user = authData.user;
   if (user) {
-    const { data: existing } = await supabase
+    const { data: existingProfile } = await supabase
       .from("profiles")
-      .select("id")
+      .select("username")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (!existing) {
+    const existingUsername =
+      (existingProfile as { username?: string | null } | null)?.username?.trim() ??
+      "";
+
+    if (existingUsername.length > 0) {
+      return NextResponse.redirect(`${origin}/`);
+    }
+
+    if (!existingProfile) {
       await supabase.from("profiles").insert({
         id: user.id,
         email: user.email ?? null,
@@ -34,16 +41,7 @@ export async function GET(request: Request) {
         .update({ email: user.email ?? null })
         .eq("id", user.id);
     }
-
-    const { data: prof } = await supabase
-      .from("profiles")
-      .select("username")
-      .eq("id", user.id)
-      .maybeSingle();
-    const username = (prof as { username?: string | null } | null)?.username;
-    if (needsUsernameOnboarding(username)) {
-      return NextResponse.redirect(`${origin}/onboarding`);
-    }
+    return NextResponse.redirect(`${origin}/onboarding`);
   }
 
   return NextResponse.redirect(`${origin}/`);

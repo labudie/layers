@@ -17,6 +17,7 @@ type CheckState = "idle" | "checking" | "available" | "taken" | "invalid";
 export default function OnboardingPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [raw, setRaw] = useState("");
   const [spaceError, setSpaceError] = useState(false);
   const [check, setCheck] = useState<CheckState>("idle");
@@ -32,10 +33,10 @@ export default function OnboardingPage() {
         data: { user },
       } = await sb.auth.getUser();
       if (!user) {
+        if (!cancelled) setAuthChecked(true);
         router.replace("/login");
         return;
       }
-      if (!cancelled) setUserId(user.id);
 
       const { data: row } = await sb
         .from("profiles")
@@ -44,8 +45,13 @@ export default function OnboardingPage() {
         .maybeSingle();
       const username = (row as { username?: string | null } | null)?.username;
       if (!needsUsernameOnboarding(username)) {
+        if (!cancelled) setAuthChecked(true);
         router.replace("/");
         return;
+      }
+      if (!cancelled) {
+        setUserId(user.id);
+        setAuthChecked(true);
       }
     })();
     return () => {
@@ -136,6 +142,16 @@ export default function OnboardingPage() {
     }
     router.refresh();
     await router.replace("/");
+  }
+
+  if (!authChecked) {
+    return (
+      <AppSiteChrome title="Layers">
+        <div className="flex flex-1 items-center justify-center px-4 py-10 text-sm text-white/60">
+          Loading...
+        </div>
+      </AppSiteChrome>
+    );
   }
 
   return (
