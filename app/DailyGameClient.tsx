@@ -534,6 +534,12 @@ export function DailyGameClient({
       )
       .eq("active_date", todayEastern)
       .order("position", { ascending: true });
+    console.log("[DailyGameClient][refresh today challenges]", {
+      todayEastern,
+      count: data?.length ?? 0,
+      rows: data ?? [],
+      error: error ?? null,
+    });
     if (error) {
       console.error("[DailyGameClient] pull refresh challenges", error);
       return;

@@ -27,12 +27,17 @@ export default async function Home() {
     supabase.auth.getUser(),
     supabase
       .from("challenges")
-      .select(
-        "id, position, title, creator_name, day_number, software, category, layer_count, image_url, is_sponsored, sponsor_name"
-      )
+      .select("*", { count: "exact" })
       .eq("active_date", todayEastern)
       .order("position", { ascending: true }),
   ]);
+
+  console.log("[home][today challenges]", {
+    todayEastern,
+    count: data?.length ?? 0,
+    rows: data ?? [],
+    error: error ?? null,
+  });
 
   const challenges: Challenge[] = error ? [] : ((data ?? []) as Challenge[]);
   const userEmail = authData.user?.email ?? null;
