@@ -2549,13 +2549,21 @@ export function DailyGameClient({
                   </div>
 
                   <div className="flex w-full shrink-0 flex-col px-1">
-                    <div className="mt-0 mb-3 flex h-11 items-center justify-center rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.45)] text-center">
-                      <span className="font-mono text-[36px] font-extrabold leading-none tracking-[0.06em] text-white">
+                    <div className="mt-0 mb-3 flex items-center justify-center rounded-[10px] border-[0.5px] border-[rgba(124,58,237,0.2)] bg-[#1a0a2e] px-4 py-[10px] text-center">
+                      <span
+                        className="font-mono text-[22px] font-bold leading-none tracking-[0.06em]"
+                        style={{
+                          color:
+                            typeof guessInput === "number"
+                              ? "#f8f4ff"
+                              : "rgba(255,255,255,0.13)",
+                        }}
+                      >
                         {typeof guessInput === "number" ? guessInput : "_ _"}
                       </span>
                     </div>
 
-                    <div className="grid h-[180px] min-h-[180px] shrink-0 grid-cols-3 grid-rows-4 gap-[4px]">
+                    <div className="grid h-[180px] min-h-[180px] shrink-0 grid-cols-3 gap-[4px]">
                   {currentFinished ? (
                     <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
                       <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
@@ -2587,7 +2595,7 @@ export function DailyGameClient({
                           type="button"
                           onClick={() => appendGuessDigit(digit)}
                           disabled={!roundActive}
-                          className="tap-press rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] px-0 py-[11px] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
+                          className="tap-press rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 py-[9px] text-[16px] font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
                         >
                           {digit}
                         </button>
@@ -2596,7 +2604,7 @@ export function DailyGameClient({
                         type="button"
                         onClick={backspaceGuessDigit}
                         disabled={!roundActive || typeof guessInput !== "number"}
-                        className="tap-press flex items-center justify-center rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] px-0 py-[11px] text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
+                        className="tap-press flex items-center justify-center rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 py-[9px] text-[11px] text-[#a0a0b0] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
                         aria-label="Delete"
                       >
                         <svg
@@ -2624,7 +2632,7 @@ export function DailyGameClient({
                         type="button"
                         onClick={() => appendGuessDigit(0)}
                         disabled={!roundActive}
-                        className="tap-press rounded-[var(--radius-card)] border border-white/12 bg-[rgba(26,10,46,0.72)] px-0 py-[11px] text-xl font-extrabold text-white shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-white/10 disabled:opacity-35"
+                        className="tap-press rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 py-[9px] text-[16px] font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
                       >
                         0
                       </button>
@@ -2632,7 +2640,7 @@ export function DailyGameClient({
                         type="button"
                         onClick={submitGuessFromPad}
                         disabled={!canSubmitGuess || typeof guessInput !== "number"}
-                        className="tap-press rounded-[var(--radius-card)] border border-emerald-300/35 bg-emerald-500/85 px-0 py-[11px] text-xl font-extrabold text-white shadow-sm transition-[transform,filter,background-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-40"
+                        className="tap-press rounded-[9px] border-[0.5px] border-[#10b981] bg-[#10b981] px-0 py-[9px] text-[16px] font-medium text-white shadow-sm transition-[transform,filter,background-color,color,border-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:border-[#1a3a2e] disabled:bg-[#1a3a2e] disabled:text-[rgba(255,255,255,0.13)] disabled:opacity-100"
                       >
                         ✓
                       </button>
