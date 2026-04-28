@@ -26,7 +26,7 @@ if (!fs.existsSync(sourcePath)) {
 const outputs = [
   { size: 512, name: "icon-512.png" },
   { size: 192, name: "icon-192.png" },
-  { size: 180, name: "apple-touch-icon.svg" },
+  { size: 180, name: "apple-touch-icon.png" },
 ];
 
 async function main() {
@@ -35,6 +35,7 @@ async function main() {
     await sharp(sourcePath)
       .rotate()
       .resize(size, size, { fit: "cover", position: "centre" })
+      .png()
       .toFile(outPath);
     console.log("Wrote", outPath);
   }
