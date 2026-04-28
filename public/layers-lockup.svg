@@ -1,0 +1,6 @@
+<svg width="130" height="32" viewBox="0 0 130 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="12" y="22" width="18" height="5" rx="2" fill="#4c1d95"/>
+  <rect x="8" y="15" width="18" height="5" rx="2" fill="#7c3aed"/>
+  <rect x="4" y="8" width="18" height="5" rx="2" fill="#a855f7"/>
+  <text x="34" y="22" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="18" font-weight="700" fill="#f8f4ff" letter-spacing="-0.3">Layers</text>
+</svg>

@@ -639,6 +639,7 @@ export function DailyGameClient({
   const [imageFeedbackClassName, setImageFeedbackClassName] = useState("");
   const [confettiBursts, setConfettiBursts] = useState<number[]>([]);
   const [shareBusyId, setShareBusyId] = useState<string | null>(null);
+  const [downloadFeedbackId, setDownloadFeedbackId] = useState<string | null>(null);
   const [tutorialStep, setTutorialStep] = useState<1 | 2 | 3 | null>(null);
   const [creatorAvatars, setCreatorAvatars] = useState<
     Map<string, string | null>
@@ -1828,6 +1829,48 @@ export function DailyGameClient({
       setShareBusyId(null);
     }
   }, [shareBusyId]);
+  const downloadChallengeImage = useCallback(
+    async (ch: Challenge) => {
+      if (!ch.image_url) return;
+      try {
+        if (userId) {
+          const { error } = await supabase().from("image_downloads").insert({
+            user_id: userId,
+            challenge_id: ch.id,
+            downloaded_at: new Date().toISOString(),
+          });
+          if (error) {
+            console.error("[downloadChallengeImage] image_downloads insert", error);
+          }
+        }
+
+        const response = await fetch(ch.image_url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        const safeTitle = (ch.title ?? "challenge")
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-_]/gi, "")
+          .toLowerCase();
+        const filename = `${safeTitle || "challenge"}.png`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setDownloadFeedbackId(ch.id);
+        window.setTimeout(() => {
+          setDownloadFeedbackId((current) => (current === ch.id ? null : current));
+        }, 1500);
+      } catch (e) {
+        console.error("[downloadChallengeImage] failed", e);
+      }
+    },
+    [userId],
+  );
 
   const shareDaily = useCallback(async () => {
     if (!challenges.length) return;
@@ -2335,12 +2378,58 @@ export function DailyGameClient({
                               />
                             </button>
 
-                            <div className="absolute bottom-1 right-2 z-20 flex items-center gap-2">
+                            <div className="absolute bottom-1 left-2 z-20 flex items-center gap-2">
                               <CreatorResultAvatar
                                 creatorName={ch.creator_name}
                                 avatarByUsername={creatorAvatars}
                               />
                             </div>
+                            <button
+                              type="button"
+                              aria-label={`Download ${ch.title ?? "challenge"} image`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                void downloadChallengeImage(ch);
+                              }}
+                              className="absolute bottom-2 right-2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-[#f8f4ff]"
+                              style={{
+                                background: "rgba(0,0,0,0.5)",
+                                backdropFilter: "blur(4px)",
+                              }}
+                            >
+                              {downloadFeedbackId === ch.id ? (
+                                <svg
+                                  width={16}
+                                  height={16}
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden
+                                >
+                                  <path d="m20 6-11 11-5-5" />
+                                </svg>
+                              ) : (
+                                <svg
+                                  width={16}
+                                  height={16}
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden
+                                >
+                                  <path d="M12 3v12" />
+                                  <path d="m7 10 5 5 5-5" />
+                                  <path d="M4 21h16" />
+                                </svg>
+                              )}
+                            </button>
                           </div>
                         ) : null}
                         <div className="min-w-0 flex-1">
