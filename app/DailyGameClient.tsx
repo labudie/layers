@@ -2124,14 +2124,11 @@ export function DailyGameClient({
           disabled={Boolean(modalImageUrl) || profilePreviewHandle != null}
           className={`mx-auto flex w-full min-w-0 max-w-3xl flex-1 flex-col px-4 md:px-5 ${
             showNoChallengesHome
-              ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#0f0520_100%)]"
+              ? "bg-[#0f0520]"
               : showDailyHome
                 ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#06020f_100%)]"
               : ""
           }`}
-          scrollAreaStyle={
-            showNoChallengesHome ? { backgroundColor: "#0f0520" } : undefined
-          }
           scrollAreaClassName={compactGameplayMode ? "overflow-y-hidden" : ""}
           contentClassName={
             compactGameplayMode ? "flex h-full min-h-full min-w-0 flex-col" : ""
