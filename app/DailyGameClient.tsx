@@ -2129,7 +2129,9 @@ export function DailyGameClient({
                 ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#06020f_100%)]"
               : ""
           }`}
-          style={showNoChallengesHome ? { backgroundColor: "#0f0520" } : undefined}
+          scrollAreaStyle={
+            showNoChallengesHome ? { backgroundColor: "#0f0520" } : undefined
+          }
           scrollAreaClassName={compactGameplayMode ? "overflow-y-hidden" : ""}
           contentClassName={
             compactGameplayMode ? "flex h-full min-h-full min-w-0 flex-col" : ""
