@@ -731,6 +731,10 @@ export default async function AdminPage({
   const isAdmin = await assertAdminOrNull();
   const today = todayYYYYMMDDUSEastern();
   const params = (await searchParams) ?? {};
+  const hasTabParam = typeof params.tab === "string" && params.tab.trim().length > 0;
+  if (!hasTabParam) {
+    redirect("/studio/assets");
+  }
   const tab =
     params.tab === "submissions" ||
     params.tab === "users" ||
@@ -822,9 +826,18 @@ export default async function AdminPage({
       }
     >
       <div className="mx-auto w-full max-w-6xl px-4 py-4 md:px-5 md:py-6">
-        <div className="mb-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100">
-          {readyAheadDays} day{readyAheadDays === 1 ? "" : "s"} of content ready
-        </div>
+        {readyAheadDays === 0 ? (
+          <Link
+            href="/studio/assets"
+            className="mb-4 block rounded-2xl border border-amber-400/35 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-500/20"
+          >
+            0 days of content ready — open Asset Library to schedule content
+          </Link>
+        ) : (
+          <div className="mb-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100">
+            {readyAheadDays} day{readyAheadDays === 1 ? "" : "s"} of content ready
+          </div>
+        )}
 
         <div className="mb-4 flex flex-wrap gap-2">
           <Link
@@ -877,18 +890,8 @@ export default async function AdminPage({
 
         {tab === "schedule" ? (
           <>
-            <div className="rounded-2xl border border-violet-400/25 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
-              Batch uploading has moved to the unified asset management page.
-              <Link href="/studio/assets" className="ml-2 font-bold text-violet-200 underline underline-offset-2">
-                Open Asset Library
-              </Link>
-            </div>
-
             <div className="mt-10">
               <div className="text-lg font-extrabold">Upcoming challenges</div>
-              <div className="mt-1 text-sm text-white/60">
-                Ordered by `active_date` then `position`
-              </div>
 
               <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10">
                 {challenges.length === 0 ? (

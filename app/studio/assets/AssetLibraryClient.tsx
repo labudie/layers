@@ -98,6 +98,13 @@ const SOFTWARE_ICONS: Record<string, string> = {
   "Affinity Designer": "Ad",
   Other: "•",
 };
+const SLOT_LABELS = [
+  "Slot 1 · Easy",
+  "Slot 2 · Medium",
+  "Slot 3 · Sponsored",
+  "Slot 4 · Hard",
+  "Slot 5 · Expert",
+] as const;
 
 function toYmd(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -542,7 +549,9 @@ export function AssetLibraryClient({
                 onDragLeave={() => setDragOverSlot(null)}
                 onDrop={() => void onDropToSlot(idx)}
               >
-                <p className="mb-1 text-center text-[10px] font-bold text-white/45">Slot {idx + 1}</p>
+                <p className="mb-1 text-center text-[10px] font-bold text-white/45">
+                  {SLOT_LABELS[idx] ?? `Slot ${idx + 1}`}
+                </p>
                 {slot ? (
                   <div
                     draggable
