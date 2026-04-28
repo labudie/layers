@@ -58,6 +58,8 @@ type SubmissionAdminRow = {
   category: string | null;
   layer_count: number | null;
   image_url: string | null;
+  is_sponsored: boolean | null;
+  sponsor_name: string | null;
   status: "pending" | "approved" | "rejected" | null;
   scheduled_challenge_id: string | null;
   scheduled_active_date: string | null;
@@ -586,7 +588,7 @@ async function approveAndScheduleSubmissionAction(formData: FormData) {
   const { data: sub } = await sb
     .from("submissions")
     .select(
-      "id, title, creator_name, software, category, layer_count, image_url, status, scheduled_challenge_id"
+      "id, title, creator_name, software, category, layer_count, image_url, is_sponsored, sponsor_name, status, scheduled_challenge_id"
     )
     .eq("id", submissionId)
     .maybeSingle();
@@ -614,8 +616,8 @@ async function approveAndScheduleSubmissionAction(formData: FormData) {
       active_date: activeDate,
       day_number: dayNumber,
       position,
-      is_sponsored: false,
-      sponsor_name: null,
+      is_sponsored: row.is_sponsored === true,
+      sponsor_name: row.is_sponsored ? row.sponsor_name ?? null : null,
     })
     .select("id")
     .maybeSingle();
@@ -652,7 +654,7 @@ async function assignApprovedSubmissionAction(formData: FormData) {
   const { data: sub } = await sb
     .from("submissions")
     .select(
-      "id, title, creator_name, software, category, layer_count, image_url, status, scheduled_challenge_id"
+      "id, title, creator_name, software, category, layer_count, image_url, is_sponsored, sponsor_name, status, scheduled_challenge_id"
     )
     .eq("id", submissionId)
     .maybeSingle();
@@ -680,8 +682,8 @@ async function assignApprovedSubmissionAction(formData: FormData) {
       active_date: activeDate,
       day_number: dayNumber,
       position,
-      is_sponsored: false,
-      sponsor_name: null,
+      is_sponsored: row.is_sponsored === true,
+      sponsor_name: row.is_sponsored ? row.sponsor_name ?? null : null,
     })
     .select("id")
     .maybeSingle();
