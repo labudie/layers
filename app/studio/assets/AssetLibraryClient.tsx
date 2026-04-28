@@ -378,7 +378,6 @@ export function AssetLibraryClient({
       window.alert(r.error);
       return;
     }
-    refresh();
   };
 
   const leftPanel = (
@@ -598,7 +597,7 @@ export function AssetLibraryClient({
                     <button
                       type="button"
                       aria-label="Unschedule"
-                      className="absolute right-1 top-1 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[rgba(0,0,0,0.5)] text-[12px] leading-none text-[#ef4444]"
+                      className="absolute right-[6px] top-[6px] inline-flex h-[18px] w-[18px] cursor-pointer items-center justify-center rounded-full border-0 bg-[rgba(0,0,0,0.6)] text-[10px] leading-none text-[#ef4444]"
                       onClick={() => void unscheduleSlot(slot.id)}
                     >
                       ✕
