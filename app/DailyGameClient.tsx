@@ -136,14 +136,6 @@ function formatLeaderboardPreviewDateEastern() {
   });
 }
 
-function formatCheckBackPhrase(seconds: number) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h >= 1) return `${h} hour${h === 1 ? "" : "s"}`;
-  if (m >= 1) return `${m} minute${m === 1 ? "" : "s"}`;
-  return "a moment";
-}
-
 function shortUserIdLabel(userId: string) {
   const id = userId?.trim() ?? "";
   return id.length <= 8 ? id : `${id.slice(0, 8)}…`;
@@ -547,6 +539,34 @@ export function DailyGameClient({
       return;
     }
     setChallengesPulled((data ?? []) as Challenge[]);
+  }, []);
+  const shareLayersInvite = useCallback(async () => {
+    const shareText = "Check out Layers — a daily design game for creatives";
+    const shareUrl = "https://layersgame.com";
+    const sharePayload = {
+      title: "Layers",
+      text: shareText,
+      url: shareUrl,
+    };
+
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        typeof navigator.share === "function" &&
+        (!navigator.canShare || navigator.canShare(sharePayload))
+      ) {
+        await navigator.share(sharePayload);
+        return;
+      }
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const challengeIdsKey = useMemo(
@@ -2001,6 +2021,16 @@ export function DailyGameClient({
       document.body.style.overflow = prevOverflow;
     };
   }, [modalImageUrl]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onHomeRetap = () => {
+      void refreshTodayChallenges();
+    };
+    window.addEventListener("layers:home-retap-refresh", onHomeRetap);
+    return () => {
+      window.removeEventListener("layers:home-retap-refresh", onHomeRetap);
+    };
+  }, [refreshTodayChallenges]);
 
   const guessTrackerHeaderRow = useMemo(() => {
     if (
@@ -2093,8 +2123,10 @@ export function DailyGameClient({
         <PullToRefresh
           disabled={Boolean(modalImageUrl) || profilePreviewHandle != null}
           className={`mx-auto flex w-full min-w-0 max-w-3xl flex-1 flex-col px-4 md:px-5 ${
-            showDailyHome || showNoChallengesHome
-              ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#06020f_100%)]"
+            showNoChallengesHome
+              ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#0f0520_100%)]"
+              : showDailyHome
+                ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#06020f_100%)]"
               : ""
           }`}
           scrollAreaClassName={compactGameplayMode ? "overflow-y-hidden" : ""}
@@ -2113,32 +2145,48 @@ export function DailyGameClient({
         {!gameDataReady && challenges.length > 0 ? (
           <HomeGameSkeleton />
         ) : showNoChallengesHome ? (
-          <div className="flex flex-1 flex-col items-center py-10 text-center">
+          <div className="flex min-h-full flex-1 flex-col items-center py-10 text-center">
+            <div className="mb-4 inline-flex items-center justify-center rounded-md bg-[#7c3aed22] px-3 py-1 text-xs font-semibold text-[#a855f7]">
+              Back tomorrow
+            </div>
             <img
               src={APP_LOGO_INGAME_SRC}
               alt="Layers"
               className="h-14 w-auto max-w-[min(280px,85vw)] object-contain drop-shadow-[0_0_40px_rgba(124,58,237,0.45)]"
             />
             <p className="mt-8 text-lg font-semibold text-white/90">
-              No challenges today
+              You&apos;re all caught up
             </p>
             <p className="mt-3 max-w-sm text-sm leading-relaxed text-white/55">
-              New puzzles appear each US Eastern day. Check back after the reset.
+              Today&apos;s challenges drop at midnight EST. Come back tomorrow for 5
+              new designs.
             </p>
             <div className="mt-10 w-full max-w-xs rounded-2xl border border-white/10 bg-black/25 px-5 py-6 backdrop-blur-sm">
               <div className="text-xs font-bold uppercase tracking-[0.2em] text-white/40">
-                Next reset in
+                Next drop in
               </div>
               <div className="mt-2 font-mono text-4xl font-bold tabular-nums tracking-tight text-white">
                 {formatHMS(easternHeroSeconds)}
               </div>
               <p className="mt-3 text-sm text-white/50">
-                Check back in {formatCheckBackPhrase(easternHeroSeconds)}
+                Resets automatically
               </p>
             </div>
-            <p className="mt-10 text-xs font-medium text-white/35">
-              Coming soon · Fresh layers daily
-            </p>
+            <div className="mt-6 flex w-full max-w-xs flex-col gap-3">
+              <Link
+                href="/leaderboard"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-[var(--accent)] px-6 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition hover:bg-[var(--accent2)]"
+              >
+                View Leaderboard
+              </Link>
+              <button
+                type="button"
+                onClick={() => void shareLayersInvite()}
+                className="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-white/20 bg-transparent px-6 text-sm font-semibold text-white/90 transition hover:bg-white/10"
+              >
+                Share Layers with a designer
+              </button>
+            </div>
           </div>
         ) : showDailyHome ? (
           <div className="flex flex-1 flex-col items-center pb-10 pt-8 text-center">

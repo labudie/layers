@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useCallback, type MouseEvent } from "react";
 
 function NavItem({
   href,
@@ -18,10 +19,20 @@ function NavItem({
   const active = exact
     ? pathname === href
     : pathname === href || pathname.startsWith(`${href}/`);
+  const onClick = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      if (href === "/" && active && typeof window !== "undefined") {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent("layers:home-retap-refresh"));
+      }
+    },
+    [active, href],
+  );
 
   return (
     <Link
       href={href}
+      onClick={onClick}
       className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[0.65rem] font-semibold leading-tight ${
         active ? "text-white" : "text-white/55 hover:text-white/85"
       }`}
