@@ -12,6 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePostHog } from "posthog-js/react";
+import { AnimatePresence, motion } from "framer-motion";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { BadgeUnlockSheet } from "@/app/components/BadgeUnlockSheet";
 import { GameplayProfileSheet } from "@/app/components/GameplayProfileSheet";
@@ -2502,19 +2503,28 @@ export function DailyGameClient({
                       >
                         <div className="flex h-full min-h-0 w-full max-w-full items-center justify-center">
                           {currentChallenge.image_url ? (
-                            <img
-                              src={displayChallengeImageUrl ?? ""}
-                              alt={currentChallenge.title ?? "Challenge image"}
-                              loading="eager"
-                              decoding="async"
-                              onLoad={() => setChallengeMainImageLoaded(true)}
-                              className={`block h-full w-full object-contain transition-opacity duration-200 [transition-timing-function:var(--smooth)] ${
-                                challengeMainImageLoaded
-                                  ? "opacity-100"
-                                  : "opacity-0"
-                              }`}
-                              style={{ background: "#0f0520" }}
-                            />
+                            <AnimatePresence mode="wait" initial={false}>
+                              <motion.img
+                                key={currentChallenge.id}
+                                src={displayChallengeImageUrl ?? ""}
+                                alt={currentChallenge.title ?? "Challenge image"}
+                                loading="eager"
+                                decoding="async"
+                                onLoad={() => setChallengeMainImageLoaded(true)}
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{
+                                  opacity: challengeMainImageLoaded ? 1 : 0,
+                                  scale: 1,
+                                }}
+                                exit={{ opacity: 0 }}
+                                transition={{
+                                  duration: 0.25,
+                                  ease: "easeOut",
+                                }}
+                                className="block h-full w-full object-contain"
+                                style={{ background: "#0f0520" }}
+                              />
+                            </AnimatePresence>
                           ) : (
                             <canvas
                               ref={canvasRef}
@@ -2645,19 +2655,28 @@ export function DailyGameClient({
                     >
                       <div className="max-h-[54vh] w-full max-w-full overflow-hidden rounded-[var(--radius-card)]">
                         {currentChallenge.image_url ? (
-                          <img
-                            src={displayChallengeImageUrl ?? ""}
-                            alt={currentChallenge.title ?? "Challenge image"}
-                            loading="eager"
-                            decoding="async"
-                            onLoad={() => setChallengeMainImageLoaded(true)}
-                            className={`block max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain transition-opacity duration-200 [transition-timing-function:var(--smooth)] ${
-                              challengeMainImageLoaded
-                                ? "opacity-100"
-                                : "opacity-0"
-                            }`}
-                            style={{ background: "#0f0520" }}
-                          />
+                          <AnimatePresence mode="wait" initial={false}>
+                            <motion.img
+                              key={currentChallenge.id}
+                              src={displayChallengeImageUrl ?? ""}
+                              alt={currentChallenge.title ?? "Challenge image"}
+                              loading="eager"
+                              decoding="async"
+                              onLoad={() => setChallengeMainImageLoaded(true)}
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{
+                                opacity: challengeMainImageLoaded ? 1 : 0,
+                                scale: 1,
+                              }}
+                              exit={{ opacity: 0 }}
+                              transition={{
+                                duration: 0.25,
+                                ease: "easeOut",
+                              }}
+                              className="block max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain"
+                              style={{ background: "#0f0520" }}
+                            />
+                          </AnimatePresence>
                         ) : (
                           <canvas
                             ref={canvasRef}
