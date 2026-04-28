@@ -2286,7 +2286,7 @@ export function DailyGameClient({
               onClick={() => setShowResultsDetail(false)}
               className="text-sm font-normal text-[#a0a0b0] hover:underline"
             >
-              ← Back to daily home
+              ← Back
             </button>
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm font-semibold text-white/80">
               Daily complete · {total} {total === 1 ? "challenge" : "challenges"}
@@ -2309,7 +2309,7 @@ export function DailyGameClient({
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                         {ch.image_url ? (
-                          <div className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-lg border border-white/10 bg-[rgba(26,10,46,0.6)] sm:w-32">
+                          <div className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-[12px] border border-white/10 bg-[rgba(26,10,46,0.6)] sm:w-32">
                             <button
                               type="button"
                               aria-label="Open result image fullscreen"
@@ -2469,7 +2469,7 @@ export function DailyGameClient({
                             openImageModal(displayChallengeImageUrl);
                         }}
                       >
-                        <div className="relative flex h-full min-h-0 w-full max-w-full items-center justify-center">
+                        <div className="relative flex h-full min-h-0 w-full max-w-full items-center justify-center overflow-hidden rounded-[12px]">
                           {currentChallenge.image_url ? (
                             <AnimatePresence mode="wait" initial={false}>
                               <motion.img
@@ -2664,7 +2664,7 @@ export function DailyGameClient({
                         }
                       }}
                     >
-                      <div className="relative max-h-[54vh] w-full max-w-full overflow-hidden rounded-[var(--radius-card)]">
+                      <div className="relative max-h-[54vh] w-full max-w-full overflow-hidden rounded-[12px]">
                         {currentChallenge.image_url ? (
                           <AnimatePresence mode="wait" initial={false}>
                             <motion.img
