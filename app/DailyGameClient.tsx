@@ -126,6 +126,44 @@ function formatFriendlyEasternToday() {
   });
 }
 
+function summarizeSupabaseError(error: unknown) {
+  const e = (error ?? {}) as {
+    code?: unknown;
+    message?: unknown;
+    details?: unknown;
+    hint?: unknown;
+    status?: unknown;
+  };
+  return {
+    code: String(e.code ?? ""),
+    status: String(e.status ?? ""),
+    message: String(e.message ?? ""),
+    details: String(e.details ?? ""),
+    hint: String(e.hint ?? ""),
+  };
+}
+
+function isIgnorableUserBadgesError(error: unknown) {
+  const e = summarizeSupabaseError(error);
+  const message = e.message.toLowerCase();
+  if (e.code === "42P01" || e.code === "42501") return true; // missing relation / permission denied
+  return (
+    message.includes("user_badges") &&
+    (message.includes("does not exist") ||
+      message.includes("permission denied") ||
+      message.includes("row-level security"))
+  );
+}
+
+function isDuplicateInsertError(error: unknown) {
+  const e = summarizeSupabaseError(error);
+  if (e.code === "23505") return true;
+  const message = e.message.toLowerCase();
+  return message.includes("duplicate");
+}
+
+let userBadgesAvailabilityCache: boolean | null = null;
+
 /** Long month + day + year in US Eastern (e.g. "March 27, 2026"). */
 function formatLeaderboardPreviewDateEastern() {
   return new Date().toLocaleDateString("en-US", {
@@ -654,6 +692,8 @@ export function DailyGameClient({
   const imageFeedbackTimeoutRef = useRef<number | null>(null);
   const confettiTimeoutsRef = useRef<number[]>([]);
   const statsSyncKeyRef = useRef<string | null>(null);
+  const userBadgesWarningShownRef = useRef(false);
+  const userBadgesAvailabilityRef = useRef<boolean | null>(userBadgesAvailabilityCache);
   const [badgeUnlockQueue, setBadgeUnlockQueue] = useState<BadgeId[]>([]);
   const startedChallengeIdsRef = useRef<Set<string>>(new Set());
   const completedChallengeIdsRef = useRef<Set<string>>(new Set());
@@ -1215,6 +1255,27 @@ export function DailyGameClient({
 
     (async () => {
       const sb = supabase();
+      const ensureUserBadgesAvailable = async () => {
+        if (userBadgesAvailabilityRef.current !== null) {
+          return userBadgesAvailabilityRef.current;
+        }
+        const { error } = await sb
+          .from("user_badges")
+          .select("badge_id")
+          .eq("user_id", userId)
+          .limit(1);
+        const available = !error || !isIgnorableUserBadgesError(error);
+        userBadgesAvailabilityRef.current = available;
+        userBadgesAvailabilityCache = available;
+        if (!available && !userBadgesWarningShownRef.current) {
+          userBadgesWarningShownRef.current = true;
+          console.warn(
+            "[user_badges] unavailable at startup; using profiles.badges fallback",
+            summarizeSupabaseError(error)
+          );
+        }
+        return available;
+      };
       const { data: profile, error: profileErr } = await sb
         .from("profiles")
         .select(
@@ -1244,12 +1305,32 @@ export function DailyGameClient({
         return;
       }
 
-      const { data: badgeRows, error: badgeRowsErr } = await sb
-        .from("user_badges")
-        .select("badge_id")
-        .eq("user_id", userId);
-      if (badgeRowsErr) {
-        console.error("[user_badges] error loading for daily sync", badgeRowsErr);
+      const canWriteUserBadges = await ensureUserBadgesAvailable();
+      let badgeRows: Array<{ badge_id?: string }> | null = null;
+      if (canWriteUserBadges) {
+        const { data, error: badgeRowsErr } = await sb
+          .from("user_badges")
+          .select("badge_id")
+          .eq("user_id", userId);
+        badgeRows = (data as Array<{ badge_id?: string }> | null) ?? null;
+        if (badgeRowsErr) {
+          if (isIgnorableUserBadgesError(badgeRowsErr)) {
+            userBadgesAvailabilityRef.current = false;
+            userBadgesAvailabilityCache = false;
+            if (!userBadgesWarningShownRef.current) {
+              userBadgesWarningShownRef.current = true;
+              console.warn(
+                "[user_badges] unavailable; continuing with profiles.badges only",
+                summarizeSupabaseError(badgeRowsErr)
+              );
+            }
+          } else {
+            console.error(
+              "[user_badges] error loading for daily sync",
+              summarizeSupabaseError(badgeRowsErr)
+            );
+          }
+        }
       }
 
       const prevBadges = new Set<BadgeId>();
@@ -1257,7 +1338,7 @@ export function DailyGameClient({
         if (typeof b === "string" && b.length) prevBadges.add(b as BadgeId);
       }
       for (const r of badgeRows ?? []) {
-        const id = (r as { badge_id?: string }).badge_id;
+        const id = r.badge_id;
         if (id) prevBadges.add(id as BadgeId);
       }
 
@@ -1346,16 +1427,26 @@ export function DailyGameClient({
       );
 
       for (const badgeId of newlyEarned) {
+        if (!canWriteUserBadges) continue;
         const { error: insErr } = await sb.from("user_badges").insert({
           user_id: userId,
           badge_id: badgeId,
         });
-        if (
-          insErr &&
-          insErr.code !== "23505" &&
-          !String(insErr.message ?? "").includes("duplicate")
-        ) {
-          console.error("[user_badges] insert after daily complete", insErr);
+        if (insErr && !isDuplicateInsertError(insErr)) {
+          if (isIgnorableUserBadgesError(insErr)) {
+            if (!userBadgesWarningShownRef.current) {
+              userBadgesWarningShownRef.current = true;
+              console.warn(
+                "[user_badges] insert skipped; feature unavailable",
+                summarizeSupabaseError(insErr)
+              );
+            }
+            break;
+          }
+          console.error(
+            "[user_badges] insert after daily complete",
+            summarizeSupabaseError(insErr)
+          );
         }
       }
 
