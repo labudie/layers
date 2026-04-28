@@ -141,10 +141,12 @@ export function AssetLibraryClient({
   initialAssets,
   pendingSubmissions,
   adminUserId,
+  showBackLink = true,
 }: {
   initialAssets: AssetRow[];
   pendingSubmissions: PendingSubmissionRow[];
   adminUserId: string;
+  showBackLink?: boolean;
 }) {
   const router = useRouter();
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("assets");
@@ -352,6 +354,28 @@ export function AssetLibraryClient({
     setPublishBusy(false);
     if (!r.ok) {
       window.alert(r.error ?? "Failed to go live.");
+      return;
+    }
+    refresh();
+  };
+  const unscheduleSlot = async (assetId: string) => {
+    const before = assets;
+    setAssets((prev) =>
+      prev.map((a) =>
+        a.id === assetId
+          ? {
+              ...a,
+              status: "ready",
+              scheduled_date: null,
+              scheduled_position: null,
+            }
+          : a,
+      ),
+    );
+    const r = await unscheduleAssetAction(assetId);
+    if (!r.ok) {
+      setAssets(before);
+      window.alert(r.error);
       return;
     }
     refresh();
@@ -572,7 +596,13 @@ export function AssetLibraryClient({
                     </div>
                     <p className="line-clamp-2 text-center text-[11px] text-white">{slot.title}</p>
                     <div className="flex justify-center"><DifficultyBadge layerCount={slot.layer_count} /></div>
-                    <button type="button" className="w-full rounded bg-white/10 py-1 text-[10px] text-white/80" onClick={async () => { const r = await unscheduleAssetAction(slot.id); if (!r.ok) window.alert(r.error); else refresh(); }}>✕ Unschedule</button>
+                    <button
+                      type="button"
+                      className="w-full rounded bg-white/10 py-1 text-[10px] text-white/80"
+                      onClick={() => void unscheduleSlot(slot.id)}
+                    >
+                      ✕ Unschedule
+                    </button>
                   </div>
                 ) : (
                   <div className="flex h-[84px] items-center justify-center rounded bg-white/[0.03] text-[11px] text-white/40">Drop asset here</div>
@@ -599,15 +629,24 @@ export function AssetLibraryClient({
         </div>
       ) : null}
       <div className="mb-3 flex items-center justify-between">
-        <Link href="/studio" className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white/85 hover:bg-white/10">← Back</Link>
+        {showBackLink ? (
+          <Link
+            href="/studio"
+            className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white/85 hover:bg-white/10"
+          >
+            ← Back
+          </Link>
+        ) : (
+          <span className="h-8" aria-hidden />
+        )}
         <div className="flex gap-2 md:hidden">
           <button type="button" onClick={() => setMobilePanel("assets")} className={`rounded-full px-3 py-1 text-xs ${mobilePanel === "assets" ? "bg-[#7c3aed] text-white" : "border border-white/20 text-white/70"}`}>Assets</button>
           <button type="button" onClick={() => setMobilePanel("calendar")} className={`rounded-full px-3 py-1 text-xs ${mobilePanel === "calendar" ? "bg-[#7c3aed] text-white" : "border border-white/20 text-white/70"}`}>Calendar</button>
         </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-5">
-        <div className={`${mobilePanel === "calendar" ? "hidden md:block" : "block"} md:col-span-2`}>{leftPanel}</div>
-        <div className={`${mobilePanel === "assets" ? "hidden md:block" : "block"} md:col-span-3`}>{rightPanel}</div>
+      <div className="grid gap-4 md:grid-cols-12">
+        <div className={`${mobilePanel === "calendar" ? "hidden md:block" : "block"} md:col-span-7`}>{leftPanel}</div>
+        <div className={`${mobilePanel === "assets" ? "hidden md:block" : "block"} md:col-span-5`}>{rightPanel}</div>
       </div>
 
       {editAsset && (

@@ -17,6 +17,11 @@ import { AdminSubmissionImage } from "@/app/studio/AdminSubmissionImage";
 import { AnalyticsExportButton } from "@/app/studio/AnalyticsExportButton";
 import { DeleteButton } from "@/app/studio/DeleteButton";
 import {
+  AssetLibraryClient,
+  type AssetRow,
+  type PendingSubmissionRow,
+} from "@/app/studio/assets/AssetLibraryClient";
+import {
   AtCreatorDisplay,
   AtUsernameDisplay,
 } from "@/lib/AtHandle";
@@ -732,22 +737,74 @@ export default async function AdminPage({
   const today = todayYYYYMMDDUSEastern();
   const params = (await searchParams) ?? {};
   const tab =
-    params.tab === "asset-library" ||
-    params.tab === "schedule" ||
+    params.tab === "workspace" ||
     params.tab === "submissions" ||
     params.tab === "users" ||
     params.tab === "analytics"
       ? params.tab
-      : "asset-library";
+      : "workspace";
 
   if (!isAdmin) {
     redirect("/");
   }
 
   const { readyAheadDays } = await getScheduleOverview(today);
-  const challenges =
-    tab === "schedule" ? await getUpcomingChallenges(today) : [];
   const sb = createSupabaseServerClient(await cookies());
+  const {
+    data: { user: adminUser },
+  } = await sb.auth.getUser();
+  const adminUserId = adminUser?.id ?? "";
+
+  let workspaceAssets: AssetRow[] = [];
+  let workspacePendingSubmissions: PendingSubmissionRow[] = [];
+  if (tab === "workspace") {
+    const { data: assetRows, error: assetsError } = await sb
+      .from("assets")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (assetsError) {
+      console.error("[studio][workspace] assets fetch", assetsError);
+    }
+    workspaceAssets = (assetRows ?? []) as AssetRow[];
+
+    const { data: pendingRows, error: pendingError } = await sb
+      .from("submissions")
+      .select(
+        "id,user_id,title,creator_name,software,category,layer_count,image_url,is_sponsored,sponsor_name,status,created_at",
+      )
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+    if (pendingError) {
+      console.error("[studio][workspace] pending submissions fetch", pendingError);
+    }
+    const pending = (pendingRows ?? []) as Array<Record<string, unknown>>;
+    const userIds = [...new Set(pending.map((r) => String(r.user_id ?? "")).filter(Boolean))];
+    const usernamesById = new Map<string, string>();
+    if (userIds.length > 0) {
+      const { data: profileRows } = await sb
+        .from("profiles")
+        .select("id, username")
+        .in("id", userIds);
+      for (const p of (profileRows ?? []) as Array<{ id: string; username: string | null }>) {
+        usernamesById.set(p.id, p.username ?? "");
+      }
+    }
+
+    workspacePendingSubmissions = pending.map((r) => ({
+      id: Number(r.id),
+      user_id: String(r.user_id),
+      username: usernamesById.get(String(r.user_id)) ?? null,
+      title: String(r.title ?? ""),
+      creator_name: String(r.creator_name ?? ""),
+      software: String(r.software ?? "Other"),
+      category: String(r.category ?? "Other"),
+      layer_count: Number(r.layer_count ?? 0),
+      image_url: String(r.image_url ?? ""),
+      is_sponsored: Boolean(r.is_sponsored),
+      sponsor_name: String(r.sponsor_name ?? ""),
+      created_at: String(r.created_at ?? ""),
+    }));
+  }
 
   let submissions: SubmissionAdminRow[] = [];
   if (tab === "submissions") {
@@ -824,13 +881,10 @@ export default async function AdminPage({
       }
     >
       <div className="mx-auto w-full max-w-6xl px-4 py-4 md:px-5 md:py-6">
-        {readyAheadDays === 0 ? (
-          <Link
-            href="/studio/assets"
-            className="mb-4 block rounded-2xl border border-amber-400/35 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-500/20"
-          >
-            0 days of content ready — open Asset Library to schedule content
-          </Link>
+        {readyAheadDays < 14 ? (
+          <div className="mb-4 rounded-2xl border border-amber-400/35 bg-amber-500/15 px-4 py-3 text-sm font-semibold text-amber-100">
+            Content buffer low: {readyAheadDays} day{readyAheadDays === 1 ? "" : "s"} ready (target: 14+ days)
+          </div>
         ) : (
           <div className="mb-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100">
             {readyAheadDays} day{readyAheadDays === 1 ? "" : "s"} of content ready
@@ -839,24 +893,14 @@ export default async function AdminPage({
 
         <div className="mb-4 flex flex-wrap gap-2">
           <Link
-            href="/studio/assets"
+            href="/studio?tab=workspace"
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              tab === "asset-library"
+              tab === "workspace"
                 ? "bg-[var(--accent)] text-white"
                 : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
             }`}
           >
-            Asset Library
-          </Link>
-          <Link
-            href="/studio?tab=schedule"
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              tab === "schedule"
-                ? "bg-[var(--accent)] text-white"
-                : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
-            }`}
-          >
-            Schedule
+            Workspace
           </Link>
           <Link
             href="/studio?tab=submissions"
@@ -890,112 +934,13 @@ export default async function AdminPage({
           </Link>
         </div>
 
-        {tab === "asset-library" ? (
-          <div className="rounded-2xl border border-violet-400/25 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
-            Manage uploads, ready assets, and calendar scheduling in the unified asset library.
-            <Link href="/studio/assets" className="ml-2 font-bold text-violet-200 underline underline-offset-2">
-              Open Asset Library
-            </Link>
-          </div>
-        ) : tab === "schedule" ? (
-          <>
-            <div className="mt-10">
-              <div className="text-lg font-extrabold">Upcoming challenges</div>
-
-              <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10">
-                {challenges.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-white/70">
-                    No upcoming challenges
-                  </div>
-                ) : (
-                  <table className="min-w-[1120px] w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
-                        <th className="px-4 py-3">Image</th>
-                        <th className="px-4 py-3">Active date</th>
-                        <th className="px-4 py-3">Day #</th>
-                        <th className="px-4 py-3">Position</th>
-                        <th className="px-4 py-3">Title</th>
-                        <th className="px-4 py-3">Creator</th>
-                        <th className="px-4 py-3">Software</th>
-                        <th className="px-4 py-3">Category</th>
-                        <th className="px-4 py-3">Layer count</th>
-                        <th className="px-4 py-3">Sponsored</th>
-                        <th className="px-4 py-3">Sponsor</th>
-                        <th className="px-4 py-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {challenges.map((ch, idx) => (
-                        <tr
-                          key={ch.id}
-                          className={`border-b border-white/5 last:border-0 ${
-                            idx % 2 === 0 ? "bg-white/[0.02]" : "bg-transparent"
-                          }`}
-                        >
-                          <td className="px-4 py-3">
-                            {ch.image_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={ch.image_url}
-                                alt=""
-                                className="h-10 w-10 rounded-md border border-white/10 object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/20 text-xs text-white/45">
-                                —
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-white/80">
-                            {formatAdminDate(ch.active_date)}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-white/80">
-                            {ch.day_number ?? "—"}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-white/80">
-                            {ch.position ?? "—"}
-                          </td>
-                          <td className="px-4 py-3 text-white/90">
-                            {ch.title ?? "Untitled"}
-                          </td>
-                          <td className="px-4 py-3 text-white/80">
-                            <AtCreatorDisplay raw={ch.creator_name} />
-                          </td>
-                          <td className="px-4 py-3 text-white/80">
-                            {ch.software ?? "—"}
-                          </td>
-                          <td className="px-4 py-3 text-white/80">
-                            {ch.category ?? "—"}
-                          </td>
-                          <td className="px-4 py-3 text-white/80">
-                            {ch.layer_count ?? "—"}
-                          </td>
-                          <td className="px-4 py-3 text-white/80">
-                            {ch.is_sponsored ? "Yes" : "No"}
-                          </td>
-                          <td className="px-4 py-3 text-white/80">
-                            {ch.is_sponsored ? ch.sponsor_name ?? "—" : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="inline-flex items-center gap-2">
-                              <button
-                                type="button"
-                                className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white hover:bg-white/10"
-                              >
-                                Edit
-                              </button>
-                              <DeleteButton id={ch.id} />
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          </>
+        {tab === "workspace" ? (
+          <AssetLibraryClient
+            initialAssets={workspaceAssets}
+            pendingSubmissions={workspacePendingSubmissions}
+            adminUserId={adminUserId}
+            showBackLink={false}
+          />
         ) : tab === "submissions" ? (
           <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)] p-5">
             <div className="text-lg font-extrabold">Submissions</div>
