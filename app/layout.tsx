@@ -33,9 +33,9 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/layers-icon.svg", type: "image/svg+xml" },
     ],
+    shortcut: "/layers-icon.svg",
     apple: "/layers-icon-192.svg",
   },
 };
@@ -51,6 +51,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
+        <link rel="icon" href="/layers-icon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/layers-icon-192.svg" />
       </head>
       <body className="flex min-h-dvh flex-col overflow-x-hidden">

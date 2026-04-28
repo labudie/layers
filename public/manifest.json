@@ -14,15 +14,15 @@
       "purpose": "any maskable"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/layers-icon-192.svg",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
       "src": "/layers-icon-192.svg",
       "sizes": "180x180",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any"
     }
   ]
