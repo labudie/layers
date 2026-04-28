@@ -2463,13 +2463,23 @@ export function DailyGameClient({
                   >
                     <div className="mx-auto flex h-full min-h-0 w-[80%] max-w-full items-center justify-center">
                       <div
-                        className={`challenge-image-frame box-border flex h-full min-h-0 max-h-full w-full cursor-zoom-in items-center justify-center rounded-none bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                        className={`challenge-image-frame box-border flex h-full min-h-0 max-h-full w-full cursor-zoom-in items-center justify-center rounded-none ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                        style={{
+                          background: "transparent",
+                          backgroundColor: "transparent",
+                        }}
                         onClick={() => {
                           if (displayChallengeImageUrl)
                             openImageModal(displayChallengeImageUrl);
                         }}
                       >
-                        <div className="relative flex h-full min-h-0 w-full max-w-full items-center justify-center overflow-hidden rounded-[12px]">
+                        <div
+                          className="relative flex h-full min-h-0 w-full max-w-full items-center justify-center"
+                          style={{
+                            background: "transparent",
+                            backgroundColor: "transparent",
+                          }}
+                        >
                           {currentChallenge.image_url ? (
                             <AnimatePresence mode="wait" initial={false}>
                               <motion.img
@@ -2489,22 +2499,33 @@ export function DailyGameClient({
                                   duration: 0.25,
                                   ease: "easeOut",
                                 }}
-                                className="block h-full w-full object-contain"
-                                style={{ background: "#0f0520" }}
+                                className="w-full object-contain"
+                                style={{
+                                  borderRadius: "14px",
+                                  overflow: "hidden",
+                                  display: "block",
+                                  width: "100%",
+                                  height: "auto",
+                                  background: "transparent",
+                                  backgroundColor: "transparent",
+                                }}
                               />
                             </AnimatePresence>
                           ) : (
                             <canvas
                               ref={canvasRef}
                               className="block h-full w-full"
-                              style={{ background: "#0f0520" }}
+                              style={{
+                                background: "transparent",
+                                backgroundColor: "transparent",
+                              }}
                             />
                           )}
-                          <span className="pointer-events-none absolute bottom-2 right-2 rounded-[5px] bg-[rgba(0,0,0,0.5)] px-[7px] py-[3px] text-[10px] text-[rgba(255,255,255,0.6)]">
-                            tap to zoom
-                          </span>
                         </div>
                       </div>
+                    </div>
+                    <div className="mt-1 text-right text-[10px] text-[#a0a0b0]">
+                      tap to zoom
                     </div>
                   </div>
 
@@ -2559,7 +2580,7 @@ export function DailyGameClient({
                               : "rgba(255,255,255,0.13)",
                         }}
                       >
-                        {typeof guessInput === "number" ? guessInput : "_ _"}
+                        {typeof guessInput === "number" ? guessInput : "—"}
                       </span>
                     </div>
 
@@ -2665,14 +2686,24 @@ export function DailyGameClient({
                     {/* Border + feedback animation live on outer (overflow visible) so red/green
                         strokes are not clipped; inner clips only the bitmap to rounded rect. */}
                     <div
-                      className={`challenge-image-frame box-border flex max-h-[54vh] w-full max-w-full cursor-zoom-in items-center justify-center rounded-[var(--radius-card)] bg-[#0f0520] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                      className={`challenge-image-frame box-border flex max-h-[54vh] w-full max-w-full cursor-zoom-in items-center justify-center rounded-[var(--radius-card)] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
+                      style={{
+                        background: "transparent",
+                        backgroundColor: "transparent",
+                      }}
                       onClick={() => {
                         if (displayChallengeImageUrl) {
                           openImageModal(displayChallengeImageUrl);
                         }
                       }}
                     >
-                      <div className="relative max-h-[54vh] w-full max-w-full overflow-hidden rounded-[12px]">
+                      <div
+                        className="relative max-h-[54vh] w-full max-w-full"
+                        style={{
+                          background: "transparent",
+                          backgroundColor: "transparent",
+                        }}
+                      >
                         {currentChallenge.image_url ? (
                           <AnimatePresence mode="wait" initial={false}>
                             <motion.img
@@ -2692,21 +2723,32 @@ export function DailyGameClient({
                                 duration: 0.25,
                                 ease: "easeOut",
                               }}
-                              className="block max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain"
-                              style={{ background: "#0f0520" }}
+                              className="max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain"
+                              style={{
+                                borderRadius: "14px",
+                                overflow: "hidden",
+                                display: "block",
+                                width: "100%",
+                                height: "auto",
+                                background: "transparent",
+                                backgroundColor: "transparent",
+                              }}
                             />
                           </AnimatePresence>
                         ) : (
                           <canvas
                             ref={canvasRef}
                             className="block h-[54vh] w-full max-w-full"
-                            style={{ background: "#0f0520" }}
+                            style={{
+                              background: "transparent",
+                              backgroundColor: "transparent",
+                            }}
                           />
                         )}
-                        <span className="pointer-events-none absolute bottom-2 right-2 rounded-[5px] bg-[rgba(0,0,0,0.5)] px-[7px] py-[3px] text-[10px] text-[rgba(255,255,255,0.6)]">
-                          tap to zoom
-                        </span>
                       </div>
+                    </div>
+                    <div className="mt-1 text-right text-[10px] text-[#a0a0b0]">
+                      tap to zoom
                     </div>
                     </div>
                   </div>
