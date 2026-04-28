@@ -2147,7 +2147,7 @@ export function DailyGameClient({
             <p className="mt-1 text-sm text-white/55">{formatFriendlyEasternToday()}</p>
 
             <div className="mt-10 w-full max-w-sm rounded-3xl border border-[rgba(167,139,250,0.35)] bg-black/20 px-6 py-8 shadow-[0_0_60px_rgba(88,28,135,0.25)] backdrop-blur-md">
-              <div className="text-xs font-bold uppercase tracking-[0.25em] text-violet-200/70">
+              <div className="text-[11px] font-normal text-[#a0a0b0]">
                 Next challenges in
               </div>
               <div className="mt-3 font-mono text-5xl font-bold tabular-nums tracking-tight text-white md:text-6xl">
@@ -2156,7 +2156,7 @@ export function DailyGameClient({
             </div>
 
             <div className="mt-10 w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-4">
-              <div className="text-xs font-bold uppercase tracking-wider text-white/45">
+              <div className="text-[11px] font-normal text-[#a0a0b0]">
                 Today&apos;s score
               </div>
               <div className="mt-2 text-2xl font-extrabold text-white">
@@ -2168,8 +2168,6 @@ export function DailyGameClient({
                 {challenges.map((ch, i) => {
                   const g = guessesByIndex[i] ?? [];
                   const solved = g.some((x) => x.verdict === "correct");
-                  const line =
-                    g.map((x) => emojiForVerdict(x.verdict)).join("") || "—";
                   return (
                     <div
                       key={ch.id}
@@ -2178,8 +2176,27 @@ export function DailyGameClient({
                       <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
                         #{i + 1}
                       </div>
-                      <div className="mt-1 font-mono text-base tracking-widest">
-                        {line}
+                      <div className="mt-1 flex items-center justify-center gap-[3px]">
+                        {g.length === 0 ? (
+                          <span className="text-base text-white/35">—</span>
+                        ) : (
+                          g.map((x, idx) => {
+                            const pipColor =
+                              x.verdict === "correct"
+                                ? "#22c55e"
+                                : x.verdict === "close"
+                                  ? "#f59e0b"
+                                  : "#ef4444";
+                            return (
+                              <span
+                                key={`${ch.id}-summary-pip-${idx}`}
+                                className="inline-block h-[18px] w-[18px] rounded-[4px]"
+                                style={{ backgroundColor: pipColor }}
+                                aria-hidden
+                              />
+                            );
+                          })
+                        )}
                       </div>
                       <div
                         className={`mt-1 text-xs font-bold ${solved ? "text-emerald-400" : "text-white/35"}`}
@@ -2196,7 +2213,7 @@ export function DailyGameClient({
               <button
                 type="button"
                 onClick={() => setShowResultsDetail(true)}
-                className="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-white px-6 text-sm font-bold text-[#1a0a2e] shadow-lg shadow-violet-500/20 transition hover:bg-violet-100"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-[#7c3aed] px-6 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition hover:bg-[#6d28d9]"
               >
                 View Results
               </button>
@@ -2217,7 +2234,7 @@ export function DailyGameClient({
               <div className="mb-3">
                 <Link
                   href="/leaderboard"
-                  className="inline-flex min-h-[44px] items-center text-xs font-bold uppercase tracking-wider text-[var(--accent2)] transition-opacity hover:opacity-90 active:opacity-80"
+                  className="inline-flex min-h-[44px] items-center text-xs font-medium text-[#a0a0b0] transition-opacity hover:opacity-90 active:opacity-80"
                 >
                   Leaderboard
                 </Link>
@@ -2261,12 +2278,12 @@ export function DailyGameClient({
             <button
               type="button"
               onClick={() => setShowResultsDetail(false)}
-              className="text-sm font-semibold text-[var(--accent2)] hover:underline"
+              className="text-sm font-normal text-[#a0a0b0] hover:underline"
             >
               ← Back to daily home
             </button>
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm font-semibold text-white/80">
-              Daily complete · {total} challenges
+              Daily complete · {total} {total === 1 ? "challenge" : "challenges"}
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
@@ -2309,41 +2326,6 @@ export function DailyGameClient({
                                 creatorName={ch.creator_name}
                                 avatarByUsername={creatorAvatars}
                               />
-
-                              <button
-                                type="button"
-                                aria-label="Share image"
-                                disabled={shareBusyId === ch.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  void shareChallengeImage(ch);
-                                }}
-                                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white/90 backdrop-blur-sm transition hover:bg-black/55 disabled:opacity-40"
-                              >
-                                {shareBusyId === ch.id ? (
-                                  <span
-                                    className="h-4 w-4 animate-spin rounded-full border-2 border-white/75 border-t-transparent"
-                                    aria-hidden
-                                  />
-                                ) : (
-                                  <svg
-                                    width={20}
-                                    height={20}
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    aria-hidden
-                                  >
-                                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                                    <polyline points="16 6 12 2 8 6" />
-                                    <line x1="12" y1="2" x2="12" y2="15" />
-                                  </svg>
-                                )}
-                              </button>
                             </div>
                           </div>
                         ) : null}
@@ -2393,9 +2375,6 @@ export function DailyGameClient({
                     ? "Shared!"
                     : "Share"}
               </button>
-              <p className="mt-2 text-xs text-white/45">
-                Copies a {total}-row emoji grid (one row per challenge).
-              </p>
             </div>
           </div>
         ) : compactGameplayMode ? (
