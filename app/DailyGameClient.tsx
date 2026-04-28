@@ -1025,9 +1025,7 @@ export function DailyGameClient({
         sponsor_name?: string | null;
       })
     | null;
-  const isSponsored =
-    challengeMeta?.is_sponsored === true ||
-    challengeMeta?.is_sponsored === "true";
+  const isSponsored = challengeMeta?.is_sponsored === true;
   const sponsorName = isSponsored ? challengeMeta?.sponsor_name ?? null : null;
 
   const currentFinished = useMemo(
@@ -2668,12 +2666,6 @@ export function DailyGameClient({
                 </div>
 
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
-                  {console.log(
-                    "challenge is_sponsored:",
-                    challengeMeta?.is_sponsored,
-                    "position:",
-                    challengeMeta?.position,
-                  )}
                   {isSponsored ? (
                     <div
                       style={{
