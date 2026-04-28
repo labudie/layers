@@ -567,7 +567,7 @@ export function AssetLibraryClient({
             {selectedSlots.map((slot, idx) => (
               <div
                 key={idx}
-                className={`min-h-[118px] rounded-lg border border-dashed p-2 transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
+                className={`min-h-[118px] overflow-visible rounded-lg border border-dashed p-2 transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
                   dragOverSlot === idx
                     ? "scale-[1.02] border-[#7c3aed] bg-[#7c3aed]/15 shadow-[0_0_0_1px_rgba(124,58,237,0.65),0_0_20px_rgba(124,58,237,0.35)]"
                     : "border-white/20 bg-black/20"
@@ -590,14 +590,14 @@ export function AssetLibraryClient({
                       setDraggingCardId(null);
                       setDragOverSlot(null);
                     }}
-                    className={`relative space-y-1 transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] ${
+                    className={`relative overflow-visible space-y-1 transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] ${
                       slotPopKey === `${selectedDate}-${idx}-${slot.id}` ? "scale-100" : "scale-95"
                     } ${draggingCardId === slot.id ? "scale-105 rotate-2 shadow-[0_10px_24px_rgba(124,58,237,0.25)]" : ""}`}
                   >
                     <button
                       type="button"
                       aria-label="Unschedule"
-                      className="absolute right-[6px] top-[6px] inline-flex h-[18px] w-[18px] cursor-pointer items-center justify-center rounded-full border-0 bg-[rgba(0,0,0,0.6)] text-[10px] leading-none text-[#ef4444]"
+                      className="absolute right-[6px] top-[6px] z-10 inline-flex h-[18px] w-[18px] cursor-pointer items-center justify-center rounded-full border-0 bg-[rgba(0,0,0,0.6)] text-[10px] leading-none text-[#ef4444]"
                       onClick={() => void unscheduleSlot(slot.id)}
                     >
                       ✕

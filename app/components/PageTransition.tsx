@@ -23,7 +23,14 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
   const transition = { duration: 0.12, ease: [0.25, 0.1, 0.25, 1] as const };
 
   return (
-    <div style={{ position: "relative", minHeight: "100dvh", overflow: "hidden" }}>
+    <div
+      style={{
+        position: "relative",
+        minHeight: "100dvh",
+        overflowX: "hidden",
+        overflowY: "visible",
+      }}
+    >
       <AnimatePresence mode="sync" initial={false}>
         <motion.div
           key={pathname}
