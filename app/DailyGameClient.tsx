@@ -2511,13 +2511,13 @@ export function DailyGameClient({
                                   duration: 0.25,
                                   ease: "easeOut",
                                 }}
-                                className="w-full object-contain"
+                                className="block h-full w-full object-contain"
                                 style={{
                                   borderRadius: "14px",
                                   overflow: "hidden",
                                   display: "block",
                                   width: "100%",
-                                  height: "auto",
+                                  height: "100%",
                                   background: "transparent",
                                   backgroundColor: "transparent",
                                 }}
@@ -2738,13 +2738,13 @@ export function DailyGameClient({
                                 duration: 0.25,
                                 ease: "easeOut",
                               }}
-                              className="max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain"
+                              className="block h-full max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain"
                               style={{
                                 borderRadius: "14px",
                                 overflow: "hidden",
                                 display: "block",
                                 width: "100%",
-                                height: "auto",
+                                height: "100%",
                                 background: "transparent",
                                 backgroundColor: "transparent",
                               }}
