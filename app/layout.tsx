@@ -36,7 +36,7 @@ export const metadata: Metadata = {
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: "/apple-touch-icon.png",
+    apple: "/layers-icon-192.svg",
   },
 };
 
@@ -51,7 +51,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" href="/layers-icon-192.svg" />
       </head>
       <body className="flex min-h-dvh flex-col overflow-x-hidden">
         {/* Per-page chrome: `AppSiteChrome` (hamburger left, title center). Home uses it via `DailyGameClient`. */}
