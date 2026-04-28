@@ -50,6 +50,29 @@ type GuessRow = {
 };
 
 const MAX_GUESSES = 3;
+let audioGestureUnlocked = false;
+let audioGestureListenersAttached = false;
+
+function markAudioGestureUnlocked() {
+  audioGestureUnlocked = true;
+}
+
+function ensureAudioGestureListeners() {
+  if (typeof window === "undefined" || audioGestureListenersAttached) return;
+  audioGestureListenersAttached = true;
+  const opts: AddEventListenerOptions = { once: true, passive: true, capture: true };
+  window.addEventListener("pointerdown", markAudioGestureUnlocked, opts);
+  window.addEventListener("keydown", markAudioGestureUnlocked, opts);
+  window.addEventListener("touchstart", markAudioGestureUnlocked, opts);
+  window.addEventListener("mousedown", markAudioGestureUnlocked, opts);
+}
+
+function canInitializeAudioContext() {
+  if (typeof window === "undefined") return false;
+  if (audioGestureUnlocked) return true;
+  ensureAudioGestureListeners();
+  return false;
+}
 
 /** Image modal scrim at rest; near-opaque for fullscreen focus. */
 const MODAL_SCRIM_MAX_OPACITY = 0.95;
@@ -294,7 +317,7 @@ function applyGuessFeedback(verdict: GuessRow["verdict"]) {
 }
 
 function playStartupReadyChime() {
-  if (typeof window === "undefined" || !readGameSoundEnabled()) return;
+  if (!canInitializeAudioContext() || !readGameSoundEnabled()) return;
   const Ctx =
     window.AudioContext ||
     (window as typeof window & { webkitAudioContext?: typeof AudioContext })
@@ -334,7 +357,7 @@ function playStartupReadyChime() {
 }
 
 function playPerfectCompletionChime() {
-  if (typeof window === "undefined" || !readGameSoundEnabled()) return;
+  if (!canInitializeAudioContext() || !readGameSoundEnabled()) return;
   const Ctx =
     window.AudioContext ||
     (window as typeof window & { webkitAudioContext?: typeof AudioContext })
@@ -381,7 +404,7 @@ function playPerfectCompletionChime() {
 }
 
 function playStandardCompletionChime() {
-  if (typeof window === "undefined" || !readGameSoundEnabled()) return;
+  if (!canInitializeAudioContext() || !readGameSoundEnabled()) return;
   const Ctx =
     window.AudioContext ||
     (window as typeof window & { webkitAudioContext?: typeof AudioContext })

@@ -34,11 +34,9 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/Layers App Logo Clear.svg?v=4", type: "image/svg+xml" },
-      { url: "/icon-192.png?v=5", type: "image/png", sizes: "192x192" },
-      { url: "/icon-512.png?v=5", type: "image/png", sizes: "512x512" },
     ],
-    shortcut: "/icon-192.png?v=5",
-    apple: "/apple-touch-icon.png?v=5",
+    shortcut: "/Layers App Logo Clear.svg?v=4",
+    apple: "/apple-touch-icon.png",
   },
 };
 
@@ -54,11 +52,8 @@ export default function RootLayout({
     >
       <head>
         <link rel="icon" href="/Layers App Logo Clear.svg?v=4" type="image/svg+xml" />
-        <link rel="icon" href="/icon-192.png?v=5" sizes="192x192" type="image/png" />
-        <link rel="icon" href="/icon-512.png?v=5" sizes="512x512" type="image/png" />
         <link rel="shortcut icon" href="/Layers App Logo Clear.svg?v=4" type="image/svg+xml" />
-        <link rel="shortcut icon" href="/icon-192.png?v=5" type="image/png" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=5" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body className="flex min-h-dvh flex-col overflow-x-hidden">
         {/* Per-page chrome: `AppSiteChrome` (hamburger left, title center). Home uses it via `DailyGameClient`. */}

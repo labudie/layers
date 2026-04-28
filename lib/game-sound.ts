@@ -22,9 +22,29 @@ export function writeGameSoundEnabled(on: boolean) {
 // --- Shared AudioContext (one per page lifetime) ---
 
 let sharedAudioContext: AudioContext | null = null;
+let audioGestureUnlocked = false;
+let audioGestureListenersAttached = false;
+
+function markAudioGestureUnlocked() {
+  audioGestureUnlocked = true;
+}
+
+function ensureAudioGestureListeners() {
+  if (typeof window === "undefined" || audioGestureListenersAttached) return;
+  audioGestureListenersAttached = true;
+  const opts: AddEventListenerOptions = { once: true, passive: true, capture: true };
+  window.addEventListener("pointerdown", markAudioGestureUnlocked, opts);
+  window.addEventListener("keydown", markAudioGestureUnlocked, opts);
+  window.addEventListener("touchstart", markAudioGestureUnlocked, opts);
+  window.addEventListener("mousedown", markAudioGestureUnlocked, opts);
+}
 
 function getSharedAudioContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
+  if (!audioGestureUnlocked) {
+    ensureAudioGestureListeners();
+    return null;
+  }
   const AC =
     window.AudioContext ||
     (window as unknown as { webkitAudioContext?: typeof AudioContext })
