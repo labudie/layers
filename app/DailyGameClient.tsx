@@ -2129,6 +2129,7 @@ export function DailyGameClient({
                 ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#06020f_100%)]"
               : ""
           }`}
+          style={showNoChallengesHome ? { backgroundColor: "#0f0520" } : undefined}
           scrollAreaClassName={compactGameplayMode ? "overflow-y-hidden" : ""}
           contentClassName={
             compactGameplayMode ? "flex h-full min-h-full min-w-0 flex-col" : ""
@@ -2146,7 +2147,7 @@ export function DailyGameClient({
           <HomeGameSkeleton />
         ) : showNoChallengesHome ? (
           <div className="flex min-h-full flex-1 flex-col items-center py-10 text-center">
-            <div className="mb-4 inline-flex items-center justify-center rounded-md bg-[#7c3aed22] px-3 py-1 text-xs font-semibold text-[#a855f7]">
+            <div className="mb-3 inline-flex items-center justify-center rounded-md bg-[#7c3aed22] px-3 py-1 text-xs font-semibold text-[#a855f7]">
               Back tomorrow
             </div>
             <img
@@ -2154,35 +2155,35 @@ export function DailyGameClient({
               alt="Layers"
               className="h-14 w-auto max-w-[min(280px,85vw)] object-contain drop-shadow-[0_0_40px_rgba(124,58,237,0.45)]"
             />
-            <p className="mt-8 text-lg font-semibold text-white/90">
+            <p className="mt-3.5 text-[22px] font-bold tracking-[-0.3px] text-white/90">
               You&apos;re all caught up
             </p>
-            <p className="mt-3 max-w-sm text-sm leading-relaxed text-white/55">
+            <p className="mb-5 mt-3 max-w-[260px] text-center text-[14px] leading-[1.55] text-[#a0a0b0]">
               Today&apos;s challenges drop at midnight EST. Come back tomorrow for 5
               new designs.
             </p>
-            <div className="mt-10 w-full max-w-xs rounded-2xl border border-white/10 bg-black/25 px-5 py-6 backdrop-blur-sm">
+            <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-black/25 px-4 py-[14px] backdrop-blur-sm">
               <div className="text-xs font-bold uppercase tracking-[0.2em] text-white/40">
                 Next drop in
               </div>
-              <div className="mt-2 font-mono text-4xl font-bold tabular-nums tracking-tight text-white">
+              <div className="mt-2 font-mono text-[38px] font-bold tracking-[0.04em] [font-variant-numeric:tabular-nums] text-white">
                 {formatHMS(easternHeroSeconds)}
               </div>
               <p className="mt-3 text-sm text-white/50">
                 Resets automatically
               </p>
             </div>
-            <div className="mt-6 flex w-full max-w-xs flex-col gap-3">
+            <div className="mt-3.5 flex w-full max-w-xs flex-col gap-2">
               <Link
                 href="/leaderboard"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-[var(--accent)] px-6 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition hover:bg-[var(--accent2)]"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-[14px] p-[14px] text-[15px] font-semibold bg-[var(--accent)] text-white shadow-lg shadow-violet-500/20 transition hover:bg-[var(--accent2)]"
               >
                 View Leaderboard
               </Link>
               <button
                 type="button"
                 onClick={() => void shareLayersInvite()}
-                className="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-white/20 bg-transparent px-6 text-sm font-semibold text-white/90 transition hover:bg-white/10"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-[14px] border border-white/20 bg-transparent p-[14px] text-[15px] font-semibold text-white/90 transition hover:bg-white/10"
               >
                 Share Layers with a designer
               </button>
