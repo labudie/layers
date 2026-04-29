@@ -156,7 +156,7 @@ export function ProfileBottomSheet({
     };
   }, [isOpen, handle]);
 
-  if (!portalEl || !isOpen) return null;
+  if (!portalEl) return null;
 
   const onHandleTouchStart = (e: React.TouchEvent) => {
     e.stopPropagation();
@@ -214,7 +214,7 @@ export function ProfileBottomSheet({
     background: "#0f0520",
     borderTop: "0.5px solid rgba(255,255,255,0.08)",
     transform: `translateY(${translateY}%)`,
-    transition: dragging ? "none" : "transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)",
+    transition: dragging ? "none" : "transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
     zIndex: 50,
     display: "flex",
     flexDirection: "column",
@@ -238,6 +238,24 @@ export function ProfileBottomSheet({
   const bio = profile?.bio?.trim() ?? "";
 
   if (!isOpen && snap === "closed") return null;
+
+  const sheetDragProps =
+    snap === "collapsed"
+      ? {
+          onTouchStart: onHandleTouchStart,
+          onTouchMove: onHandleTouchMove,
+          onTouchEnd: onHandleTouchEnd,
+        }
+      : {};
+
+  const handleDragProps =
+    snap === "expanded"
+      ? {
+          onTouchStart: onHandleTouchStart,
+          onTouchMove: onHandleTouchMove,
+          onTouchEnd: onHandleTouchEnd,
+        }
+      : {};
 
   return createPortal(
     <div className="fixed inset-0 z-[220]" role="dialog" aria-modal="true" aria-label="Profile">
@@ -264,11 +282,13 @@ export function ProfileBottomSheet({
 
       <div
         ref={sheetRef}
+        {...sheetDragProps}
         style={sheetStyle}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
       >
         <div
+          {...handleDragProps}
           style={{
             padding: "12px 0 8px",
             display: "flex",
@@ -279,9 +299,6 @@ export function ProfileBottomSheet({
             flexShrink: 0,
             touchAction: "none",
           }}
-          onTouchStart={onHandleTouchStart}
-          onTouchMove={onHandleTouchMove}
-          onTouchEnd={onHandleTouchEnd}
         >
           <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.2)" }} />
           {snap === "collapsed" && (
