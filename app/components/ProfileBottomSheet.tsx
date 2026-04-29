@@ -87,6 +87,27 @@ export function ProfileBottomSheet({
   }, []);
 
   useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!rendered) return;
+    const body = document.body;
+    const html = document.documentElement;
+    const prevBodyOverflow = body.style.overflow;
+    const prevBodyOverscroll = body.style.overscrollBehavior;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevHtmlOverscroll = html.style.overscrollBehavior;
+    body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+    html.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+    return () => {
+      body.style.overflow = prevBodyOverflow;
+      body.style.overscrollBehavior = prevBodyOverscroll;
+      html.style.overflow = prevHtmlOverflow;
+      html.style.overscrollBehavior = prevHtmlOverscroll;
+    };
+  }, [rendered]);
+
+  useEffect(() => {
     if (closeTimeoutRef.current) {
       window.clearTimeout(closeTimeoutRef.current);
       closeTimeoutRef.current = null;
@@ -208,6 +229,7 @@ export function ProfileBottomSheet({
           transform: `${sheetTransformBase}${dragTransform}`,
           transition: draggingRef.current ? "none" : `transform ${ANIM_MS}ms ${EASE}, height ${ANIM_MS}ms ${EASE}, border-radius ${ANIM_MS}ms ${EASE}`,
           willChange: "transform,height,border-radius",
+          overscrollBehaviorY: "contain",
         }}
         onTouchStart={(e) => {
           e.stopPropagation();
@@ -217,6 +239,7 @@ export function ProfileBottomSheet({
         }}
         onTouchMove={(e) => {
           e.stopPropagation();
+          if (!isFull) e.preventDefault();
           if (!draggingRef.current) return;
           const touch = e.touches[0];
           const startY = dragStartYRef.current;
