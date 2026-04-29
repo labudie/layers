@@ -66,7 +66,7 @@ export function ProfileBottomSheet({
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [publishedWork, setPublishedWork] = useState<PublishedWorkRow[]>([]);
   const [snap, setSnap] = useState<SnapPoint>("closed");
-  const [dragging, setDragging] = useState(false);
+  const dragging = useRef(false);
   const [dragOffset, setDragOffset] = useState(0);
   const [viewportH, setViewportH] = useState(1);
 
@@ -124,32 +124,41 @@ export function ProfileBottomSheet({
     setProfile(null);
     setPublishedWork([]);
     (async () => {
-      const sb = supabase();
-      const { data: row } = await sb
-        .from("profiles")
-        .select(
-          "id, username, avatar_url, current_streak, longest_streak, total_solved, perfect_days, badges, bio, website_url, instagram_handle"
-        )
-        .eq("username", handle)
-        .maybeSingle();
-      if (cancelled) return;
-      const prof = (row as ProfileRow | null) ?? null;
-      setProfile(prof);
-      if (!prof) {
-        setLoading(false);
-        return;
+      try {
+        const sb = supabase();
+        const { data: row } = await sb
+          .from("profiles")
+          .select(
+            "id, username, avatar_url, current_streak, longest_streak, total_solved, perfect_days, badges, bio, website_url, instagram_handle"
+          )
+          .eq("username", handle)
+          .maybeSingle();
+        if (cancelled) return;
+        const prof = (row as ProfileRow | null) ?? null;
+        setProfile(prof);
+        if (!prof) {
+          setLoading(false);
+          return;
+        }
+        const variants = Array.from(new Set([handle, `@${handle}`]));
+        const { data: workRows } = await sb
+          .from("challenges")
+          .select("id, image_url, title, active_date")
+          .in("creator_name", variants)
+          .not("image_url", "is", null)
+          .order("active_date", { ascending: false })
+          .order("position", { ascending: true });
+        if (cancelled) return;
+        setPublishedWork((workRows as PublishedWorkRow[] | null) ?? []);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("[ProfileBottomSheet] failed to fetch profile", error);
+          setProfile(null);
+          setPublishedWork([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      const variants = Array.from(new Set([handle, `@${handle}`]));
-      const { data: workRows } = await sb
-        .from("challenges")
-        .select("id, image_url, title, active_date")
-        .in("creator_name", variants)
-        .not("image_url", "is", null)
-        .order("active_date", { ascending: false })
-        .order("position", { ascending: true });
-      if (cancelled) return;
-      setPublishedWork((workRows as PublishedWorkRow[] | null) ?? []);
-      setLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -162,21 +171,22 @@ export function ProfileBottomSheet({
     e.stopPropagation();
     dragStartY.current = e.touches[0].clientY;
     dragStartTime.current = Date.now();
-    setDragging(true);
+    dragging.current = true;
     setDragOffset(0);
   };
 
   const onHandleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault();
     e.stopPropagation();
-    if (!dragging) return;
+    if (!dragging.current) return;
     const dy = e.touches[0].clientY - dragStartY.current;
     setDragOffset(dy);
   };
 
   const onHandleTouchEnd = (e: React.TouchEvent) => {
     e.stopPropagation();
-    if (!dragging) return;
-    setDragging(false);
+    if (!dragging.current) return;
+    dragging.current = false;
 
     const dy = e.changedTouches[0].clientY - dragStartY.current;
     const dt = Math.max(1, Date.now() - dragStartTime.current);
@@ -201,7 +211,7 @@ export function ProfileBottomSheet({
   };
 
   const baseTranslate = SNAP[snap];
-  const dragPercent = dragging ? (dragOffset / Math.max(1, viewportH)) * 100 : 0;
+  const dragPercent = dragging.current ? (dragOffset / Math.max(1, viewportH)) * 100 : 0;
   const translateY = Math.max(0, Math.min(100, baseTranslate + dragPercent));
 
   const sheetStyle: React.CSSProperties = {
@@ -214,7 +224,7 @@ export function ProfileBottomSheet({
     background: "#0f0520",
     borderTop: "0.5px solid rgba(255,255,255,0.08)",
     transform: `translateY(${translateY}%)`,
-    transition: dragging ? "none" : "transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+    transition: dragging.current ? "none" : "transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
     zIndex: 50,
     display: "flex",
     flexDirection: "column",
