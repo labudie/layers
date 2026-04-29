@@ -247,6 +247,14 @@ export function ProfileBottomSheet({
           const dy = touch.clientY - startY;
           const dx = touch.clientX - startX;
 
+          // Collapsed (peek) mode: always treat drag as sheet drag.
+          // This makes swipe-up to expand deterministic on Chrome mobile.
+          if (!isFull) {
+            e.preventDefault();
+            setDragOffsetY(dy * 0.55);
+            return;
+          }
+
           if (dragDirectionRef.current === "unknown") {
             if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
               // Bias toward vertical so profile drag feels reliable.
@@ -258,10 +266,6 @@ export function ProfileBottomSheet({
             }
           }
 
-          // In collapsed mode we always prioritize sheet drag.
-          if (!isFull && dragDirectionRef.current === "unknown") {
-            dragDirectionRef.current = "vertical";
-          }
           if (dragDirectionRef.current === "horizontal") {
             return;
           }
