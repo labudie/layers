@@ -239,24 +239,6 @@ export function ProfileBottomSheet({
 
   if (!isOpen && snap === "closed") return null;
 
-  const sheetDragProps =
-    snap === "collapsed"
-      ? {
-          onTouchStart: onHandleTouchStart,
-          onTouchMove: onHandleTouchMove,
-          onTouchEnd: onHandleTouchEnd,
-        }
-      : {};
-
-  const handleDragProps =
-    snap === "expanded"
-      ? {
-          onTouchStart: onHandleTouchStart,
-          onTouchMove: onHandleTouchMove,
-          onTouchEnd: onHandleTouchEnd,
-        }
-      : {};
-
   return createPortal(
     <div className="fixed inset-0 z-[220]" role="dialog" aria-modal="true" aria-label="Profile">
       <div
@@ -282,13 +264,21 @@ export function ProfileBottomSheet({
 
       <div
         ref={sheetRef}
-        {...sheetDragProps}
         style={sheetStyle}
-        onTouchStart={(e) => e.stopPropagation()}
-        onTouchMove={(e) => e.stopPropagation()}
+        onTouchStart={(e) => {
+          e.stopPropagation();
+          if (snap !== "expanded") onHandleTouchStart(e);
+        }}
+        onTouchMove={(e) => {
+          e.stopPropagation();
+          if (snap !== "expanded") onHandleTouchMove(e);
+        }}
+        onTouchEnd={(e) => {
+          e.stopPropagation();
+          if (snap !== "expanded") onHandleTouchEnd(e);
+        }}
       >
         <div
-          {...handleDragProps}
           style={{
             padding: "12px 0 8px",
             display: "flex",
@@ -299,6 +289,9 @@ export function ProfileBottomSheet({
             flexShrink: 0,
             touchAction: "none",
           }}
+          onTouchStart={onHandleTouchStart}
+          onTouchMove={onHandleTouchMove}
+          onTouchEnd={onHandleTouchEnd}
         >
           <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.2)" }} />
           {snap === "collapsed" && (
