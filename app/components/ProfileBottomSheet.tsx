@@ -304,15 +304,23 @@ export function ProfileBottomSheet({
           if (startY == null || endY == null) return;
           const dy = endY - startY;
           const velocity = Math.abs(dy) / elapsedMs;
-          const shouldSnap = Math.abs(dy) > CLOSE_SWIPE_PX || velocity > VELOCITY_THRESHOLD;
-          if (!shouldSnap) return;
 
-          if (dy < 0) {
-            if (!isFull) setSnap("full");
+          if (!isFull) {
+            // Deterministic peek behavior on Chrome touch:
+            // small upward pull expands; stronger downward pull closes.
+            if (dy <= -24) {
+              setSnap("full");
+              return;
+            }
+            if (dy >= 56) {
+              onClose();
+            }
             return;
           }
-          if (isFull) setSnap("peek");
-          else onClose();
+
+          const shouldSnap = Math.abs(dy) > CLOSE_SWIPE_PX || velocity > VELOCITY_THRESHOLD;
+          if (!shouldSnap) return;
+          if (dy > 0) setSnap("peek");
         }}
       >
         <div
