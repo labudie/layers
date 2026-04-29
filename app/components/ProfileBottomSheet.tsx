@@ -49,6 +49,8 @@ function normalizeInstagramHandle(raw: string | null | undefined) {
   return (raw ?? "").trim().replace(/^@+/, "");
 }
 
+type SnapPoint = "closed" | "collapsed" | "expanded";
+
 export function ProfileBottomSheet({
   username,
   isOpen,
@@ -63,17 +65,17 @@ export function ProfileBottomSheet({
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [publishedWork, setPublishedWork] = useState<PublishedWorkRow[]>([]);
+  const [snap, setSnap] = useState<SnapPoint>("closed");
+  const [dragging, setDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [viewportH, setViewportH] = useState(1);
 
-  const [snapState, setSnapState] = useState<"collapsed" | "expanded">("collapsed");
-  const [dragY, setDragY] = useState(0);
-  const dragStartY = useRef<number>(0);
-  const dragStartTime = useRef<number>(0);
-  const isDraggingFromHandle = useRef<boolean>(false);
+  const dragStartY = useRef(0);
+  const dragStartTime = useRef(0);
   const sheetRef = useRef<HTMLDivElement>(null);
-  const scrollableRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const COLLAPSED_HEIGHT = "55vh";
-  const EXPANDED_HEIGHT = "100vh";
+  const SNAP = { closed: 100, collapsed: 45, expanded: 0 } as const;
   const SNAP_THRESHOLD_PX = 80;
   const VELOCITY_THRESHOLD = 0.3; // px/ms
 
@@ -83,7 +85,36 @@ export function ProfileBottomSheet({
   }, []);
 
   useEffect(() => {
-    if (!isOpen) setSnapState("collapsed");
+    if (!isOpen) {
+      setSnap("closed");
+      return;
+    }
+    const id = window.requestAnimationFrame(() => setSnap("collapsed"));
+    return () => window.cancelAnimationFrame(id);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const setVh = () => setViewportH(window.innerHeight || 1);
+    setVh();
+    window.addEventListener("resize", setVh);
+    return () => window.removeEventListener("resize", setVh);
+  }, []);
+
+  // Block touch events from leaking to page behind the sheet.
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevent = (e: TouchEvent) => e.stopPropagation();
+    const preventScroll = (e: TouchEvent) => {
+      if (scrollRef.current && scrollRef.current.contains(e.target as Node)) return;
+      e.preventDefault();
+    };
+    document.addEventListener("touchmove", preventScroll, { passive: false });
+    document.addEventListener("touchstart", prevent, { passive: false });
+    return () => {
+      document.removeEventListener("touchmove", preventScroll);
+      document.removeEventListener("touchstart", prevent);
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -127,64 +158,76 @@ export function ProfileBottomSheet({
 
   if (!portalEl || !isOpen) return null;
 
-  const handleHandleTouchStart = (e: React.TouchEvent) => {
-    isDraggingFromHandle.current = true;
+  const onHandleTouchStart = (e: React.TouchEvent) => {
+    e.stopPropagation();
     dragStartY.current = e.touches[0].clientY;
     dragStartTime.current = Date.now();
-    setDragY(0);
+    setDragging(true);
+    setDragOffset(0);
   };
 
-  const handleHandleTouchMove = (e: React.TouchEvent) => {
-    if (!isDraggingFromHandle.current) return;
-    const delta = e.touches[0].clientY - dragStartY.current;
-    setDragY(delta);
+  const onHandleTouchMove = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    if (!dragging) return;
+    const dy = e.touches[0].clientY - dragStartY.current;
+    setDragOffset(dy);
   };
 
-  const handleHandleTouchEnd = (e: React.TouchEvent) => {
-    if (!isDraggingFromHandle.current) return;
-    isDraggingFromHandle.current = false;
+  const onHandleTouchEnd = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    if (!dragging) return;
+    setDragging(false);
 
-    const delta = e.changedTouches[0].clientY - dragStartY.current;
-    const elapsed = Date.now() - dragStartTime.current;
-    const velocity = Math.abs(delta) / Math.max(1, elapsed);
+    const dy = e.changedTouches[0].clientY - dragStartY.current;
+    const dt = Math.max(1, Date.now() - dragStartTime.current);
+    const velocity = dy / dt; // positive = downward
 
-    const isSignificantGesture =
-      Math.abs(delta) > SNAP_THRESHOLD_PX || velocity > VELOCITY_THRESHOLD;
+    const fastDown = velocity > 0.4;
+    const fastUp = velocity < -0.4;
+    const bigDown = dy > SNAP_THRESHOLD_PX;
+    const bigUp = dy < -SNAP_THRESHOLD_PX;
 
-    if (isSignificantGesture) {
-      if (delta < 0 && snapState === "collapsed") {
-        setSnapState("expanded");
-      } else if (delta > 0 && snapState === "expanded") {
-        setSnapState("collapsed");
-      } else if (delta > 0 && snapState === "collapsed") {
+    if (snap === "collapsed") {
+      if (fastUp || bigUp) setSnap("expanded");
+      else if (fastDown || bigDown) {
+        setSnap("closed");
         onClose();
       }
+    } else if (snap === "expanded") {
+      if (fastDown || bigDown) setSnap("collapsed");
     }
 
-    setDragY(0);
+    setDragOffset(0);
   };
+
+  const baseTranslate = SNAP[snap];
+  const dragPercent = dragging ? (dragOffset / Math.max(1, viewportH)) * 100 : 0;
+  const translateY = Math.max(0, Math.min(100, baseTranslate + dragPercent));
 
   const sheetStyle: React.CSSProperties = {
     position: "fixed",
     bottom: 0,
     left: 0,
     right: 0,
-    height: snapState === "expanded" ? EXPANDED_HEIGHT : COLLAPSED_HEIGHT,
-    borderRadius: snapState === "expanded" ? "0" : "20px 20px 0 0",
+    height: "100vh",
+    borderRadius: "20px 20px 0 0",
     background: "#0f0520",
     borderTop: "0.5px solid rgba(255,255,255,0.08)",
-    transition:
-      "height 0.35s cubic-bezier(0.32, 0.72, 0, 1), border-radius 0.35s cubic-bezier(0.32, 0.72, 0, 1)",
-    transform: dragY !== 0 ? `translateY(${Math.max(0, dragY)}px)` : "translateY(0)",
+    transform: `translateY(${translateY}%)`,
+    transition: dragging ? "none" : "transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)",
     zIndex: 50,
     display: "flex",
     flexDirection: "column",
+    willChange: "transform",
+    touchAction: "none",
   };
 
   const scrollableStyle: React.CSSProperties = {
     flex: 1,
-    overflowY: snapState === "expanded" ? "auto" : "hidden",
+    overflowY: snap === "expanded" ? "auto" : "hidden",
     WebkitOverflowScrolling: "touch",
+    touchAction: snap === "expanded" ? "pan-y" : "none",
+    padding: "0 16px 40px",
   };
 
   const displayHandle = stripAtHandle(profile?.username ?? handle);
@@ -194,32 +237,54 @@ export function ProfileBottomSheet({
   const instagram = normalizeInstagramHandle(profile?.instagram_handle);
   const bio = profile?.bio?.trim() ?? "";
 
+  if (!isOpen && snap === "closed") return null;
+
   return createPortal(
     <div className="fixed inset-0 z-[220]" role="dialog" aria-modal="true" aria-label="Profile">
       <div
+        onTouchStart={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+        onTouchMove={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
         onClick={() =>
-          snapState === "expanded" ? setSnapState("collapsed") : onClose()
+          snap === "expanded" ? setSnap("collapsed") : (setSnap("closed"), onClose())
         }
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 49 }}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: snap === "expanded" ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.5)",
+          transition: "background 0.3s",
+          zIndex: 49,
+        }}
       />
 
-      <div ref={sheetRef} style={sheetStyle}>
+      <div
+        ref={sheetRef}
+        style={sheetStyle}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+      >
         <div
           style={{
-            padding: "10px 0 6px",
+            padding: "12px 0 8px",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
             gap: "6px",
             cursor: "grab",
             flexShrink: 0,
+            touchAction: "none",
           }}
-          onTouchStart={handleHandleTouchStart}
-          onTouchMove={handleHandleTouchMove}
-          onTouchEnd={handleHandleTouchEnd}
+          onTouchStart={onHandleTouchStart}
+          onTouchMove={onHandleTouchMove}
+          onTouchEnd={onHandleTouchEnd}
         >
           <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.2)" }} />
-          {snapState === "collapsed" && (
+          {snap === "collapsed" && (
             <div style={{ fontSize: 10, color: "#6b7280" }}>↑ Swipe up to expand</div>
           )}
         </div>
@@ -315,8 +380,8 @@ export function ProfileBottomSheet({
           )}
         </div>
 
-        <div ref={scrollableRef} className="min-h-0 px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-2" style={scrollableStyle}>
-          <div className={`pb-3 transition-all duration-300 ${snapState === "expanded" ? "opacity-100" : "opacity-45"}`}>
+        <div ref={scrollRef} className="min-h-0 pt-2" style={scrollableStyle}>
+          <div className={`pb-3 transition-all duration-300 ${snap === "expanded" ? "opacity-100" : "opacity-45"}`}>
             <p className="text-xs font-bold uppercase tracking-wider text-white/45">Published work</p>
             <div className="mt-2 grid grid-cols-2 gap-[6px]">
               {publishedWork.length === 0 ? (
