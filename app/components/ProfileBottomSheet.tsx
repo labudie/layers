@@ -76,9 +76,9 @@ export function ProfileBottomSheet({
   const closeTimeoutRef = useRef<number | null>(null);
   const draggingRef = useRef(false);
   const dragStartYRef = useRef<number | null>(null);
+  const dragStartXRef = useRef<number | null>(null);
   const dragStartTimeRef = useRef<number>(0);
-  const dragStartedFromHeaderRef = useRef(false);
-  const sheetRef = useRef<HTMLDivElement | null>(null);
+  const dragDirectionRef = useRef<"unknown" | "horizontal" | "vertical">("unknown");
   const scrollAreaRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -175,8 +175,24 @@ export function ProfileBottomSheet({
     dragOffsetY !== 0 ? ` translateY(${Math.max(-120, dragOffsetY)}px)` : "";
   const borderRadius = isFull ? "0px" : "20px 20px 0 0";
 
+  const beginDragGesture = (touch: { clientX: number; clientY: number }) => {
+    draggingRef.current = true;
+    dragStartYRef.current = touch.clientY;
+    dragStartXRef.current = touch.clientX;
+    dragStartTimeRef.current = performance.now();
+    dragDirectionRef.current = "unknown";
+  };
+
   return createPortal(
-    <div className="fixed inset-0 z-[220]" role="dialog" aria-modal="true" aria-label="Profile">
+    <div
+      className="fixed inset-0 z-[220]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Profile"
+      onTouchStartCapture={(e) => e.stopPropagation()}
+      onTouchMoveCapture={(e) => e.stopPropagation()}
+      onTouchEndCapture={(e) => e.stopPropagation()}
+    >
       <button
         type="button"
         aria-label="Close profile sheet"
@@ -185,7 +201,6 @@ export function ProfileBottomSheet({
         style={overlayStyle}
       />
       <div
-        ref={sheetRef}
         className="absolute bottom-0 left-0 right-0 flex flex-col overflow-hidden bg-[#0f0520] shadow-[0_-12px_48px_rgba(0,0,0,0.55)]"
         style={{
           height: targetHeight,
@@ -194,57 +209,79 @@ export function ProfileBottomSheet({
           transition: draggingRef.current ? "none" : `transform ${ANIM_MS}ms ${EASE}, height ${ANIM_MS}ms ${EASE}, border-radius ${ANIM_MS}ms ${EASE}`,
           willChange: "transform,height,border-radius",
         }}
+        onTouchStart={(e) => {
+          e.stopPropagation();
+          const touch = e.touches[0];
+          if (!touch) return;
+          beginDragGesture(touch);
+        }}
+        onTouchMove={(e) => {
+          e.stopPropagation();
+          if (!draggingRef.current) return;
+          const touch = e.touches[0];
+          const startY = dragStartYRef.current;
+          const startX = dragStartXRef.current;
+          if (!touch || startY == null || startX == null) return;
+          const dy = touch.clientY - startY;
+          const dx = touch.clientX - startX;
+
+          if (dragDirectionRef.current === "unknown") {
+            if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+              dragDirectionRef.current =
+                Math.abs(dx) > Math.abs(dy) ? "horizontal" : "vertical";
+            }
+          }
+          if (dragDirectionRef.current === "horizontal") {
+            return;
+          }
+
+          const target = e.target as Node | null;
+          const inScrollableContent =
+            scrollAreaRef.current != null &&
+            target != null &&
+            scrollAreaRef.current.contains(target);
+
+          if (inScrollableContent && isFull) {
+            const scrollTop = scrollAreaRef.current?.scrollTop ?? 0;
+            // When expanded, let internal scroll consume gesture unless user pulls down from top.
+            if (!(scrollTop <= 0 && dy > 0)) {
+              return;
+            }
+          }
+
+          e.preventDefault();
+          setDragOffsetY(dy * 0.55);
+        }}
+        onTouchEnd={(e) => {
+          e.stopPropagation();
+          if (!draggingRef.current) return;
+          const startY = dragStartYRef.current;
+          const endY = e.changedTouches[0]?.clientY;
+          const elapsedMs = Math.max(1, performance.now() - dragStartTimeRef.current);
+          const direction = dragDirectionRef.current;
+          draggingRef.current = false;
+          dragStartYRef.current = null;
+          dragStartXRef.current = null;
+          dragDirectionRef.current = "unknown";
+          setDragOffsetY(0);
+
+          if (direction === "horizontal") return;
+          if (startY == null || endY == null) return;
+          const dy = endY - startY;
+          const velocity = Math.abs(dy) / elapsedMs;
+          const shouldSnap = Math.abs(dy) > CLOSE_SWIPE_PX || velocity > VELOCITY_THRESHOLD;
+          if (!shouldSnap) return;
+
+          if (dy < 0) {
+            if (!isFull) setSnap("full");
+            return;
+          }
+          if (isFull) setSnap("peek");
+          else onClose();
+        }}
       >
         <div
           className="shrink-0 px-4 pt-2"
-          onTouchStart={(e) => {
-            const target = e.target as Node | null;
-            const inScrollableContent =
-              scrollAreaRef.current != null &&
-              target != null &&
-              scrollAreaRef.current.contains(target);
-            if (inScrollableContent) {
-              dragStartedFromHeaderRef.current = false;
-              draggingRef.current = false;
-              return;
-            }
-            dragStartedFromHeaderRef.current = true;
-            draggingRef.current = true;
-            dragStartYRef.current = e.touches[0]?.clientY ?? null;
-            dragStartTimeRef.current = performance.now();
-          }}
-          onTouchMove={(e) => {
-            if (!dragStartedFromHeaderRef.current || !draggingRef.current) return;
-            const startY = dragStartYRef.current;
-            const y = e.touches[0]?.clientY;
-            if (startY == null || y == null) return;
-            const dy = y - startY;
-            // Resist upward/downward drag a bit for smoother feel.
-            setDragOffsetY(dy * 0.55);
-          }}
-          onTouchEnd={(e) => {
-            if (!dragStartedFromHeaderRef.current || !draggingRef.current) return;
-            const startY = dragStartYRef.current;
-            const endY = e.changedTouches[0]?.clientY;
-            const elapsedMs = Math.max(1, performance.now() - dragStartTimeRef.current);
-            dragStartedFromHeaderRef.current = false;
-            draggingRef.current = false;
-            dragStartYRef.current = null;
-            setDragOffsetY(0);
-            if (startY == null || endY == null) return;
-            const dy = endY - startY;
-            const velocity = Math.abs(dy) / elapsedMs;
-            const shouldSnap = Math.abs(dy) > CLOSE_SWIPE_PX || velocity > VELOCITY_THRESHOLD;
-            if (!shouldSnap) return;
-            if (dy < 0) {
-              // swipe up
-              if (!isFull) setSnap("full");
-              return;
-            }
-            // swipe down
-            if (isFull) setSnap("peek");
-            else onClose();
-          }}
         >
           <div className="flex justify-center pb-1">
             <div
@@ -357,35 +394,33 @@ export function ProfileBottomSheet({
           onTouchMove={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
         >
-          {isFull ? (
-            <div className="pb-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-white/45">Published work</p>
-              <div className="mt-2 grid grid-cols-2 gap-[6px]">
-                {publishedWork.length === 0 ? (
-                  <p className="col-span-2 py-8 text-center text-sm text-white/45">
-                    No published work yet
-                  </p>
-                ) : (
-                  publishedWork.map((w) => (
-                    <div
-                      key={w.id}
-                      className="overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.04]"
-                    >
-                      <div className="relative aspect-[4/5] w-full bg-black/30">
-                        {w.image_url ? (
-                          <img
-                            src={w.image_url}
-                            alt={w.title ?? ""}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : null}
-                      </div>
+          <div className={`pb-3 transition-all duration-300 ${isFull ? "opacity-100" : "opacity-45"}`}>
+            <p className="text-xs font-bold uppercase tracking-wider text-white/45">Published work</p>
+            <div className="mt-2 grid grid-cols-2 gap-[6px]">
+              {publishedWork.length === 0 ? (
+                <p className="col-span-2 py-8 text-center text-sm text-white/45">
+                  No published work yet
+                </p>
+              ) : (
+                publishedWork.map((w) => (
+                  <div
+                    key={w.id}
+                    className="overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.04]"
+                  >
+                    <div className="relative aspect-[4/5] w-full bg-black/30">
+                      {w.image_url ? (
+                        <img
+                          src={w.image_url}
+                          alt={w.title ?? ""}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : null}
                     </div>
-                  ))
-                )}
-              </div>
+                  </div>
+                ))
+              )}
             </div>
-          ) : null}
+          </div>
         </div>
       </div>
     </div>,
