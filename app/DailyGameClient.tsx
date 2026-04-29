@@ -528,7 +528,7 @@ function CreatorResultAvatar({
   const handle = stripAtHandle(creatorName ?? "");
   const initial = (handle.slice(0, 1) || "?").toUpperCase();
   return (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[var(--accent)]">
+    <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#7c3aed]">
       {avatarUrl ? (
         <img
           src={avatarUrl}
@@ -536,7 +536,7 @@ function CreatorResultAvatar({
           className="h-full w-full object-cover"
         />
       ) : (
-        <span className="text-sm font-extrabold text-[var(--text)]">
+        <span className="text-xs font-extrabold text-white">
           {initial}
         </span>
       )}
@@ -2456,9 +2456,6 @@ export function DailyGameClient({
                   const g = guessesByIndex[i] ?? [];
                   const ans = ch.layer_count;
                   const solved = g.some((x) => x.verdict === "correct");
-                  const emojiRow = g
-                    .map((x) => emojiForVerdict(x.verdict))
-                    .join("");
                   return (
                     <div
                       key={ch.id}
@@ -2467,7 +2464,7 @@ export function DailyGameClient({
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                         {ch.image_url ? (
                           <div
-                            className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-[12px] border border-white/10 sm:w-32"
+                            className="aspect-[3/4] w-full shrink-0 overflow-hidden rounded-[12px] border border-white/10 sm:w-32"
                             style={{
                               background: "transparent",
                               backgroundColor: "transparent",
@@ -2489,59 +2486,6 @@ export function DailyGameClient({
                                 className="h-full w-full cursor-zoom-in object-contain"
                               />
                             </button>
-
-                            <div className="absolute bottom-1 left-2 z-20 flex items-center gap-2">
-                              <CreatorResultAvatar
-                                creatorName={ch.creator_name}
-                                avatarByUsername={creatorAvatars}
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              aria-label={`Download ${ch.title ?? "challenge"} image`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                void downloadChallengeImage(ch);
-                              }}
-                              className="absolute bottom-2 right-2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-[#f8f4ff]"
-                              style={{
-                                background: "rgba(0,0,0,0.5)",
-                                backdropFilter: "blur(4px)",
-                              }}
-                            >
-                              {downloadFeedbackId === ch.id ? (
-                                <svg
-                                  width={16}
-                                  height={16}
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth={2}
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  aria-hidden
-                                >
-                                  <path d="m20 6-11 11-5-5" />
-                                </svg>
-                              ) : (
-                                <svg
-                                  width={16}
-                                  height={16}
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth={2}
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  aria-hidden
-                                >
-                                  <path d="M12 3v12" />
-                                  <path d="m7 10 5 5 5-5" />
-                                  <path d="M4 21h16" />
-                                </svg>
-                              )}
-                            </button>
                           </div>
                         ) : null}
                         <div className="min-w-0 flex-1">
@@ -2552,10 +2496,6 @@ export function DailyGameClient({
                           <div className="mt-1 font-semibold text-white">
                             {ch.title ?? "Untitled"}
                           </div>
-                          <div className="mt-1 text-sm text-white/60">
-                            Creator{" "}
-                            <CreatorProfileLink raw={ch.creator_name} />
-                          </div>
                           <div className="mt-2 text-sm text-white/70">
                             Answer:{" "}
                             <span className="font-bold text-white">
@@ -2565,11 +2505,109 @@ export function DailyGameClient({
                             {solved ? "Solved" : "Not solved"} ·{" "}
                             {`${g.length}/${MAX_GUESSES} attempts`}
                           </div>
-                          {emojiRow ? (
-                            <div className="mt-2 font-mono text-lg tracking-widest">
-                              {emojiRow}
-                            </div>
-                          ) : null}
+                          <div className="mt-2 flex gap-[3px]">
+                            {Array.from({ length: MAX_GUESSES }).map((_, idx) => {
+                              const x = g[idx];
+                              const pipColor = !x
+                                ? "#ffffff15"
+                                : x.verdict === "correct"
+                                  ? "#22c55e"
+                                  : x.verdict === "close"
+                                    ? "#f59e0b"
+                                    : "#ef4444";
+                              return (
+                                <span
+                                  key={`${ch.id}-result-pip-${idx}`}
+                                  className="inline-block h-[18px] w-[18px] rounded-[4px]"
+                                  style={{ backgroundColor: pipColor }}
+                                  aria-hidden
+                                />
+                              );
+                            })}
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              marginTop: "10px",
+                              paddingTop: "10px",
+                              borderTop:
+                                "0.5px solid rgba(255,255,255,0.06)",
+                            }}
+                          >
+                            {stripAtHandle(ch.creator_name ?? "").length ? (
+                              <div className="flex min-w-0 flex-1 items-center gap-2 pr-2">
+                                <CreatorResultAvatar
+                                  creatorName={ch.creator_name}
+                                  avatarByUsername={creatorAvatars}
+                                />
+                                <span
+                                  className="min-w-0 truncate text-[12px] text-[#a0a0b0] [&_a]:text-[#a0a0b0] [&_a]:no-underline hover:[&_a]:text-white/90 hover:[&_a]:underline"
+                                >
+                                  <CreatorProfileLink raw={ch.creator_name} />
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="min-w-0 flex-1" />
+                            )}
+                            {ch.image_url ? (
+                              <button
+                                type="button"
+                                aria-label={`Download ${ch.title ?? "challenge"} image`}
+                                onClick={() => {
+                                  void downloadChallengeImage(ch);
+                                }}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 5,
+                                  padding: "6px 12px",
+                                  borderRadius: 8,
+                                  background: "rgba(255,255,255,0.05)",
+                                  border:
+                                    "0.5px solid rgba(255,255,255,0.1)",
+                                  color: "#f8f4ff",
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                }}
+                                className="shrink-0 transition-opacity hover:opacity-90 active:opacity-80"
+                              >
+                                {downloadFeedbackId === ch.id ? (
+                                  <svg
+                                    width={14}
+                                    height={14}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    aria-hidden
+                                  >
+                                    <path d="m20 6-11 11-5-5" />
+                                  </svg>
+                                ) : (
+                                  <svg
+                                    width={14}
+                                    height={14}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    aria-hidden
+                                  >
+                                    <path d="M12 17V3" />
+                                    <path d="m7 12 5 5 5-5" />
+                                    <path d="M19 21H5" />
+                                  </svg>
+                                )}
+                                Download
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>
