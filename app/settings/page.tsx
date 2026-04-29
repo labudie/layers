@@ -23,6 +23,9 @@ export default function SettingsPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [instagramHandle, setInstagramHandle] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -63,7 +66,7 @@ export default function SettingsPage() {
         const { data: profile, error: profileError } = await sb
           .from("profiles")
           .select(
-            "username, avatar_url, current_streak, longest_streak, total_solved, perfect_days, badges",
+            "username, avatar_url, current_streak, longest_streak, total_solved, perfect_days, badges, bio, website_url, instagram_handle",
           )
           .eq("id", user.id)
           .maybeSingle();
@@ -79,9 +82,15 @@ export default function SettingsPage() {
             total_solved?: number | null;
             perfect_days?: number | null;
             badges?: string[] | null;
+            bio?: string | null;
+            website_url?: string | null;
+            instagram_handle?: string | null;
           } | null;
           setDisplayName(row?.username ?? "");
           setAvatarUrl(row?.avatar_url ?? null);
+          setBio(row?.bio ?? "");
+          setWebsiteUrl(row?.website_url ?? "");
+          setInstagramHandle(row?.instagram_handle ?? "");
           setStats({
             current_streak: row?.current_streak ?? 0,
             longest_streak: row?.longest_streak ?? 0,
@@ -112,6 +121,9 @@ export default function SettingsPage() {
     setSuccess(null);
     try {
       const normalized = normalizeUsernameForStorage(displayName);
+      const normalizedBio = bio.trim().slice(0, 100);
+      const normalizedWebsite = websiteUrl.trim();
+      const normalizedInstagram = instagramHandle.trim().replace(/^@+/, "");
       if (!isValidUsernameNormalized(normalized)) {
         setError("Username must be 2–32 characters (letters, numbers, _ and - only).");
         return;
@@ -121,6 +133,9 @@ export default function SettingsPage() {
           id: userId,
           username: normalized,
           avatar_url: avatarUrl,
+          bio: normalizedBio.length ? normalizedBio : null,
+          website_url: normalizedWebsite.length ? normalizedWebsite : null,
+          instagram_handle: normalizedInstagram.length ? normalizedInstagram : null,
         },
         { onConflict: "id" }
       );
@@ -129,6 +144,7 @@ export default function SettingsPage() {
         return;
       }
       setDisplayName(normalized);
+      setInstagramHandle(normalizedInstagram);
       setSuccess("Profile saved.");
       window.setTimeout(() => setSuccess(null), 2000);
     } finally {
@@ -176,6 +192,9 @@ export default function SettingsPage() {
           id: userId,
           username: normalized,
           avatar_url: pub.publicUrl,
+          bio: bio.trim().slice(0, 100) || null,
+          website_url: websiteUrl.trim() || null,
+          instagram_handle: instagramHandle.trim().replace(/^@+/, "") || null,
         },
         { onConflict: "id" }
       );
@@ -312,6 +331,62 @@ export default function SettingsPage() {
                       {usernameFieldError}
                     </p>
                   ) : null}
+                </div>
+
+                <div className="mt-5 w-full space-y-3 text-left">
+                  <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-white/50">
+                      Bio
+                    </label>
+                    <div className="relative">
+                      <textarea
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value.slice(0, 100))}
+                        maxLength={100}
+                        rows={3}
+                        className="w-full resize-none rounded-xl border border-white/15 bg-black/35 px-3 py-2.5 text-sm text-white outline-none"
+                        placeholder="Tell players about yourself"
+                      />
+                      <span className="absolute bottom-2 right-2 text-[10px] text-white/45">
+                        {bio.length}/100
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-white/50">
+                      Portfolio URL
+                    </label>
+                    <input
+                      type="text"
+                      value={websiteUrl}
+                      onChange={(e) => setWebsiteUrl(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2.5 text-sm text-white outline-none"
+                      placeholder="https://yoursite.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-white/50">
+                      Instagram
+                    </label>
+                    <input
+                      type="text"
+                      value={instagramHandle}
+                      onChange={(e) => setInstagramHandle(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2.5 text-sm text-white outline-none"
+                      placeholder="@username"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void saveProfile()}
+                    disabled={saving}
+                    className="mt-1 inline-flex min-h-[42px] items-center justify-center rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent2)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : "Save profile"}
+                  </button>
                 </div>
               </div>
             </section>
