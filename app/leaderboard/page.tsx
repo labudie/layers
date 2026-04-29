@@ -338,42 +338,132 @@ export default async function LeaderboardPage({
             No creators yet
           </p>
         ) : (
-          <div className="mt-8 overflow-hidden rounded-2xl border border-white/10">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
-                  <th className="px-4 py-3">Rank</th>
-                  <th className="px-4 py-3">Creator</th>
-                  <th className="px-4 py-3">Submissions</th>
-                  <th className="px-4 py-3">Downloads</th>
-                </tr>
-              </thead>
-              <tbody className="leaderboard-stagger">
-                {(creatorRows as CreatorRow[]).map((row, i) => {
-                  return (
-                    <tr
-                      key={`${row.creator_name ?? "creator"}-${i}`}
-                      className="lb-stagger-row border-b border-white/5 transition-colors last:border-0 active:bg-white/[0.06]"
-                      style={{ "--lb-i": i } as CSSProperties}
+          <>
+            {/* Mobile: card list — avoids clipped table headers on narrow screens */}
+            <div className="mt-8 flex flex-col gap-2 px-4 sm:hidden">
+              {(creatorRows as CreatorRow[]).map((row, i) => (
+                <div
+                  key={`${row.creator_name ?? "creator"}-m-${i}`}
+                  className="lb-stagger-row flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 transition-colors active:bg-white/[0.08]"
+                  style={{ "--lb-i": i } as CSSProperties}
+                >
+                  <span
+                    className="flex w-12 shrink-0 justify-center font-mono text-sm font-semibold text-white/90"
+                    aria-label={`Rank ${i + 1}`}
+                  >
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1 text-sm text-white/90">
+                    <CreatorProfileLink raw={row.creator_name} />
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold tabular-nums text-white/90"
+                      title="Submissions"
                     >
-                      <td className="px-4 py-3 font-mono font-semibold text-white/90">
-                        {i + 1}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-white/90">
-                        <CreatorProfileLink raw={row.creator_name} />
-                      </td>
-                      <td className="px-4 py-3 text-white/80">
-                        {row.total_submissions ?? 0}
-                      </td>
-                      <td className="px-4 py-3 text-white/80">
-                        {row.total_downloads ?? 0}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="shrink-0 text-white/55"
+                        aria-hidden
+                      >
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                      </svg>
+                      {row.total_submissions ?? 0}
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold tabular-nums text-white/90"
+                      title="Downloads"
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="shrink-0 text-white/55"
+                        aria-hidden
+                      >
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      {row.total_downloads ?? 0}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop: responsive headers + auto table layout */}
+            <div className="mt-8 hidden overflow-x-auto rounded-2xl border border-white/10 px-4 sm:block">
+              <table className="w-full min-w-0 table-auto text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
+                    <th
+                      className="w-12 min-w-[48px] max-w-[48px] shrink-0 px-2 py-3 sm:px-4"
+                      scope="col"
+                    >
+                      Rank
+                    </th>
+                    <th className="min-w-0 px-2 py-3 sm:px-4" scope="col">
+                      Creator
+                    </th>
+                    <th
+                      className="whitespace-nowrap px-2 py-3 text-right sm:px-4"
+                      scope="col"
+                    >
+                      <span className="sm:hidden">SUBM.</span>
+                      <span className="hidden sm:inline">Submissions</span>
+                    </th>
+                    <th
+                      className="whitespace-nowrap px-2 py-3 text-right sm:px-4"
+                      scope="col"
+                    >
+                      <span className="sm:hidden">DL</span>
+                      <span className="hidden sm:inline">Downloads</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="leaderboard-stagger">
+                  {(creatorRows as CreatorRow[]).map((row, i) => {
+                    return (
+                      <tr
+                        key={`${row.creator_name ?? "creator"}-${i}`}
+                        className="lb-stagger-row border-b border-white/5 transition-colors last:border-0 active:bg-white/[0.06]"
+                        style={{ "--lb-i": i } as CSSProperties}
+                      >
+                        <td className="w-12 min-w-[48px] max-w-[48px] shrink-0 px-2 py-3 text-center font-mono font-semibold text-white/90 sm:px-4">
+                          {i + 1}
+                        </td>
+                        <td className="min-w-0 px-2 py-3 sm:px-4">
+                          <div className="min-w-0 truncate">
+                            <CreatorProfileLink raw={row.creator_name} />
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums text-white/80 sm:px-4">
+                          {row.total_submissions ?? 0}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums text-white/80 sm:px-4">
+                          {row.total_downloads ?? 0}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
           </LeaderboardTabPanel>
         </LeaderboardSwipeArea>
