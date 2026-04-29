@@ -239,7 +239,6 @@ export function ProfileBottomSheet({
         }}
         onTouchMove={(e) => {
           e.stopPropagation();
-          if (!isFull) e.preventDefault();
           if (!draggingRef.current) return;
           const touch = e.touches[0];
           const startY = dragStartYRef.current;
@@ -249,10 +248,19 @@ export function ProfileBottomSheet({
           const dx = touch.clientX - startX;
 
           if (dragDirectionRef.current === "unknown") {
-            if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
-              dragDirectionRef.current =
-                Math.abs(dx) > Math.abs(dy) ? "horizontal" : "vertical";
+            if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
+              // Bias toward vertical so profile drag feels reliable.
+              if (Math.abs(dx) > Math.abs(dy) + 12) {
+                dragDirectionRef.current = "horizontal";
+              } else if (Math.abs(dy) > Math.abs(dx) - 2) {
+                dragDirectionRef.current = "vertical";
+              }
             }
+          }
+
+          // In collapsed mode we always prioritize sheet drag.
+          if (!isFull && dragDirectionRef.current === "unknown") {
+            dragDirectionRef.current = "vertical";
           }
           if (dragDirectionRef.current === "horizontal") {
             return;
