@@ -390,9 +390,15 @@ export function ProfileBottomSheet({
           ref={scrollAreaRef}
           className={`min-h-0 flex-1 px-4 pb-[max(env(safe-area-inset-bottom),16px)] ${isFull ? "overflow-y-auto pt-2" : "overflow-hidden pt-0"}`}
           style={isFull ? { WebkitOverflowScrolling: "touch", touchAction: "pan-y" } : { touchAction: "none" }}
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
+          onTouchStart={(e) => {
+            if (isFull) e.stopPropagation();
+          }}
+          onTouchMove={(e) => {
+            if (isFull) e.stopPropagation();
+          }}
+          onTouchEnd={(e) => {
+            if (isFull) e.stopPropagation();
+          }}
         >
           <div className={`pb-3 transition-all duration-300 ${isFull ? "opacity-100" : "opacity-45"}`}>
             <p className="text-xs font-bold uppercase tracking-wider text-white/45">Published work</p>
