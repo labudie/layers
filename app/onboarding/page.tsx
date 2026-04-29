@@ -17,6 +17,7 @@ type CheckState = "idle" | "checking" | "available" | "taken" | "invalid";
 export default function OnboardingPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
+  const [googleAvatar, setGoogleAvatar] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [raw, setRaw] = useState("");
   const [spaceError, setSpaceError] = useState(false);
@@ -51,6 +52,10 @@ export default function OnboardingPage() {
       }
       if (!cancelled) {
         setUserId(user.id);
+        const meta = user.user_metadata as
+          | { avatar_url?: string | null; picture?: string | null }
+          | undefined;
+        setGoogleAvatar(meta?.avatar_url ?? meta?.picture ?? null);
         setAuthChecked(true);
       }
     })();
@@ -132,7 +137,11 @@ export default function OnboardingPage() {
       return;
     }
     const { error } = await sb.from("profiles").upsert(
-      { id: userId, username: candidate },
+      {
+        id: userId,
+        username: candidate,
+        ...(googleAvatar ? { avatar_url: googleAvatar } : {}),
+      },
       { onConflict: "id" },
     );
     if (error) {
