@@ -1,7 +1,10 @@
-import Link from "next/link";
+"use client";
+
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { AtHandle, AtUsernameDisplay } from "@/lib/AtHandle";
 import { stripAtHandle } from "@/lib/username-display";
+import { ProfileBottomSheet } from "@/app/components/ProfileBottomSheet";
 
 /** Purple handle links: no underline until hover. */
 export const profileHandleLinkClass =
@@ -20,6 +23,7 @@ export function ProfileUsernameLink({
   children,
 }: UsernameLinkProps) {
   const handle = stripAtHandle(username ?? "");
+  const [sheetOpen, setSheetOpen] = useState(false);
   if (!handle.length) {
     return (
       <>
@@ -30,26 +34,49 @@ export function ProfileUsernameLink({
     );
   }
   return (
-    <Link
-      href={`/profile/${encodeURIComponent(handle)}`}
-      className={profileHandleLinkClass}
-    >
-      {children ?? (
-        <AtUsernameDisplay raw={username ?? handle} fallback={fallbackDisplay} />
-      )}
-    </Link>
+    <>
+      <button
+        type="button"
+        className={`${profileHandleLinkClass} cursor-pointer border-none bg-transparent p-0 font-inherit`}
+        onClick={() => setSheetOpen(true)}
+      >
+        {children ?? (
+          <AtUsernameDisplay raw={username ?? handle} fallback={fallbackDisplay} />
+        )}
+      </button>
+      <ProfileBottomSheet
+        username={handle}
+        isOpen={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+      />
+    </>
   );
 }
 
-export function CreatorProfileLink({ raw }: { raw: string | null | undefined }) {
+export function CreatorProfileLink({
+  raw,
+  children,
+}: {
+  raw: string | null | undefined;
+  children?: ReactNode;
+}) {
   const b = stripAtHandle(raw ?? "");
+  const [sheetOpen, setSheetOpen] = useState(false);
   if (!b.length) return "—";
   return (
-    <Link
-      href={`/profile/${encodeURIComponent(b)}`}
-      className={profileHandleLinkClass}
-    >
-      <AtHandle>@{b}</AtHandle>
-    </Link>
+    <>
+      <button
+        type="button"
+        className={`${profileHandleLinkClass} cursor-pointer border-none bg-transparent p-0 font-inherit`}
+        onClick={() => setSheetOpen(true)}
+      >
+        {children ?? <AtHandle>@{b}</AtHandle>}
+      </button>
+      <ProfileBottomSheet
+        username={b}
+        isOpen={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+      />
+    </>
   );
 }

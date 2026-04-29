@@ -15,7 +15,7 @@ import { usePostHog } from "posthog-js/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { BadgeUnlockSheet } from "@/app/components/BadgeUnlockSheet";
-import { GameplayProfileSheet } from "@/app/components/GameplayProfileSheet";
+import { ProfileBottomSheet } from "@/app/components/ProfileBottomSheet";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import type { Challenge } from "./page";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
@@ -3342,10 +3342,10 @@ export function DailyGameClient({
         </div>
         </PullToRefresh>
 
-        <GameplayProfileSheet
-          open={profilePreviewHandle != null}
+        <ProfileBottomSheet
+          username={profilePreviewHandle}
+          isOpen={profilePreviewHandle != null}
           onClose={() => setProfilePreviewHandle(null)}
-          usernameHandle={profilePreviewHandle}
         />
 
         <BadgeUnlockSheet

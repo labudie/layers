@@ -14,6 +14,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { AtUsernameDisplay } from "@/lib/AtHandle";
 import { stripAtHandle } from "@/lib/username-display";
+import { ProfileBottomSheet } from "@/app/components/ProfileBottomSheet";
 
 export type AppSiteChromeProps = {
   title: ReactNode;
@@ -123,6 +124,7 @@ export function AppSiteChrome({
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
   const [profileStreak, setProfileStreak] = useState(0);
   const [profileTotalSolved, setProfileTotalSolved] = useState(0);
+  const [sheetUsername, setSheetUsername] = useState<string | null>(null);
 
   const loadNavProfile = useCallback(async () => {
     const sb = supabase();
@@ -292,7 +294,19 @@ export function AppSiteChrome({
                       "--drawer-delay": `${index * 30}ms`,
                     } as CSSProperties
                   }
-                  onClick={() => setDrawerOpen(false)}
+                  onClick={(e) => {
+                    if (
+                      item.label === "Profile" &&
+                      signedIn &&
+                      profileHandle.length > 0
+                    ) {
+                      e.preventDefault();
+                      setDrawerOpen(false);
+                      setSheetUsername(profileHandle);
+                      return;
+                    }
+                    setDrawerOpen(false);
+                  }}
                 >
                   <span className={drawerIconClass} aria-hidden>
                     {item.icon}
@@ -368,6 +382,12 @@ export function AppSiteChrome({
       >
         {children}
       </div>
+
+      <ProfileBottomSheet
+        username={sheetUsername}
+        isOpen={sheetUsername != null}
+        onClose={() => setSheetUsername(null)}
+      />
     </div>
   );
 }

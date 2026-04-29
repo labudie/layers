@@ -156,17 +156,22 @@ function DailyPodiumSlot({
   const handle = trunc8Handle(row.username, row.user_id);
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center">
-      <div
-        className="rounded-full"
-        style={{ boxShadow: `0 0 0 2px ${cfg.border}` }}
+      <ProfileUsernameLink
+        username={row.username ?? undefined}
+        fallbackDisplay={shortUsername(row.user_id)}
       >
-        <LeaderboardAvatar
-          url={row.avatar_url}
-          label={row.username ?? row.user_id}
-          sizePx={cfg.avatar}
-          className="border-0"
-        />
-      </div>
+        <span
+          className="inline-flex rounded-full"
+          style={{ boxShadow: `0 0 0 2px ${cfg.border}` }}
+        >
+          <LeaderboardAvatar
+            url={row.avatar_url}
+            label={row.username ?? row.user_id}
+            sizePx={cfg.avatar}
+            className="border-0"
+          />
+        </span>
+      </ProfileUsernameLink>
       <div
         className="mt-2 w-full truncate text-center text-xs font-semibold text-white/90"
         title={stripAtHandle(row.username ?? "") || row.user_id}
@@ -426,11 +431,16 @@ export default async function LeaderboardPage({
                             >
                               {rank}
                             </span>
-                            <LeaderboardAvatar
-                              url={row.avatar_url}
-                              label={row.username ?? row.user_id}
-                              sizePx={28}
-                            />
+                            <ProfileUsernameLink
+                              username={row.username ?? undefined}
+                              fallbackDisplay={shortUsername(row.user_id)}
+                            >
+                              <LeaderboardAvatar
+                                url={row.avatar_url}
+                                label={row.username ?? row.user_id}
+                                sizePx={28}
+                              />
+                            </ProfileUsernameLink>
                             <span className="min-w-0 flex-1 truncate text-sm text-white/90">
                               <ProfileUsernameLink
                                 username={row.username ?? undefined}
@@ -470,11 +480,16 @@ export default async function LeaderboardPage({
                           >
                             {rank}
                           </span>
-                          <LeaderboardAvatar
-                            url={row.avatar_url}
-                            label={row.username ?? row.id}
-                            sizePx={28}
-                          />
+                          <ProfileUsernameLink
+                            username={row.username ?? undefined}
+                            fallbackDisplay={shortUsername(row.id)}
+                          >
+                            <LeaderboardAvatar
+                              url={row.avatar_url}
+                              label={row.username ?? row.id}
+                              sizePx={28}
+                            />
+                          </ProfileUsernameLink>
                           <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-sm text-white/90">
                             <span className="min-w-0 truncate">
                               <ProfileUsernameLink
@@ -526,25 +541,27 @@ export default async function LeaderboardPage({
                         >
                           {rank}
                         </span>
-                        <div
-                          className="h-9 w-9 shrink-0 overflow-hidden rounded-md border-[0.5px] border-white/10 bg-[#1a0a2e]"
-                          style={{ borderRadius: 6 }}
-                        >
-                          {thumb ? (
-                            <img
-                              src={thumb}
-                              alt=""
-                              className="h-full w-full object-cover"
-                              width={36}
-                              height={36}
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-xs font-bold text-white/80">
-                              {(stripAtHandle(row.creator_name ?? "").slice(0, 1) ||
-                                "?").toUpperCase()}
-                            </div>
-                          )}
-                        </div>
+                        <CreatorProfileLink raw={row.creator_name}>
+                          <span
+                            className="inline-flex h-9 w-9 shrink-0 overflow-hidden rounded-md border-[0.5px] border-white/10 bg-[#1a0a2e]"
+                            style={{ borderRadius: 6 }}
+                          >
+                            {thumb ? (
+                              <img
+                                src={thumb}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                width={36}
+                                height={36}
+                              />
+                            ) : (
+                              <span className="flex h-full w-full items-center justify-center text-xs font-bold text-white/80">
+                                {(stripAtHandle(row.creator_name ?? "").slice(0, 1) ||
+                                  "?").toUpperCase()}
+                              </span>
+                            )}
+                          </span>
+                        </CreatorProfileLink>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-bold text-white">
                             <CreatorProfileLink raw={row.creator_name} />
