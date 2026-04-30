@@ -356,11 +356,11 @@ export default function SettingsPage() {
         name,
         email: normalizedEmail,
         years_experience: feedbackYears,
-        primary_design_tool: feedbackTool,
-        heard_about_layers: feedbackSource,
-        goals: goals.slice(0, 300),
+        primary_tool: feedbackTool,
+        heard_about: feedbackSource,
+        hoped_outcome: goals.slice(0, 300),
         play_frequency: feedbackFrequency,
-        early_feedback: thoughts ? thoughts.slice(0, 500) : null,
+        open_feedback: thoughts ? thoughts.slice(0, 500) : null,
       });
       if (insertError) {
         setFeedbackError(insertError.message);
