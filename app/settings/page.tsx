@@ -44,6 +44,18 @@ export default function SettingsPage() {
   const [earnedBadges, setEarnedBadges] = useState<BadgeId[]>([]);
   const [gameSoundOn, setGameSoundOn] = useState(true);
   const [usernameFieldError, setUsernameFieldError] = useState<string | null>(null);
+  const [feedbackSheetOpen, setFeedbackSheetOpen] = useState(false);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [feedbackSuccess, setFeedbackSuccess] = useState(false);
+  const [feedbackName, setFeedbackName] = useState("");
+  const [feedbackEmail, setFeedbackEmail] = useState("");
+  const [feedbackYears, setFeedbackYears] = useState("");
+  const [feedbackTool, setFeedbackTool] = useState("");
+  const [feedbackSource, setFeedbackSource] = useState("");
+  const [feedbackGoals, setFeedbackGoals] = useState("");
+  const [feedbackFrequency, setFeedbackFrequency] = useState("");
+  const [feedbackThoughts, setFeedbackThoughts] = useState("");
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(
@@ -87,6 +99,7 @@ export default function SettingsPage() {
             instagram_handle?: string | null;
           } | null;
           setDisplayName(row?.username ?? "");
+          setFeedbackName(row?.username ?? "");
           setAvatarUrl(row?.avatar_url ?? null);
           setBio(row?.bio ?? "");
           setWebsiteUrl(row?.website_url ?? "");
@@ -225,6 +238,80 @@ export default function SettingsPage() {
     nameInputRef.current?.focus();
     nameInputRef.current?.select();
   }, [editingName]);
+
+  function openFeedbackSheet() {
+    setFeedbackError(null);
+    setFeedbackSuccess(false);
+    setFeedbackName((prev) => prev || displayName || "");
+    setFeedbackEmail((prev) => prev || email || "");
+    setFeedbackSheetOpen(true);
+  }
+
+  function closeFeedbackSheet() {
+    setFeedbackSheetOpen(false);
+    setFeedbackError(null);
+    setFeedbackSubmitting(false);
+  }
+
+  async function submitFeedback() {
+    const name = feedbackName.trim();
+    const normalizedEmail = feedbackEmail.trim().toLowerCase();
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+    const goals = feedbackGoals.trim();
+    const thoughts = feedbackThoughts.trim();
+
+    if (
+      !name ||
+      !normalizedEmail ||
+      !emailValid ||
+      !feedbackYears ||
+      !feedbackTool ||
+      !feedbackSource ||
+      !goals ||
+      !feedbackFrequency
+    ) {
+      setFeedbackError("Please complete all required fields.");
+      return;
+    }
+
+    setFeedbackSubmitting(true);
+    setFeedbackError(null);
+    try {
+      const sb = supabase();
+      const { data: existing, error: existingError } = await sb
+        .from("beta_applications")
+        .select("id")
+        .eq("email", normalizedEmail)
+        .maybeSingle();
+      if (existingError) {
+        setFeedbackError(existingError.message);
+        return;
+      }
+      if (existing) {
+        setFeedbackError("Already received your feedback — thanks!");
+        return;
+      }
+
+      const { error: insertError } = await sb.from("beta_applications").insert({
+        user_id: userId,
+        name,
+        email: normalizedEmail,
+        years_experience: feedbackYears,
+        primary_design_tool: feedbackTool,
+        heard_about_layers: feedbackSource,
+        goals: goals.slice(0, 300),
+        play_frequency: feedbackFrequency,
+        early_feedback: thoughts ? thoughts.slice(0, 500) : null,
+      });
+      if (insertError) {
+        setFeedbackError(insertError.message);
+        return;
+      }
+      setFeedbackSuccess(true);
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  }
 
   return (
     <AppSiteChrome
@@ -561,10 +648,10 @@ export default function SettingsPage() {
                 <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.62)]">
                   <button
                     type="button"
-                    onClick={comingSoon}
+                    onClick={openFeedbackSheet}
                     className="settings-row-tap flex min-h-[48px] w-full items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/90 hover:bg-white/5 active:bg-white/[0.07]"
                   >
-                    <span>Send feedback</span>
+                    <span>Send Feedback (Beta)</span>
                     <span className="text-white/40">→</span>
                   </button>
                   <button
@@ -606,6 +693,170 @@ export default function SettingsPage() {
         )}
         </div>
       </div>
+      {feedbackSheetOpen ? (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            aria-label="Close beta feedback sheet"
+            onClick={closeFeedbackSheet}
+            className="absolute inset-0 bg-black/70"
+          />
+          <div className="absolute inset-x-0 bottom-0 rounded-t-[20px] border-t border-white/10 bg-[#1a0a2e]">
+            <div className="flex justify-center pt-3">
+              <div className="h-1 w-10 rounded-full bg-white/30" />
+            </div>
+            <div className="max-h-[78vh] overflow-y-auto px-4 pb-6 pt-3">
+              <h2 className="text-base font-bold text-white">Beta Feedback</h2>
+
+              {feedbackSuccess ? (
+                <div className="mt-4 space-y-4">
+                  <p className="rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm text-white/90">
+                    Thanks for your feedback. We&apos;ll be in touch.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={closeFeedbackSheet}
+                    className="w-full rounded-xl border border-white/20 px-4 py-3 text-sm font-semibold text-white"
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-white/50">
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      value={feedbackName}
+                      onChange={(e) => setFeedbackName(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2.5 text-sm text-white outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-white/50">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={feedbackEmail}
+                      onChange={(e) => setFeedbackEmail(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2.5 text-sm text-white outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-white/50">
+                      Years of design experience
+                    </label>
+                    <select
+                      value={feedbackYears}
+                      onChange={(e) => setFeedbackYears(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2.5 text-sm text-white outline-none"
+                    >
+                      <option value="">Select</option>
+                      <option value="Less than 1">Less than 1</option>
+                      <option value="1–3">1–3</option>
+                      <option value="3–5">3–5</option>
+                      <option value="5–10">5–10</option>
+                      <option value="10+">10+</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-white/50">
+                      Primary design tool
+                    </label>
+                    <select
+                      value={feedbackTool}
+                      onChange={(e) => setFeedbackTool(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2.5 text-sm text-white outline-none"
+                    >
+                      <option value="">Select</option>
+                      <option value="Figma">Figma</option>
+                      <option value="Photoshop">Photoshop</option>
+                      <option value="Illustrator">Illustrator</option>
+                      <option value="Sketch">Sketch</option>
+                      <option value="Affinity">Affinity</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-white/50">
+                      How did you hear about Layers?
+                    </label>
+                    <select
+                      value={feedbackSource}
+                      onChange={(e) => setFeedbackSource(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2.5 text-sm text-white outline-none"
+                    >
+                      <option value="">Select</option>
+                      <option value="Twitter/X">Twitter/X</option>
+                      <option value="Instagram">Instagram</option>
+                      <option value="A friend">A friend</option>
+                      <option value="Designer community">Designer community</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-white/50">
+                      What do you hope to get out of Layers?
+                    </label>
+                    <textarea
+                      rows={3}
+                      maxLength={300}
+                      value={feedbackGoals}
+                      onChange={(e) => setFeedbackGoals(e.target.value)}
+                      className="w-full resize-none rounded-xl border border-white/15 bg-black/35 px-3 py-2.5 text-sm text-white outline-none"
+                    />
+                    <p className="mt-1 text-right text-[10px] text-white/45">{feedbackGoals.length}/300</p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-white/50">
+                      How often do you think you&apos;d play?
+                    </label>
+                    <select
+                      value={feedbackFrequency}
+                      onChange={(e) => setFeedbackFrequency(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2.5 text-sm text-white outline-none"
+                    >
+                      <option value="">Select</option>
+                      <option value="Daily">Daily</option>
+                      <option value="A few times a week">A few times a week</option>
+                      <option value="Occasionally">Occasionally</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-white/50">
+                      Any early thoughts or feedback? (optional)
+                    </label>
+                    <textarea
+                      rows={3}
+                      maxLength={500}
+                      value={feedbackThoughts}
+                      onChange={(e) => setFeedbackThoughts(e.target.value)}
+                      className="w-full resize-none rounded-xl border border-white/15 bg-black/35 px-3 py-2.5 text-sm text-white outline-none"
+                    />
+                    <p className="mt-1 text-right text-[10px] text-white/45">{feedbackThoughts.length}/500</p>
+                  </div>
+                  {feedbackError ? (
+                    <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                      {feedbackError}
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void submitFeedback()}
+                    disabled={feedbackSubmitting}
+                    className="w-full rounded-xl bg-[#7c3aed] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {feedbackSubmitting ? "Submitting..." : "Submit Feedback"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppSiteChrome>
   );
 }
