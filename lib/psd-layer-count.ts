@@ -1,16 +1,16 @@
 /**
- * Parses a classic PSD (version 1) and returns the count of visible, content-bearing layers.
+ * Parses a classic PSD (version 1) and returns the count of leaf content layers.
+ *
+ * Count rule:
+ * - visible ((flags & 0x02) === 0)
+ * - no lsct/lsdk section info tag present
  *
  * Excludes:
- * - hidden layers: (flags & 0x02) !== 0
- * - section divider layers: lsct/lsdk type 1,2,3
- * - zero-size layers: width === 0 || height === 0
- * - group marker names that start with "<"
+ * - hidden layers (flags bit 0x02)
+ * - group/folder layers (lsct type 1 or 2)
+ * - section divider markers (lsct type 3)
  */
-export function parsePsdLayerCount(
-  buffer: ArrayBuffer,
-  debug = (globalThis as { __LAYERS_PSD_DEBUG__?: boolean }).__LAYERS_PSD_DEBUG__ === true,
-): number | null {
+export function parsePsdLayerCount(buffer: ArrayBuffer): number | null {
   const u8 = new Uint8Array(buffer);
   if (u8.length < 40) return null;
 
@@ -60,11 +60,10 @@ export function parsePsdLayerCount(
   const totalRecords = Math.abs(layerCountRaw);
   if (totalRecords > 100_000) return null;
 
-  let visibleContentCount = 0;
+  let finalLeafCount = 0;
   let hiddenExcluded = 0;
+  let groupFolderExcluded = 0;
   let sectionDividerExcluded = 0;
-  let groupContainerExcluded = 0;
-  let zeroBoundsExcluded = 0;
 
   const readAscii = (start: number, len: number) => {
     let out = "";
@@ -74,14 +73,7 @@ export function parsePsdLayerCount(
 
   for (let i = 0; i < totalRecords; i++) {
     if (off + 16 + 2 > u8.length) return null;
-    const top = dv.getInt32(off, false);
-    off += 4;
-    const left = dv.getInt32(off, false);
-    off += 4;
-    const bottom = dv.getInt32(off, false);
-    off += 4;
-    const right = dv.getInt32(off, false);
-    off += 4;
+    off += 16;
 
     const numCh = dv.getUint16(off, false);
     off += 2;
@@ -121,7 +113,6 @@ export function parsePsdLayerCount(
     const nameLen = u8[off];
     off += 1;
     if (off + nameLen > extraEnd) return null;
-    const layerName = readAscii(off, nameLen);
     off += nameLen;
     const namePad = (4 - ((1 + nameLen) % 4)) % 4;
     if (off + namePad > extraEnd) return null;
@@ -151,30 +142,27 @@ export function parsePsdLayerCount(
 
     off = extraEnd;
 
-    const width = right - left;
-    const height = bottom - top;
     const isHidden = (flags & 0x02) !== 0;
-    const isSectionDivider = sectionType === 1 || sectionType === 2 || sectionType === 3;
-    const isGroupContainer = layerName.trimStart().startsWith("<");
-    const isZeroBounds = width === 0 || height === 0;
+    const hasSectionTag = sectionType !== null;
+    const isGroupFolder = sectionType === 1 || sectionType === 2;
+    const isSectionDivider = sectionType === 3;
 
     if (isHidden) {
       hiddenExcluded++;
+      continue;
+    }
+    if (isGroupFolder) {
+      groupFolderExcluded++;
       continue;
     }
     if (isSectionDivider) {
       sectionDividerExcluded++;
       continue;
     }
-    if (isGroupContainer) {
-      groupContainerExcluded++;
+    if (hasSectionTag) {
       continue;
     }
-    if (isZeroBounds) {
-      zeroBoundsExcluded++;
-      continue;
-    }
-    visibleContentCount++;
+    finalLeafCount++;
 
     // Guard: ensure parser never moved before start.
     if (off < extraStart) return null;
@@ -185,17 +173,14 @@ export function parsePsdLayerCount(
 
   if (off > layerAndMaskEnd) return null;
 
-  if (debug) {
-    // eslint-disable-next-line no-console
-    console.log("[psd-layer-count] breakdown", {
-      totalRawLayersFound: totalRecords,
-      hiddenLayersExcluded: hiddenExcluded,
-      sectionDividerLayersExcluded: sectionDividerExcluded,
-      groupContainerLayersExcluded: groupContainerExcluded,
-      adjustmentZeroBoundsExcluded: zeroBoundsExcluded,
-      finalVisibleCount: visibleContentCount,
-    });
-  }
+  // eslint-disable-next-line no-console
+  console.log("[psd-layer-count] breakdown", {
+    totalRawLayersInPsd: totalRecords,
+    hiddenLayersExcluded: hiddenExcluded,
+    groupFolderLayersExcluded: groupFolderExcluded,
+    sectionDividerMarkersExcluded: sectionDividerExcluded,
+    finalCount: finalLeafCount,
+  });
 
-  return visibleContentCount;
+  return finalLeafCount;
 }
