@@ -1,11 +1,16 @@
 /**
- * Parses a classic PSD (version 1) and returns the count of **visible** raster layers
- * with non-zero bounds. Uses layer record flags: bit 0x02 set ⇒ hidden (matches common
- * parsers / psd-tools: visible = !(flags & 2)).
+ * Parses a classic PSD (version 1) and returns the count of visible, content-bearing layers.
  *
- * Skips layers with zero width or height (typical of adjustment / empty layer records).
+ * Excludes:
+ * - hidden layers: (flags & 0x02) !== 0
+ * - section divider layers: lsct/lsdk type 1,2,3
+ * - zero-size layers: width === 0 || height === 0
+ * - group marker names that start with "<"
  */
-export function parsePsdLayerCount(buffer: ArrayBuffer): number | null {
+export function parsePsdLayerCount(
+  buffer: ArrayBuffer,
+  debug = (globalThis as { __LAYERS_PSD_DEBUG__?: boolean }).__LAYERS_PSD_DEBUG__ === true,
+): number | null {
   const u8 = new Uint8Array(buffer);
   if (u8.length < 40) return null;
 
@@ -55,7 +60,17 @@ export function parsePsdLayerCount(buffer: ArrayBuffer): number | null {
   const totalRecords = Math.abs(layerCountRaw);
   if (totalRecords > 100_000) return null;
 
-  let visibleNonEmpty = 0;
+  let visibleContentCount = 0;
+  let hiddenExcluded = 0;
+  let sectionDividerExcluded = 0;
+  let groupContainerExcluded = 0;
+  let zeroBoundsExcluded = 0;
+
+  const readAscii = (start: number, len: number) => {
+    let out = "";
+    for (let i = 0; i < len; i++) out += String.fromCharCode(u8[start + i]);
+    return out;
+  };
 
   for (let i = 0; i < totalRecords; i++) {
     if (off + 16 + 2 > u8.length) return null;
@@ -87,13 +102,82 @@ export function parsePsdLayerCount(buffer: ArrayBuffer): number | null {
     const extraSize = dv.getUint32(off, false);
     off += 4;
     if (extraSize < 0 || off + extraSize > u8.length) return null;
-    off += extraSize;
+    const extraStart = off;
+    const extraEnd = off + extraSize;
+
+    if (off + 4 > extraEnd) return null;
+    const layerMaskDataLen = dv.getUint32(off, false);
+    off += 4;
+    if (off + layerMaskDataLen > extraEnd) return null;
+    off += layerMaskDataLen;
+
+    if (off + 4 > extraEnd) return null;
+    const blendingRangesLen = dv.getUint32(off, false);
+    off += 4;
+    if (off + blendingRangesLen > extraEnd) return null;
+    off += blendingRangesLen;
+
+    if (off + 1 > extraEnd) return null;
+    const nameLen = u8[off];
+    off += 1;
+    if (off + nameLen > extraEnd) return null;
+    const layerName = readAscii(off, nameLen);
+    off += nameLen;
+    const namePad = (4 - ((1 + nameLen) % 4)) % 4;
+    if (off + namePad > extraEnd) return null;
+    off += namePad;
+
+    let sectionType: number | null = null;
+    while (off + 12 <= extraEnd) {
+      const sig = readAscii(off, 4);
+      off += 4;
+      const key = readAscii(off, 4);
+      off += 4;
+      let dataLen = dv.getUint32(off, false);
+      off += 4;
+      if (sig !== "8BIM" && sig !== "8B64") {
+        if (off + dataLen > extraEnd) return null;
+        off += dataLen;
+        if (dataLen % 2 !== 0) off += 1;
+        continue;
+      }
+      if (off + dataLen > extraEnd) return null;
+      if ((key === "lsct" || key === "lsdk") && dataLen >= 4) {
+        sectionType = dv.getUint32(off, false);
+      }
+      off += dataLen;
+      if (dataLen % 2 !== 0 && off < extraEnd) off += 1;
+    }
+
+    off = extraEnd;
 
     const width = right - left;
     const height = bottom - top;
-    const nonEmpty = width > 0 && height > 0;
-    const visible = (flags & 0x02) === 0;
-    if (nonEmpty && visible) visibleNonEmpty++;
+    const isHidden = (flags & 0x02) !== 0;
+    const isSectionDivider = sectionType === 1 || sectionType === 2 || sectionType === 3;
+    const isGroupContainer = layerName.trimStart().startsWith("<");
+    const isZeroBounds = width === 0 || height === 0;
+
+    if (isHidden) {
+      hiddenExcluded++;
+      continue;
+    }
+    if (isSectionDivider) {
+      sectionDividerExcluded++;
+      continue;
+    }
+    if (isGroupContainer) {
+      groupContainerExcluded++;
+      continue;
+    }
+    if (isZeroBounds) {
+      zeroBoundsExcluded++;
+      continue;
+    }
+    visibleContentCount++;
+
+    // Guard: ensure parser never moved before start.
+    if (off < extraStart) return null;
   }
 
   if (off > layerInfoEnd) return null;
@@ -101,5 +185,17 @@ export function parsePsdLayerCount(buffer: ArrayBuffer): number | null {
 
   if (off > layerAndMaskEnd) return null;
 
-  return visibleNonEmpty;
+  if (debug) {
+    // eslint-disable-next-line no-console
+    console.log("[psd-layer-count] breakdown", {
+      totalRawLayersFound: totalRecords,
+      hiddenLayersExcluded: hiddenExcluded,
+      sectionDividerLayersExcluded: sectionDividerExcluded,
+      groupContainerLayersExcluded: groupContainerExcluded,
+      adjustmentZeroBoundsExcluded: zeroBoundsExcluded,
+      finalVisibleCount: visibleContentCount,
+    });
+  }
+
+  return visibleContentCount;
 }
