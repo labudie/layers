@@ -14,7 +14,7 @@ import {
 } from "@/lib/asset-pairing";
 import {
   difficultyBadgeClass,
-  difficultyFromLayerCount
+  difficultyFromLayerCount,
 } from "@/lib/asset-difficulty";
 import { CATEGORY_OPTIONS, type CategoryOption } from "@/lib/challenge-categories";
 import { parsePsdLayerCount } from "@/lib/psd-layer-count";
@@ -23,6 +23,10 @@ import { CreatorAutocompleteInput } from "@/app/studio/AdminChallengeFormClient"
 import {
   approveSubmissionToAssetAction,
   insertReadyAssetAction,
+  insertReadyAssetsBatchAction,
+  previewAutoScheduleAction,
+  confirmAutoScheduleAction,
+  type AutoSchedulePreviewRow,
   publishScheduledDayAction,
   rejectSubmissionAction,
   scheduleAssetAction,
@@ -145,6 +149,16 @@ function assetDraftStoragePath(safeTitle: string, ext: "png" | "jpg") {
   return `asset-ready/${crypto.randomUUID()}-${safeTitle || "asset"}.${ext}`;
 }
 
+function todayYmdEastern() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
+function addDaysToYmd(ymd: string, days: number) {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function AssetLibraryClient({
   initialAssets,
   pendingSubmissions,
@@ -183,6 +197,14 @@ export function AssetLibraryClient({
   const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [liveCounts, setLiveCounts] = useState(liveCountsByDate);
   const [liveChallengeMap, setLiveChallengeMap] = useState(liveChallengeIdByDatePosition);
+  const [saveAllBusy, setSaveAllBusy] = useState(false);
+  const [autoScheduleOpen, setAutoScheduleOpen] = useState(false);
+  const [autoScheduleStartDate, setAutoScheduleStartDate] = useState(todayYmdEastern());
+  const [autoScheduleEndDate, setAutoScheduleEndDate] = useState(addDaysToYmd(todayYmdEastern(), 14));
+  const [autoSchedulePreviewBusy, setAutoSchedulePreviewBusy] = useState(false);
+  const [autoScheduleConfirmBusy, setAutoScheduleConfirmBusy] = useState(false);
+  const [autoSchedulePreview, setAutoSchedulePreview] = useState<AutoSchedulePreviewRow[]>([]);
+  const [autoScheduleUnplaced, setAutoScheduleUnplaced] = useState<Array<{ id: string; title: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = () => router.refresh();
@@ -227,6 +249,7 @@ export function AssetLibraryClient({
   }, [assets, readyFilter, readySearch, adminUserId]);
 
   const matrix = monthMatrix(viewMonth.y, viewMonth.m);
+  const readyAssetCount = assets.filter((a) => a.status === "ready").length;
   const monthLabel = new Date(viewMonth.y, viewMonth.m, 1).toLocaleDateString("en-US", {
     month: "long",
     year: "numeric",
@@ -320,6 +343,151 @@ export function AssetLibraryClient({
     setDraftPairs((list) => list.filter((r) => r.key !== row.key));
     setToast({ type: "success", text: "Saved to Ready." });
     window.setTimeout(() => setToast(null), 2200);
+    refresh();
+  };
+
+  const saveAllReadyPairs = async () => {
+    if (draftPairs.length === 0) return;
+    setSaveAllBusy(true);
+    try {
+      const sb = supabase();
+      const payloads: AssetUpsertFields[] = [];
+      const validKeys: string[] = [];
+      for (const row of draftPairs) {
+        if (!row.spec.raster) continue;
+        const layerCount = Number(row.layer_count);
+        if (!row.title.trim() || !Number.isFinite(layerCount)) continue;
+        const safeTitle = row.title
+          .toLowerCase()
+          .trim()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-_]/g, "")
+          .slice(0, 80);
+        const storagePath = assetDraftStoragePath(
+          safeTitle,
+          row.spec.raster.type === "image/jpeg" ? "jpg" : "png",
+        );
+        const { error: uploadErr } = await sb.storage
+          .from("challenge-images")
+          .upload(storagePath, row.spec.raster, {
+            contentType: row.spec.raster.type || "image/png",
+            upsert: true,
+          });
+        if (uploadErr) {
+          setToast({ type: "error", text: `Upload failed for ${row.title}: ${uploadErr.message}` });
+          return;
+        }
+        const { data: pub } = sb.storage.from("challenge-images").getPublicUrl(storagePath);
+        if (!pub?.publicUrl) {
+          setToast({ type: "error", text: `Could not resolve image URL for ${row.title}.` });
+          return;
+        }
+        payloads.push({
+          title: row.title.trim(),
+          creator_name: row.creator_name.trim(),
+          software: row.software,
+          category: row.category,
+          layer_count: Math.trunc(layerCount),
+          is_sponsored: row.is_sponsored,
+          sponsor_name: row.sponsor_name.trim(),
+          image_url: pub.publicUrl,
+        });
+        validKeys.push(row.key);
+      }
+      if (payloads.length === 0) {
+        setToast({ type: "error", text: "No valid upload pairs to save." });
+        return;
+      }
+      const res = await insertReadyAssetsBatchAction(payloads);
+      if (!res.ok) {
+        setToast({ type: "error", text: res.error ?? "Failed to save assets." });
+        return;
+      }
+      const insertedIds = (res.inserted ?? []).map((r) => r.id);
+      const newAssets: AssetRow[] = payloads.map((payload, idx) => ({
+        id: insertedIds[idx] ?? `temp-${validKeys[idx] ?? idx}`,
+        title: payload.title,
+        creator_name: payload.creator_name || null,
+        software: payload.software,
+        category: payload.category,
+        layer_count: payload.layer_count,
+        is_sponsored: payload.is_sponsored,
+        sponsor_name: payload.is_sponsored ? payload.sponsor_name || null : null,
+        image_url: payload.image_url,
+        status: "ready",
+        scheduled_date: null,
+        scheduled_position: null,
+        challenge_id: null,
+        source: "admin",
+        uploaded_by: adminUserId || null,
+        submission_id: null,
+      }));
+      setAssets((prev) => [...newAssets, ...prev]);
+      setDraftPairs((list) => list.filter((row) => !validKeys.includes(row.key)));
+      setToast({ type: "success", text: `${payloads.length} assets saved to Ready.` });
+      window.setTimeout(() => setToast(null), 2400);
+      refresh();
+    } finally {
+      setSaveAllBusy(false);
+    }
+  };
+
+  const openAutoScheduleModal = () => {
+    const todayEastern = todayYmdEastern();
+    setAutoScheduleStartDate(todayEastern);
+    setAutoScheduleEndDate(addDaysToYmd(todayEastern, 14));
+    setAutoSchedulePreview([]);
+    setAutoScheduleUnplaced([]);
+    setAutoScheduleOpen(true);
+  };
+
+  const previewAutoSchedule = async () => {
+    setAutoSchedulePreviewBusy(true);
+    const result = await previewAutoScheduleAction(autoScheduleStartDate, autoScheduleEndDate);
+    setAutoSchedulePreviewBusy(false);
+    if (!result.ok) {
+      setToast({ type: "error", text: result.error ?? "Preview failed." });
+      window.setTimeout(() => setToast(null), 2600);
+      return;
+    }
+    setAutoSchedulePreview(result.assignments ?? []);
+    setAutoScheduleUnplaced(result.unplaced ?? []);
+  };
+
+  const confirmAutoSchedule = async () => {
+    setAutoScheduleConfirmBusy(true);
+    const result = await confirmAutoScheduleAction(autoScheduleStartDate, autoScheduleEndDate);
+    setAutoScheduleConfirmBusy(false);
+    if (!result.ok) {
+      setToast({ type: "error", text: result.error ?? "Auto-schedule failed." });
+      window.setTimeout(() => setToast(null), 2600);
+      return;
+    }
+    const assignmentKeys = new Set(
+      autoSchedulePreview.map((row) => `${row.asset_id}-${row.active_date}-${row.position}`),
+    );
+    setAssets((prev) =>
+      prev.map((asset) => {
+        const match = autoSchedulePreview.find((row) => row.asset_id === asset.id);
+        if (!match || !assignmentKeys.has(`${match.asset_id}-${match.active_date}-${match.position}`)) {
+          return asset;
+        }
+        return {
+          ...asset,
+          status: "scheduled",
+          scheduled_date: match.active_date,
+          scheduled_position: match.position,
+        };
+      }),
+    );
+    setAutoScheduleOpen(false);
+    setAutoSchedulePreview([]);
+    setAutoScheduleUnplaced([]);
+    setToast({
+      type: "success",
+      text: `${result.scheduledCount ?? 0} assets auto-scheduled.`,
+    });
+    window.setTimeout(() => setToast(null), 2600);
     refresh();
   };
 
@@ -453,6 +621,16 @@ export function AssetLibraryClient({
 
       {draftPairs.length > 0 && (
         <div className="mb-4 space-y-3">
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => void saveAllReadyPairs()}
+              disabled={saveAllBusy}
+              className="rounded bg-[#7c3aed] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+            >
+              {saveAllBusy ? "Saving..." : "Save All as Ready"}
+            </button>
+          </div>
           {draftPairs.map((row) => (
             <div key={row.key} className="rounded-xl border border-white/10 bg-black/25 p-3">
               <div className="flex gap-3">
@@ -558,6 +736,20 @@ export function AssetLibraryClient({
                 </span>
               </button>
             ))}
+          </div>
+          <div className="mt-3">
+            <button
+              type="button"
+              disabled={readyAssetCount === 0}
+              onClick={openAutoScheduleModal}
+              className={`w-full rounded px-3 py-2 text-sm font-bold ${
+                readyAssetCount === 0
+                  ? "cursor-not-allowed bg-[#7c3aed] text-white opacity-40"
+                  : "bg-[#7c3aed] text-white"
+              }`}
+            >
+              Auto-Schedule
+            </button>
           </div>
         </>
       ) : (
@@ -739,6 +931,122 @@ export function AssetLibraryClient({
         <div className={`${mobilePanel === "calendar" ? "hidden md:block" : "block"} self-start md:col-span-7`}>{leftPanel}</div>
         <div className={`${mobilePanel === "assets" ? "hidden md:block" : "block"} self-start md:col-span-5`}>{rightPanel}</div>
       </div>
+
+      {autoScheduleOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-4xl rounded-2xl border border-white/15 bg-[#160828] p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-white">Auto-Schedule Assets</h2>
+              <button
+                type="button"
+                className="text-sm text-white/60"
+                onClick={() => {
+                  setAutoScheduleOpen(false);
+                  setAutoSchedulePreview([]);
+                  setAutoScheduleUnplaced([]);
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="text-sm text-white/80">
+                <span className="mb-1 block text-xs uppercase text-white/55">Start date</span>
+                <input
+                  type="date"
+                  value={autoScheduleStartDate}
+                  onChange={(e) => setAutoScheduleStartDate(e.target.value)}
+                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-2 text-white"
+                />
+              </label>
+              <label className="text-sm text-white/80">
+                <span className="mb-1 block text-xs uppercase text-white/55">End date</span>
+                <input
+                  type="date"
+                  value={autoScheduleEndDate}
+                  onChange={(e) => setAutoScheduleEndDate(e.target.value)}
+                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-2 text-white"
+                />
+              </label>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  disabled={autoSchedulePreviewBusy}
+                  onClick={() => void previewAutoSchedule()}
+                  className="w-full rounded bg-[#7c3aed] px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
+                >
+                  {autoSchedulePreviewBusy ? "Previewing..." : "Preview Schedule"}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 max-h-[42vh] overflow-auto rounded-xl border border-white/10">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-white/5 text-xs uppercase tracking-wider text-white/55">
+                  <tr>
+                    <th className="px-3 py-2">Date</th>
+                    <th className="px-3 py-2">Slot</th>
+                    <th className="px-3 py-2">Title</th>
+                    <th className="px-3 py-2">Creator</th>
+                    <th className="px-3 py-2">Layers</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {autoSchedulePreview.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-4 text-center text-white/60">
+                        No preview yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    autoSchedulePreview.map((row) => (
+                      <tr key={`${row.asset_id}-${row.active_date}-${row.position}`} className="border-t border-white/10">
+                        <td className="px-3 py-2 text-white/90">{row.active_date}</td>
+                        <td className="px-3 py-2 text-white/80">{row.position}</td>
+                        <td className="px-3 py-2 text-white">{row.title}</td>
+                        <td className="px-3 py-2 text-white/75">@{row.creator_name || "creator"}</td>
+                        <td className="px-3 py-2 text-white/75">{row.layer_count}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-3 text-sm text-white/80">
+              {autoSchedulePreview.length} assets scheduled, {autoScheduleUnplaced.length} assets could not be placed in this date range
+            </div>
+            {autoScheduleUnplaced.length > 0 ? (
+              <div className="mt-2 max-h-20 overflow-auto rounded border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/70">
+                {autoScheduleUnplaced.map((item) => item.title).join(" · ")}
+              </div>
+            ) : null}
+
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                disabled={autoScheduleConfirmBusy || autoSchedulePreview.length === 0}
+                onClick={() => void confirmAutoSchedule()}
+                className="rounded bg-[#7c3aed] px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {autoScheduleConfirmBusy ? "Scheduling..." : "Confirm Schedule"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAutoScheduleOpen(false);
+                  setAutoSchedulePreview([]);
+                  setAutoScheduleUnplaced([]);
+                }}
+                className="rounded border border-white/20 px-3 py-2 text-sm font-semibold text-white/85"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {editAsset && (
         <EditAssetModal

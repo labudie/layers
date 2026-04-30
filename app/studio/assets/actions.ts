@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase";
+import { getPosition } from "@/lib/asset-difficulty";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 
 const ADMIN_EMAIL = "rjlabudie@gmail.com".toLowerCase();
@@ -87,6 +88,20 @@ export type AssetUpsertFields = {
   image_url: string;
 };
 
+export type AutoSchedulePreviewRow = {
+  asset_id: string;
+  active_date: string;
+  position: number;
+  title: string;
+  creator_name: string | null;
+  layer_count: number;
+  software: string;
+  category: string;
+  is_sponsored: boolean;
+  sponsor_name: string | null;
+  image_url: string | null;
+};
+
 function validateAssetFields(f: AssetUpsertFields): string | null {
   const title = String(f.title ?? "").trim();
   const software = String(f.software ?? "").trim();
@@ -145,6 +160,306 @@ export async function insertReadyAssetAction(
   const id = (data as { id?: string } | null)?.id;
   revalidatePath("/studio/assets");
   return { ok: true, id };
+}
+
+export async function insertReadyAssetsBatchAction(
+  fieldsList: AssetUpsertFields[],
+): Promise<{
+  ok: boolean;
+  error?: string;
+  inserted?: Array<{ id: string }>;
+}> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  if (!Array.isArray(fieldsList) || fieldsList.length === 0) {
+    return { ok: false, error: "No assets to save." };
+  }
+
+  for (const fields of fieldsList) {
+    const err = validateAssetFields(fields);
+    if (err) return { ok: false, error: err };
+  }
+
+  const userId = (await gate.sb.auth.getUser()).data.user?.id ?? null;
+  const insertRows = fieldsList.map((fields) => ({
+    title: fields.title.trim(),
+    creator_name: fields.creator_name.trim() || null,
+    software: fields.software.trim(),
+    category: fields.category.trim(),
+    layer_count: Math.trunc(Number(fields.layer_count)),
+    is_sponsored: Boolean(fields.is_sponsored),
+    sponsor_name: fields.is_sponsored ? fields.sponsor_name.trim() || null : null,
+    image_url: fields.image_url.trim(),
+    status: "ready" as const,
+    source: "admin" as const,
+    uploaded_by: userId,
+  }));
+
+  const { data, error } = await gate.sb
+    .from("assets")
+    .insert(insertRows)
+    .select("id");
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/studio/assets");
+  revalidatePath("/studio");
+  return {
+    ok: true,
+    inserted: ((data ?? []) as Array<{ id: string }>).map((r) => ({ id: r.id })),
+  };
+}
+
+function toYmdEasternToday() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
+function isYmd(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function iterateDateRange(start: string, end: string): string[] {
+  const out: string[] = [];
+  const cursor = new Date(`${start}T00:00:00`);
+  const endDate = new Date(`${end}T00:00:00`);
+  while (cursor <= endDate) {
+    const y = cursor.getFullYear();
+    const m = String(cursor.getMonth() + 1).padStart(2, "0");
+    const d = String(cursor.getDate()).padStart(2, "0");
+    out.push(`${y}-${m}-${d}`);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return out;
+}
+
+async function buildAutoSchedulePreview(
+  sb: ReturnType<typeof createSupabaseServerClient>,
+  startDate: string,
+  endDate: string,
+): Promise<{
+  assignments: AutoSchedulePreviewRow[];
+  unplaced: Array<{ id: string; title: string }>;
+  error?: string;
+}> {
+  const { data: readyRows, error: readyErr } = await sb
+    .from("assets")
+    .select("id,title,creator_name,layer_count,software,category,is_sponsored,sponsor_name,image_url")
+    .eq("status", "ready")
+    .order("created_at", { ascending: true });
+  if (readyErr) return { assignments: [], unplaced: [], error: readyErr.message };
+
+  const { data: challengeRows, error: challengeErr } = await sb
+    .from("challenges")
+    .select("active_date,position,creator_name")
+    .gte("active_date", startDate)
+    .lte("active_date", endDate)
+    .order("active_date", { ascending: true })
+    .order("position", { ascending: true });
+  if (challengeErr) return { assignments: [], unplaced: [], error: challengeErr.message };
+
+  const dates = iterateDateRange(startDate, endDate);
+  const slotsByDate = new Map<string, Set<number>>();
+  const creatorsByDate = new Map<string, Set<string>>();
+  for (const row of (challengeRows ?? []) as Array<{
+    active_date: string | null;
+    position: number | null;
+    creator_name: string | null;
+  }>) {
+    const date = row.active_date ?? "";
+    const position = Number(row.position ?? 0);
+    if (!date || position < 1 || position > 5) continue;
+    if (!slotsByDate.has(date)) slotsByDate.set(date, new Set<number>());
+    slotsByDate.get(date)!.add(position);
+    const creator = (row.creator_name ?? "").trim().toLowerCase();
+    if (creator) {
+      if (!creatorsByDate.has(date)) creatorsByDate.set(date, new Set<string>());
+      creatorsByDate.get(date)!.add(creator);
+    }
+  }
+
+  const readyPool = ((readyRows ?? []) as Array<{
+    id: string;
+    title: string | null;
+    creator_name: string | null;
+    layer_count: number | null;
+    software?: string | null;
+    category?: string | null;
+    is_sponsored?: boolean | null;
+    sponsor_name?: string | null;
+    image_url?: string | null;
+  }>).map((row) => ({
+    id: row.id,
+    title: (row.title ?? "Untitled").trim() || "Untitled",
+    creator_name: (row.creator_name ?? "").trim() || null,
+    creator_key: (row.creator_name ?? "").trim().toLowerCase(),
+    layer_count: Math.max(0, Math.trunc(Number(row.layer_count ?? 0))),
+    software: String(row.software ?? "Other"),
+    category: String(row.category ?? "Other"),
+    is_sponsored: row.is_sponsored === true,
+    sponsor_name: row.is_sponsored ? (row.sponsor_name ?? null) : null,
+    image_url: row.image_url ?? null,
+  }));
+
+  const assignments: AutoSchedulePreviewRow[] = [];
+  const usedAssetIds = new Set<string>();
+
+  for (const date of dates) {
+    for (let position = 1; position <= 5; position++) {
+      if (slotsByDate.get(date)?.has(position)) continue;
+      const takenCreators = creatorsByDate.get(date) ?? new Set<string>();
+      const matchIndex = readyPool.findIndex((asset) => {
+        if (usedAssetIds.has(asset.id)) return false;
+        if (!asset.image_url) return false;
+        if (getPosition(asset.layer_count) !== position) return false;
+        if (asset.creator_key && takenCreators.has(asset.creator_key)) return false;
+        return true;
+      });
+      if (matchIndex === -1) continue;
+      const asset = readyPool[matchIndex];
+      usedAssetIds.add(asset.id);
+      if (!slotsByDate.has(date)) slotsByDate.set(date, new Set<number>());
+      slotsByDate.get(date)!.add(position);
+      if (asset.creator_key) {
+        if (!creatorsByDate.has(date)) creatorsByDate.set(date, new Set<string>());
+        creatorsByDate.get(date)!.add(asset.creator_key);
+      }
+      assignments.push({
+        asset_id: asset.id,
+        active_date: date,
+        position,
+        title: asset.title,
+        creator_name: asset.creator_name,
+        layer_count: asset.layer_count,
+        software: asset.software,
+        category: asset.category,
+        is_sponsored: asset.is_sponsored,
+        sponsor_name: asset.sponsor_name,
+        image_url: asset.image_url,
+      });
+    }
+  }
+
+  const unplaced = readyPool
+    .filter((asset) => !usedAssetIds.has(asset.id))
+    .map((asset) => ({ id: asset.id, title: asset.title }));
+
+  assignments.sort((a, b) =>
+    a.active_date === b.active_date
+      ? a.position - b.position
+      : a.active_date.localeCompare(b.active_date),
+  );
+
+  return { assignments, unplaced };
+}
+
+export async function previewAutoScheduleAction(
+  startDate: string,
+  endDate: string,
+): Promise<{
+  ok: boolean;
+  error?: string;
+  assignments?: AutoSchedulePreviewRow[];
+  unplaced?: Array<{ id: string; title: string }>;
+}> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  if (!isYmd(startDate) || !isYmd(endDate)) {
+    return { ok: false, error: "Invalid date format." };
+  }
+  if (startDate > endDate) return { ok: false, error: "Start date must be before end date." };
+  if (startDate < toYmdEasternToday()) {
+    return { ok: false, error: "Start date must be today or later (US Eastern)." };
+  }
+
+  const result = await buildAutoSchedulePreview(gate.sb, startDate, endDate);
+  if (result.error) return { ok: false, error: result.error };
+  return {
+    ok: true,
+    assignments: result.assignments,
+    unplaced: result.unplaced,
+  };
+}
+
+export async function confirmAutoScheduleAction(
+  startDate: string,
+  endDate: string,
+): Promise<{
+  ok: boolean;
+  error?: string;
+  scheduledCount?: number;
+}> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  if (!isYmd(startDate) || !isYmd(endDate)) {
+    return { ok: false, error: "Invalid date format." };
+  }
+  if (startDate > endDate) return { ok: false, error: "Start date must be before end date." };
+  if (startDate < toYmdEasternToday()) {
+    return { ok: false, error: "Start date must be today or later (US Eastern)." };
+  }
+
+  const preview = await buildAutoSchedulePreview(gate.sb, startDate, endDate);
+  if (preview.error) return { ok: false, error: preview.error };
+  if (preview.assignments.length === 0) return { ok: true, scheduledCount: 0 };
+
+  const uniqueDates = Array.from(new Set(preview.assignments.map((a) => a.active_date))).sort();
+  const dayNumberByDate = new Map<string, number>();
+  for (const date of uniqueDates) {
+    dayNumberByDate.set(date, await computeDayNumberForDate(gate.sb, date));
+  }
+
+  const upsertChallenges = preview.assignments.map((item) => ({
+    title: item.title,
+    creator_name: item.creator_name,
+    day_number: dayNumberByDate.get(item.active_date) ?? 1,
+    software: item.software,
+    category: item.category,
+    layer_count: item.layer_count,
+    active_date: item.active_date,
+    position: item.position,
+    is_sponsored: item.is_sponsored,
+    sponsor_name: item.is_sponsored ? item.sponsor_name : null,
+    image_url: item.image_url,
+  }));
+
+  const { error: upsertError } = await gate.sb
+    .from("challenges")
+    .upsert(upsertChallenges, { onConflict: "active_date,position" });
+  if (upsertError) return { ok: false, error: upsertError.message };
+
+  const { data: createdChallenges, error: challengeFetchError } = await gate.sb
+    .from("challenges")
+    .select("id,active_date,position")
+    .gte("active_date", startDate)
+    .lte("active_date", endDate);
+  if (challengeFetchError) return { ok: false, error: challengeFetchError.message };
+
+  const challengeIdByDatePosition = new Map<string, string>();
+  for (const row of (createdChallenges ?? []) as Array<{
+    id: string;
+    active_date: string | null;
+    position: number | null;
+  }>) {
+    if (!row.active_date || !row.position) continue;
+    challengeIdByDatePosition.set(`${row.active_date}-${row.position}`, row.id);
+  }
+
+  const assetUpdates = preview.assignments.map((item) => ({
+    id: item.asset_id,
+    status: "scheduled" as const,
+    scheduled_date: item.active_date,
+    scheduled_position: item.position,
+    challenge_id: challengeIdByDatePosition.get(`${item.active_date}-${item.position}`) ?? null,
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error: assetsUpsertError } = await gate.sb
+    .from("assets")
+    .upsert(assetUpdates, { onConflict: "id" });
+  if (assetsUpsertError) return { ok: false, error: assetsUpsertError.message };
+
+  revalidatePath("/studio/assets");
+  revalidatePath("/studio");
+  return { ok: true, scheduledCount: preview.assignments.length };
 }
 
 export async function updateAssetAction(
