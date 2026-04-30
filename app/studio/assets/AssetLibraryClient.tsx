@@ -67,7 +67,15 @@ export type PendingSubmissionRow = {
 
 type MobilePanel = "assets" | "calendar";
 type LeftTab = "ready" | "pending";
-type ReadyFilter = "all" | "Easy" | "Medium" | "Hard" | "my" | "community";
+type ReadyFilter =
+  | "all"
+  | "Easy"
+  | "Medium"
+  | "Medium-Hard"
+  | "Hard"
+  | "Expert"
+  | "my"
+  | "community";
 
 type DraftPairLocal = {
   key: string;
@@ -101,7 +109,7 @@ const SOFTWARE_ICONS: Record<string, string> = {
 const SLOT_LABELS = [
   "Slot 1 · Easy",
   "Slot 2 · Medium",
-  "Slot 3 · Sponsored",
+  "Slot 3 · Medium-Hard",
   "Slot 4 · Hard",
   "Slot 5 · Expert",
 ] as const;
@@ -198,7 +206,13 @@ export function AssetLibraryClient({
       .filter((a) => {
         const d = difficultyFromLayerCount(a.layer_count);
         const q = readySearch.trim().toLowerCase();
-        if (readyFilter === "Easy" || readyFilter === "Medium" || readyFilter === "Hard") {
+        if (
+          readyFilter === "Easy" ||
+          readyFilter === "Medium" ||
+          readyFilter === "Medium-Hard" ||
+          readyFilter === "Hard" ||
+          readyFilter === "Expert"
+        ) {
           if (d !== readyFilter) return false;
         }
         if (readyFilter === "my" && a.uploaded_by !== adminUserId) return false;
@@ -474,9 +488,32 @@ export function AssetLibraryClient({
       {leftTab === "ready" ? (
         <>
           <div className="mb-3 flex flex-wrap gap-2">
-            {(["all", "Easy", "Medium", "Hard", "my", "community"] as ReadyFilter[]).map((f) => (
+            {([
+              "all",
+              "Easy",
+              "Medium",
+              "Medium-Hard",
+              "Hard",
+              "Expert",
+              "my",
+              "community",
+            ] as ReadyFilter[]).map((f) => (
               <button key={f} type="button" onClick={() => setReadyFilter(f)} className={`rounded-full px-2.5 py-1 text-xs ${readyFilter === f ? "bg-[#7c3aed] text-white" : "border border-white/15 text-white/70"}`}>
-                {f === "my" ? "My Uploads" : f === "community" ? "Community" : f}
+                {f === "my"
+                  ? "My Uploads"
+                  : f === "community"
+                    ? "Community"
+                    : f === "Easy"
+                      ? "Easy (5-25)"
+                      : f === "Medium"
+                        ? "Medium (26-45)"
+                        : f === "Medium-Hard"
+                          ? "Medium-Hard (46-65)"
+                          : f === "Hard"
+                            ? "Hard (66-90)"
+                            : f === "Expert"
+                              ? "Expert (91+)"
+                              : f}
               </button>
             ))}
             <input className="min-w-[170px] flex-1 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white" placeholder="Search title or creator" value={readySearch} onChange={(e) => setReadySearch(e.target.value)} />
