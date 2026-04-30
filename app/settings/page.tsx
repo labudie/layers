@@ -56,6 +56,12 @@ export default function SettingsPage() {
   const [feedbackGoals, setFeedbackGoals] = useState("");
   const [feedbackFrequency, setFeedbackFrequency] = useState("");
   const [feedbackThoughts, setFeedbackThoughts] = useState("");
+  const [feedbackSnap, setFeedbackSnap] = useState<"closed" | "collapsed">("closed");
+  const [feedbackDragOffset, setFeedbackDragOffset] = useState(0);
+  const [feedbackViewportH, setFeedbackViewportH] = useState(1);
+  const feedbackDragging = useRef(false);
+  const feedbackDragStartY = useRef(0);
+  const feedbackDragStartTime = useRef(0);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(
@@ -239,6 +245,22 @@ export default function SettingsPage() {
     nameInputRef.current?.select();
   }, [editingName]);
 
+  useEffect(() => {
+    if (!feedbackSheetOpen) {
+      setFeedbackSnap("closed");
+      return;
+    }
+    const id = window.requestAnimationFrame(() => setFeedbackSnap("collapsed"));
+    return () => window.cancelAnimationFrame(id);
+  }, [feedbackSheetOpen]);
+
+  useEffect(() => {
+    const setVh = () => setFeedbackViewportH(window.innerHeight || 1);
+    setVh();
+    window.addEventListener("resize", setVh);
+    return () => window.removeEventListener("resize", setVh);
+  }, []);
+
   function openFeedbackSheet() {
     setFeedbackError(null);
     setFeedbackSuccess(false);
@@ -249,9 +271,46 @@ export default function SettingsPage() {
 
   function closeFeedbackSheet() {
     setFeedbackSheetOpen(false);
+    setFeedbackSnap("closed");
+    setFeedbackDragOffset(0);
     setFeedbackError(null);
     setFeedbackSubmitting(false);
   }
+
+  const onFeedbackHandleTouchStart = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    feedbackDragStartY.current = e.touches[0].clientY;
+    feedbackDragStartTime.current = Date.now();
+    feedbackDragging.current = true;
+    setFeedbackDragOffset(0);
+  };
+
+  const onFeedbackHandleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!feedbackDragging.current) return;
+    const dy = e.touches[0].clientY - feedbackDragStartY.current;
+    setFeedbackDragOffset(dy);
+  };
+
+  const onFeedbackHandleTouchEnd = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    if (!feedbackDragging.current) return;
+    feedbackDragging.current = false;
+
+    const dy = e.changedTouches[0].clientY - feedbackDragStartY.current;
+    const dt = Math.max(1, Date.now() - feedbackDragStartTime.current);
+    const velocity = dy / dt;
+    const fastDown = velocity > 0.4;
+    const bigDown = dy > 80;
+
+    if (fastDown || bigDown) {
+      closeFeedbackSheet();
+      return;
+    }
+    setFeedbackSnap("collapsed");
+    setFeedbackDragOffset(0);
+  };
 
   async function submitFeedback() {
     const name = feedbackName.trim();
@@ -701,8 +760,32 @@ export default function SettingsPage() {
             onClick={closeFeedbackSheet}
             className="absolute inset-0 bg-black/70"
           />
-          <div className="absolute inset-x-0 bottom-0 rounded-t-[20px] border-t border-white/10 bg-[#1a0a2e]">
-            <div className="flex justify-center pt-3">
+          <div
+            className="absolute inset-x-0 bottom-0 rounded-t-[20px] border-t border-white/10 bg-[#1a0a2e]"
+            style={{
+              transform: `translateY(${Math.max(
+                0,
+                Math.min(
+                  100,
+                  (feedbackSnap === "collapsed" ? 0 : 100) +
+                    (feedbackDragging.current
+                      ? (feedbackDragOffset / Math.max(1, feedbackViewportH)) * 100
+                      : 0),
+                ),
+              )}%)`,
+              transition: feedbackDragging.current
+                ? "none"
+                : "transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+              willChange: "transform",
+              touchAction: "none",
+            }}
+          >
+            <div
+              className="flex justify-center pt-3"
+              onTouchStart={onFeedbackHandleTouchStart}
+              onTouchMove={onFeedbackHandleTouchMove}
+              onTouchEnd={onFeedbackHandleTouchEnd}
+            >
               <div className="h-1 w-10 rounded-full bg-white/30" />
             </div>
             <div className="max-h-[78vh] overflow-y-auto px-4 pb-6 pt-3">
