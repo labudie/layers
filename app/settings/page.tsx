@@ -353,14 +353,14 @@ export default function SettingsPage() {
 
       const { error: insertError } = await sb.from("beta_applications").insert({
         user_id: userId,
-        name,
+        name: name,
         email: normalizedEmail,
         years_experience: feedbackYears,
         primary_tool: feedbackTool,
         heard_about: feedbackSource,
-        hoped_outcome: goals.slice(0, 300),
+        goals: goals,
         play_frequency: feedbackFrequency,
-        open_feedback: thoughts ? thoughts.slice(0, 500) : null,
+        early_feedback: thoughts ? thoughts.slice(0, 500) : null,
       });
       if (insertError) {
         setFeedbackError(insertError.message);
