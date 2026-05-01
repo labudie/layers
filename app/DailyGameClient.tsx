@@ -1070,6 +1070,10 @@ export function DailyGameClient({
       if (guesses.length === 0) return;
       if (!isChallengeFinished(layerCount, guesses)) return;
 
+      const cid =
+        typeof challengeId === "string" ? challengeId.trim() : "";
+      if (!cid) return;
+
       const sb = supabase();
       const {
         data: { user },
@@ -1086,18 +1090,64 @@ export function DailyGameClient({
 
       const positionVal =
         typeof position === "number" ? position : fallbackIndex + 1;
+      const todayEastern = todayYYYYMMDDUSEastern();
 
-      console.log("[results] saving result", {
-        user_id: user.id,
-        challenge_id: challengeId,
-        solved,
-        attempts_used,
-      });
+      let resolvedId: string | null = null;
+      const { data: rowById, error: errById } = await sb
+        .from("challenges")
+        .select("id")
+        .eq("id", cid)
+        .maybeSingle();
+      if (errById) {
+        console.warn(
+          "[results] challenge id lookup failed",
+          summarizeSupabaseError(errById),
+        );
+      } else if (rowById && typeof (rowById as { id?: string }).id === "string") {
+        resolvedId = (rowById as { id: string }).id;
+      }
+
+      if (!resolvedId) {
+        const { data: rowBySlot, error: errBySlot } = await sb
+          .from("challenges")
+          .select("id")
+          .eq("active_date", todayEastern)
+          .eq("position", positionVal)
+          .maybeSingle();
+        if (errBySlot) {
+          console.warn(
+            "[results] challenge slot lookup failed",
+            summarizeSupabaseError(errBySlot),
+          );
+        } else if (
+          rowBySlot &&
+          typeof (rowBySlot as { id?: string }).id === "string"
+        ) {
+          resolvedId = (rowBySlot as { id: string }).id;
+        }
+      }
+
+      if (!resolvedId) {
+        console.warn("[results] skip persist: no challenge row", {
+          challengeId: cid,
+          active_date: todayEastern,
+          position: positionVal,
+        });
+        return;
+      }
+
+      if (resolvedId !== cid) {
+        console.log("[results] remapped stale challenge_id", {
+          from: cid,
+          to: resolvedId,
+          position: positionVal,
+        });
+      }
 
       const { error } = await sb.from("results").upsert(
         {
           user_id: user.id,
-          challenge_id: challengeId,
+          challenge_id: resolvedId,
           solved,
           attempts_used,
           position: positionVal,
@@ -1106,13 +1156,9 @@ export function DailyGameClient({
       );
       if (error) {
         console.error(
-          "[results] error saving - full details:",
-          JSON.stringify(error)
+          "[results] upsert failed",
+          summarizeSupabaseError(error),
         );
-        console.error("[results] error code:", error.code);
-        console.error("[results] error message:", error.message);
-        console.error("[results] error details:", error.details);
-        console.error("[results] error hint:", error.hint);
       }
     },
     []
@@ -2632,7 +2678,7 @@ export function DailyGameClient({
           </div>
         ) : compactGameplayMode ? (
           <div
-            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden"
             style={{ paddingBottom: "max(env(safe-area-inset-bottom), 16px)" }}
           >
             {currentChallenge ? (
@@ -2703,7 +2749,7 @@ export function DailyGameClient({
                   </div>
                 </div>
 
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0 overflow-y-auto">
                   {isSponsored ? (
                     <div
                       style={{
@@ -2721,7 +2767,7 @@ export function DailyGameClient({
                   ) : null}
                   <div
                     ref={tutorialImageRef}
-                    className="relative left-1/2 mb-3 flex min-h-0 min-w-0 flex-1 items-center justify-center w-dvw -translate-x-1/2"
+                    className="relative left-1/2 mb-3 flex min-h-0 min-w-0 w-dvw shrink-0 grow basis-0 items-center justify-center -translate-x-1/2"
                   >
                     <div
                       className="mx-auto flex h-full min-h-0 w-[80%] max-w-full items-center justify-center"
@@ -2835,7 +2881,7 @@ export function DailyGameClient({
                   </div>
 
                   <div className="flex w-full shrink-0 flex-col px-1">
-                    <div className="mt-0 mb-3 flex items-center justify-center rounded-[10px] border-[0.5px] border-[rgba(124,58,237,0.2)] bg-[#1a0a2e] px-4 py-[10px] text-center">
+                    <div className="mt-0 mb-3 flex items-center justify-center rounded-[10px] border-[0.5px] border-[rgba(124,58,237,0.2)] bg-[#1a0a2e] px-4 py-[12px] text-center">
                       <span
                         className="font-mono text-[22px] font-bold leading-none tracking-[0.06em]"
                         style={{
@@ -2849,7 +2895,8 @@ export function DailyGameClient({
                       </span>
                     </div>
 
-                    <div className="grid h-[180px] min-h-[180px] shrink-0 grid-cols-3 gap-[4px]">
+                    <div style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+                    <div className="grid h-[200px] min-h-[200px] shrink-0 grid-cols-3 gap-[6px]">
                   {currentFinished ? (
                     <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
                       <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
@@ -2881,7 +2928,7 @@ export function DailyGameClient({
                           type="button"
                           onClick={() => appendGuessDigit(digit)}
                           disabled={!roundActive}
-                          className="tap-press rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 py-[9px] text-[16px] font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
+                          className="tap-press rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 py-[13px] text-[18px] font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
                         >
                           {digit}
                         </button>
@@ -2890,7 +2937,7 @@ export function DailyGameClient({
                         type="button"
                         onClick={backspaceGuessDigit}
                         disabled={!roundActive || typeof guessInput !== "number"}
-                        className="tap-press flex items-center justify-center rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 py-[9px] text-[11px] text-[#a0a0b0] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
+                        className="tap-press flex items-center justify-center rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 py-[13px] text-[11px] text-[#a0a0b0] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
                         aria-label="Delete"
                       >
                         <svg
@@ -2918,7 +2965,7 @@ export function DailyGameClient({
                         type="button"
                         onClick={() => appendGuessDigit(0)}
                         disabled={!roundActive}
-                        className="tap-press rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 py-[9px] text-[16px] font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
+                        className="tap-press rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 py-[13px] text-[18px] font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
                       >
                         0
                       </button>
@@ -2926,13 +2973,14 @@ export function DailyGameClient({
                         type="button"
                         onClick={submitGuessFromPad}
                         disabled={!canSubmitGuess || typeof guessInput !== "number"}
-                        className="tap-press rounded-[9px] border-[0.5px] border-[#10b981] bg-[#10b981] px-0 py-[9px] text-[16px] font-medium text-white shadow-sm transition-[transform,filter,background-color,color,border-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:border-[#1a3a2e] disabled:bg-[#1a3a2e] disabled:text-[rgba(255,255,255,0.13)] disabled:opacity-100"
+                        className="tap-press rounded-[9px] border-[0.5px] border-[#10b981] bg-[#10b981] px-0 py-[13px] text-[18px] font-medium text-white shadow-sm transition-[transform,filter,background-color,color,border-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:border-[#1a3a2e] disabled:bg-[#1a3a2e] disabled:text-[rgba(255,255,255,0.13)] disabled:opacity-100"
                       >
                         ✓
                       </button>
                     </>
                   )}
                   </div>
+                    </div>
                 </div>
                 </div>
               </>
