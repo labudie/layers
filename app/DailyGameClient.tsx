@@ -703,6 +703,7 @@ export function DailyGameClient({
 
   const [countdownText, setCountdownText] = useState<string | null>(null);
   const [guessInput, setGuessInput] = useState<number | "">("");
+  const [isMobile, setIsMobile] = useState(true);
   const [guessesByIndex, setGuessesByIndex] = useState<GuessRow[][]>(() =>
     challenges.map(() => [])
   );
@@ -753,6 +754,7 @@ export function DailyGameClient({
   const infoButtonRef = useRef<HTMLButtonElement | null>(null);
   const infoPopoverRef = useRef<HTMLDivElement | null>(null);
   const guessInputRef = useRef<HTMLInputElement | null>(null);
+  const compactDesktopInputRef = useRef<HTMLInputElement | null>(null);
   const tutorialImageRef = useRef<HTMLDivElement | null>(null);
   const [modalImageUrl, setModalImageUrl] = useState<string | null>(null);
   const [modalScale, setModalScale] = useState(1);
@@ -768,6 +770,18 @@ export function DailyGameClient({
   const [challengeMainImageLoaded, setChallengeMainImageLoaded] =
     useState(true);
   const prevChallengeImageIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const check = () => {
+      setIsMobile(
+        window.innerWidth < 768 ||
+          /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
+      );
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
@@ -1998,6 +2012,15 @@ export function DailyGameClient({
     void submitGuess();
   }, [canSubmitGuess, guessInput, submitGuess, vibrateKeyTap]);
 
+  useEffect(() => {
+    if (isMobile || !compactGameplayMode) return;
+    const t = window.setTimeout(() => {
+      compactDesktopInputRef.current?.focus();
+      compactDesktopInputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [isMobile, compactGameplayMode, currentChallengeIndex, currentGuesses.length]);
+
   const shareChallengeImage = useCallback(async (ch: Challenge) => {
     if (!ch.image_url) return;
     if (shareBusyId === ch.id) return;
@@ -2997,45 +3020,100 @@ export function DailyGameClient({
                   )}
                 </div>
 
-                <div
-                  style={{
-                    flexShrink: 0,
-                    height: "48px",
-                    margin: "0 14px 6px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "#1a0a2e",
-                    borderRadius: "10px",
-                    border: "0.5px solid rgba(124,58,237,0.2)",
-                    fontSize: "20px",
-                    fontWeight: "700",
-                    color: "rgba(255,255,255,0.13)",
-                  }}
-                >
-                  <span
-                    className="font-mono font-bold leading-none tracking-[0.06em] tabular-nums"
+                {isMobile ? (
+                  <div
                     style={{
-                      color:
-                        typeof guessInput === "number"
-                          ? "#f8f4ff"
-                          : undefined,
+                      flexShrink: 0,
+                      height: "48px",
+                      margin: "0 14px 6px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "#1a0a2e",
+                      borderRadius: "10px",
+                      border: "0.5px solid rgba(124,58,237,0.2)",
+                      fontSize: "20px",
+                      fontWeight: "700",
+                      color: "rgba(255,255,255,0.13)",
                     }}
                   >
-                    {typeof guessInput === "number" ? guessInput : "—"}
-                  </span>
-                </div>
+                    <span
+                      className="font-mono font-bold leading-none tracking-[0.06em] tabular-nums"
+                      style={{
+                        color:
+                          typeof guessInput === "number"
+                            ? "#f8f4ff"
+                            : undefined,
+                      }}
+                    >
+                      {typeof guessInput === "number" ? guessInput : "—"}
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ flexShrink: 0, margin: "0 14px 6px" }}>
+                    <input
+                      ref={compactDesktopInputRef}
+                      type="number"
+                      min={1}
+                      max={999}
+                      value={typeof guessInput === "number" ? guessInput : ""}
+                      placeholder="Type your guess..."
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw.trim() === "") {
+                          setGuessInput("");
+                          return;
+                        }
+                        const n = Number(raw);
+                        if (!Number.isFinite(n)) return;
+                        const clamped = Math.max(1, Math.min(999, Math.floor(n)));
+                        setGuessInput(clamped);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && e.currentTarget.value.trim()) {
+                          e.preventDefault();
+                          submitGuessFromPad();
+                        }
+                      }}
+                      style={{
+                        width: "100%",
+                        background: "#1a0a2e",
+                        borderRadius: "10px",
+                        border: "0.5px solid rgba(124,58,237,0.2)",
+                        padding: "12px 16px",
+                        fontSize: "22px",
+                        fontWeight: "700",
+                        color: "#f8f4ff",
+                        textAlign: "center",
+                        outline: "none",
+                        appearance: "textfield",
+                        MozAppearance: "textfield",
+                      }}
+                    />
+                    <p
+                      style={{
+                        marginTop: "6px",
+                        textAlign: "center",
+                        fontSize: "11px",
+                        color: "#6b7280",
+                      }}
+                    >
+                      Press Enter to submit
+                    </p>
+                  </div>
+                )}
 
-                <div
-                  style={{
-                    flexShrink: 0,
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3, 1fr)",
-                    gap: "5px",
-                    padding: "0 14px",
-                    paddingBottom: "max(env(safe-area-inset-bottom), 8px)",
-                  }}
-                >
+                {isMobile ? (
+                  <div
+                    style={{
+                      flexShrink: 0,
+                      display: "grid",
+                      gridTemplateColumns: "repeat(3, 1fr)",
+                      gap: "5px",
+                      padding: "0 14px",
+                      paddingBottom: "max(env(safe-area-inset-bottom), 8px)",
+                    }}
+                  >
                   {currentFinished ? (
                     <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
                       <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
@@ -3147,7 +3225,8 @@ export function DailyGameClient({
                       </button>
                     </>
                   )}
-                </div>
+                  </div>
+                ) : null}
               </>
             ) : null}
           </div>

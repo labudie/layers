@@ -224,6 +224,11 @@ select {
     color 0.15s var(--smooth);
 }
 
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  display: none;
+}
+
 input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(
     [type="hidden"]
   ):focus-visible,
