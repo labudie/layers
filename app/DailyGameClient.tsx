@@ -2941,8 +2941,6 @@ export function DailyGameClient({
                   style={{
                     flex: 1,
                     minHeight: 0,
-                    maxHeight:
-                      "calc(100dvh - 180px - 48px - 6px - (52px * 4) - (5px * 3) - max(env(safe-area-inset-bottom), 20px))",
                     padding: "0 14px 8px",
                     display: "flex",
                     alignItems: "center",
@@ -3035,7 +3033,7 @@ export function DailyGameClient({
                     gridTemplateColumns: "repeat(3, 1fr)",
                     gap: "5px",
                     padding: "0 14px",
-                    paddingBottom: "max(env(safe-area-inset-bottom), 20px)",
+                    paddingBottom: "max(env(safe-area-inset-bottom), 8px)",
                   }}
                 >
                   {currentFinished ? (
