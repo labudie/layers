@@ -26,6 +26,8 @@ export type AppSiteChromeProps = {
   className?: string;
   /** Classes for the main content wrapper below the header (default flex-1 column). */
   contentClassName?: string;
+  /** When true, the fixed site header is omitted (e.g. compact in-game chrome provides its own). */
+  suppressSiteHeader?: boolean;
 };
 
 const drawerNavClass =
@@ -113,6 +115,7 @@ export function AppSiteChrome({
   children,
   className = "",
   contentClassName = "",
+  suppressSiteHeader = false,
 }: AppSiteChromeProps) {
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -183,6 +186,12 @@ export function AppSiteChrome({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [drawerOpen]);
+
+  useEffect(() => {
+    const onOpenMenu = () => setDrawerOpen(true);
+    window.addEventListener("layers:open-site-menu", onOpenMenu);
+    return () => window.removeEventListener("layers:open-site-menu", onOpenMenu);
+  }, []);
 
   const profileHandle = stripAtHandle(profileUsername ?? "");
   const profileHref =
@@ -348,32 +357,34 @@ export function AppSiteChrome({
       </div>
       ) : null}
 
-      <header className="relative flex min-h-[52px] shrink-0 items-center justify-center px-4 pb-3 pt-4 md:min-h-[56px] md:px-5">
-        <button
-          type="button"
-          aria-label="Open menu"
-          aria-expanded={drawerOpen}
-          onClick={() => setDrawerOpen(true)}
-          className="tap-press absolute left-4 top-1/2 z-10 flex h-11 min-h-[44px] w-11 min-w-[44px] -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-[rgba(26,10,46,0.75)] text-lg font-semibold text-white shadow-sm transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-white/10 hover:brightness-105 md:left-5"
-        >
-          ☰
-        </button>
-        <div className="pointer-events-none max-w-[min(16rem,calc(100%-6.5rem))] truncate text-center text-xl font-extrabold tracking-tight">
-          {title === "Layers" ? (
-            <img src="/Layers App Logo.svg" alt="Layers" height="22" />
-          ) : (
-            title
-          )}
-        </div>
-        <div className="absolute right-4 top-1/2 z-10 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-end md:right-5">
-          {right ?? (
-            <span
-              className="pointer-events-none inline-block h-11 w-11 shrink-0"
-              aria-hidden
-            />
-          )}
-        </div>
-      </header>
+      {!suppressSiteHeader ? (
+        <header className="relative flex min-h-[52px] shrink-0 items-center justify-center px-4 pb-3 pt-4 md:min-h-[56px] md:px-5">
+          <button
+            type="button"
+            aria-label="Open menu"
+            aria-expanded={drawerOpen}
+            onClick={() => setDrawerOpen(true)}
+            className="tap-press absolute left-4 top-1/2 z-10 flex h-11 min-h-[44px] w-11 min-w-[44px] -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-[rgba(26,10,46,0.75)] text-lg font-semibold text-white shadow-sm transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-white/10 hover:brightness-105 md:left-5"
+          >
+            ☰
+          </button>
+          <div className="pointer-events-none max-w-[min(16rem,calc(100%-6.5rem))] truncate text-center text-xl font-extrabold tracking-tight">
+            {title === "Layers" ? (
+              <img src="/Layers App Logo.svg" alt="Layers" height="22" />
+            ) : (
+              title
+            )}
+          </div>
+          <div className="absolute right-4 top-1/2 z-10 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-end md:right-5">
+            {right ?? (
+              <span
+                className="pointer-events-none inline-block h-11 w-11 shrink-0"
+                aria-hidden
+              />
+            )}
+          </div>
+        </header>
+      ) : null}
 
       {belowHeader}
 

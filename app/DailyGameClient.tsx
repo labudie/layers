@@ -5,7 +5,7 @@
  *   className="relative flex min-h-0 flex-1 flex-col"
  *   style={
  *     {
- *       height: "100dvh",
+ *       height: "100%",
  *       overflow: "hidden",
  *       ...(profilePreviewHandle != null
  *         ? ({ touchAction: "none" } as React.CSSProperties)
@@ -15,7 +15,7 @@
  * >
  *
  * <PullToRefresh
- *   disabled={Boolean(modalImageUrl) || profilePreviewHandle != null}
+ *   disabled={compactGameplayMode || Boolean(modalImageUrl) || profilePreviewHandle != null}
  *   className={`mx-auto flex w-full min-w-0 max-w-3xl flex-1 flex-col px-4 md:px-5 ${
  *     compactGameplayMode ? "h-full min-h-0 overflow-hidden " : ""
  *   }${
@@ -42,8 +42,7 @@
  * >
  *
  * <div
- *   className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
- *   style={{ flex: 1, minHeight: 0 } as CSSProperties}
+ *   style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}
  * >
  */
 /* eslint-disable @next/next/no-img-element */
@@ -2292,6 +2291,7 @@ export function DailyGameClient({
   return (
     <AppSiteChrome
       title="Layers"
+      suppressSiteHeader={compactGameplayMode}
       right={
         typeof dayNumber === "number" && dayNumber > 0 ? (
           <div className="rounded-full border border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.1)] px-3 py-1.5 text-xs font-bold tabular-nums text-white shadow-sm">
@@ -2319,7 +2319,7 @@ export function DailyGameClient({
         className="relative flex min-h-0 flex-1 flex-col"
         style={
           {
-            height: "100dvh",
+            height: "100%",
             overflow: "hidden",
             ...(profilePreviewHandle != null
               ? ({ touchAction: "none" } as React.CSSProperties)
@@ -2328,7 +2328,11 @@ export function DailyGameClient({
         }
       >
         <PullToRefresh
-          disabled={Boolean(modalImageUrl) || profilePreviewHandle != null}
+          disabled={
+            compactGameplayMode ||
+            Boolean(modalImageUrl) ||
+            profilePreviewHandle != null
+          }
           className={`mx-auto flex w-full min-w-0 max-w-3xl flex-1 flex-col px-4 md:px-5 ${
             compactGameplayMode ? "h-full min-h-0 overflow-hidden " : ""
           }${
@@ -2737,16 +2741,121 @@ export function DailyGameClient({
           </div>
         ) : compactGameplayMode ? (
           <div
-            className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-            style={{ flex: 1, minHeight: 0 } as CSSProperties}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              height: "100%",
+              overflow: "hidden",
+            }}
           >
             {currentChallenge ? (
               <>
                 <div
-                  className={`flex h-11 shrink-0 min-w-0 items-center justify-end gap-2 ${challengeVisualFadeClassName}`}
+                  style={{
+                    flexShrink: 0,
+                    padding: "12px 14px 6px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
                 >
-                  <div className="flex shrink-0 items-center gap-2">
-                    <div className="relative">
+                  <button
+                    type="button"
+                    aria-label="Open menu"
+                    className="tap-press flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-[rgba(26,10,46,0.75)] text-lg font-semibold text-white shadow-sm transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-white/10 hover:brightness-105"
+                    onClick={() => {
+                      window.dispatchEvent(
+                        new CustomEvent("layers:open-site-menu"),
+                      );
+                    }}
+                  >
+                    ☰
+                  </button>
+                  <div className="flex min-w-0 flex-1 justify-center px-2">
+                    <img src="/Layers App Logo.svg" alt="Layers" height={22} />
+                  </div>
+                  <div className="flex shrink-0 justify-end">
+                    {typeof dayNumber === "number" && dayNumber > 0 ? (
+                      <div className="rounded-full border border-[rgba(124,58,237,0.35)] bg-[rgba(124,58,237,0.1)] px-3 py-1.5 text-xs font-bold tabular-nums text-white shadow-sm">
+                        Daily #{dayNumber}
+                      </div>
+                    ) : (
+                      <span
+                        className="inline-block h-11 w-11 shrink-0"
+                        aria-hidden
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  className={challengeVisualFadeClassName}
+                  style={{
+                    flexShrink: 0,
+                    padding: "0 14px 6px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
+                >
+                  <div className="min-w-0 flex-1 pr-1">
+                    <p
+                      className="break-words text-white"
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        margin: 0,
+                      }}
+                    >
+                      {currentChallenge.title ?? "Untitled"}
+                    </p>
+                    <p
+                      style={{
+                        fontSize: "10px",
+                        color: "#a0a0b0",
+                        margin: "4px 0 0",
+                      }}
+                    >
+                      Challenge {currentChallengeIndex + 1} of {total}
+                    </p>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <div
+                      className="flex shrink-0 items-center gap-1.5"
+                      role="img"
+                      aria-label={`Guesses used ${currentGuesses.length} of ${MAX_GUESSES}`}
+                    >
+                      {Array.from({ length: MAX_GUESSES }).map((_, i) => {
+                        const isUsed = i < currentGuesses.length;
+                        const isActive =
+                          !isUsed &&
+                          i === currentGuesses.length &&
+                          roundActive &&
+                          currentGuesses.length < MAX_GUESSES;
+                        return (
+                          <span
+                            key={`${currentChallenge.id}-compact-pip-${i}`}
+                            className="inline-block h-[5px] w-[28px] rounded-[3px]"
+                            style={{
+                              backgroundColor: isActive
+                                ? "#7c3aed"
+                                : isUsed
+                                  ? "#ef4444"
+                                  : "#ffffff15",
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="relative shrink-0">
                       <button
                         ref={infoButtonRef}
                         type="button"
@@ -2808,155 +2917,75 @@ export function DailyGameClient({
                   </div>
                 </div>
 
-                {isSponsored ? (
-                  <div
-                    className="shrink-0"
-                    style={{
-                      fontSize: "11px",
-                      color: "#6b7280",
-                      fontWeight: "400",
-                      letterSpacing: "0.04em",
-                      paddingLeft: "2px",
-                      marginTop: "4px",
-                      marginBottom: "6px",
-                    }}
-                  >
-                    Sponsored
-                  </div>
-                ) : null}
-
-                <div
-                  className={`mb-2 flex min-w-0 shrink-0 items-start justify-between gap-3 ${challengeVisualFadeClassName}`}
-                >
-                  <div className="min-w-0 flex-1 pr-2">
-                    <p className="break-words text-sm font-semibold leading-snug text-white">
-                      {currentChallenge.title ?? "Untitled"}
-                    </p>
-                    <p className="mt-1 text-[11px] font-mono text-white/60">
-                      Challenge {currentChallengeIndex + 1} of {total}
-                    </p>
-                  </div>
-                  <div
-                    className="flex shrink-0 items-center gap-1.5"
-                    role="img"
-                    aria-label={`Guesses used ${currentGuesses.length} of ${MAX_GUESSES}`}
-                  >
-                    {Array.from({ length: MAX_GUESSES }).map((_, i) => {
-                      const isUsed = i < currentGuesses.length;
-                      const isActive =
-                        !isUsed &&
-                        i === currentGuesses.length &&
-                        roundActive &&
-                        currentGuesses.length < MAX_GUESSES;
-                      return (
-                        <span
-                          key={`${currentChallenge.id}-compact-pip-${i}`}
-                          className="inline-block h-[5px] w-[28px] rounded-[3px]"
-                          style={{
-                            backgroundColor: isActive
-                              ? "#7c3aed"
-                              : isUsed
-                                ? "#ef4444"
-                                : "#ffffff15",
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-
                 <div
                   ref={tutorialImageRef}
-                  className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-                  style={{ minHeight: 0 }}
+                  className={challengeVisualFadeClassName}
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    padding: "0 14px 8px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                  }}
                 >
-                  <div
-                    className="mx-auto flex h-full min-h-0 w-full max-w-[80%] flex-1 flex-col overflow-hidden"
-                    style={{
-                      background: "transparent",
-                      backgroundColor: "transparent",
-                    }}
-                  >
-                    <div
-                      className={`box-border flex h-full min-h-0 w-full min-w-0 flex-1 cursor-zoom-in items-center justify-center overflow-hidden rounded-[14px] ${imageFeedbackClassName} ${challengeVisualFadeClassName}`}
-                      style={{
-                        background: "transparent",
-                        backgroundColor: "transparent",
-                      }}
-                      onClick={() => {
-                        if (displayChallengeImageUrl)
-                          openImageModal(displayChallengeImageUrl);
-                      }}
-                    >
-                      <div
-                        className="relative flex h-full min-h-0 w-full min-w-0 items-center justify-center overflow-hidden"
-                        style={{
-                          background: "transparent",
-                          backgroundColor: "transparent",
-                          marginBottom: "10px",
+                  {currentChallenge.image_url ? (
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.img
+                        key={currentChallenge.id}
+                        src={displayChallengeImageUrl ?? ""}
+                        alt={currentChallenge.title ?? "Challenge image"}
+                        loading="eager"
+                        decoding="async"
+                        onLoad={() => setChallengeMainImageLoaded(true)}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{
+                          opacity: challengeMainImageLoaded ? 1 : 0,
+                          scale: 1,
                         }}
-                      >
-                        {currentChallenge.image_url ? (
-                          <AnimatePresence mode="wait" initial={false}>
-                            <motion.img
-                              key={currentChallenge.id}
-                              src={displayChallengeImageUrl ?? ""}
-                              alt={currentChallenge.title ?? "Challenge image"}
-                              loading="eager"
-                              decoding="async"
-                              onLoad={() => setChallengeMainImageLoaded(true)}
-                              initial={{ opacity: 0, scale: 0.95 }}
-                              animate={{
-                                opacity: challengeMainImageLoaded ? 1 : 0,
-                                scale: 1,
-                              }}
-                              exit={{ opacity: 0 }}
-                              transition={{
-                                duration: 0.25,
-                                ease: "easeOut",
-                              }}
-                              className="block h-full w-full max-h-full object-contain"
-                              style={{
-                                borderRadius: "14px",
-                                overflow: "hidden",
-                                display: "block",
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "contain",
-                                background: "transparent",
-                                backgroundColor: "transparent",
-                              }}
-                            />
-                          </AnimatePresence>
-                        ) : (
-                          <canvas
-                            ref={canvasRef}
-                            className="block h-full w-full max-h-full min-h-0 object-contain"
-                            style={{
-                              background: "transparent",
-                              backgroundColor: "transparent",
-                              width: "100%",
-                              height: "100%",
-                            }}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                        exit={{ opacity: 0 }}
+                        transition={{
+                          duration: 0.25,
+                          ease: "easeOut",
+                        }}
+                        className={`cursor-zoom-in ${imageFeedbackClassName}`}
+                        onClick={() => {
+                          if (displayChallengeImageUrl)
+                            openImageModal(displayChallengeImageUrl);
+                        }}
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                          objectFit: "contain",
+                          borderRadius: "12px",
+                          display: "block",
+                        }}
+                      />
+                    </AnimatePresence>
+                  ) : (
+                    <canvas
+                      ref={canvasRef}
+                      className="bg-transparent"
+                      style={{
+                        maxWidth: "100%",
+                        maxHeight: "100%",
+                        display: "block",
+                        borderRadius: "12px",
+                        width: "100%",
+                        height: "100%",
+                      }}
+                    />
+                  )}
                 </div>
 
                 <div
-                  className="flex w-full shrink-0 flex-col px-1"
                   style={{
-                    paddingBottom:
-                      "calc(env(safe-area-inset-bottom) + 16px)",
                     flexShrink: 0,
+                    margin: "0 14px 6px",
                   }}
                 >
-                  <div
-                    className="mt-0 flex items-center justify-center rounded-[10px] border-[0.5px] border-[rgba(124,58,237,0.2)] bg-[#1a0a2e] px-4 py-[12px] text-center"
-                    style={{ marginBottom: "8px" }}
-                  >
+                  <div className="flex items-center justify-center rounded-[10px] border-[0.5px] border-[rgba(124,58,237,0.2)] bg-[#1a0a2e] px-4 py-[12px] text-center">
                     <span
                       className="font-mono text-[22px] font-bold leading-none tracking-[0.06em]"
                       style={{
@@ -2969,106 +2998,130 @@ export function DailyGameClient({
                       {typeof guessInput === "number" ? guessInput : "—"}
                     </span>
                   </div>
+                </div>
 
-                  <div
-                    className="grid h-[200px] min-h-[200px] shrink-0 grid-cols-3"
-                    style={{ gap: "6px" }}
-                  >
-                    {currentFinished ? (
-                      <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
-                        <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
-                          {solvedWithCorrect ? "Correct" : "Answer"}
-                        </div>
-                        <div className="font-mono text-4xl font-extrabold tracking-tight text-white">
-                          {currentAnswer ?? "—"}
-                        </div>
-                        {pendingAutoAdvance ? (
-                          <p className="text-sm font-semibold text-[var(--success)]">
-                            Continuing…
-                          </p>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={challengeTransitioning}
-                            onClick={() =>
-                              advanceAfterTransitionOut(isLastChallenge)
-                            }
-                            className="inline-flex min-h-[48px] items-center justify-center rounded-[var(--radius-pill)] bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40"
-                          >
-                            {isLastChallenge
-                              ? "View daily summary"
-                              : "Next challenge"}
-                          </button>
-                        )}
+                <div
+                  style={{
+                    flexShrink: 0,
+                    padding: "0 14px",
+                    paddingBottom:
+                      "calc(env(safe-area-inset-bottom) + 12px)",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, 1fr)",
+                    gap: "6px",
+                  }}
+                  className="h-[200px] min-h-[200px]"
+                >
+                  {currentFinished ? (
+                    <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
+                        {solvedWithCorrect ? "Correct" : "Answer"}
                       </div>
-                    ) : (
-                      <>
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
-                          <button
-                            key={`digit-${digit}`}
-                            type="button"
-                            onClick={() => appendGuessDigit(digit)}
-                            disabled={!roundActive}
-                            className="tap-press rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
-                            style={{ padding: "14px 0", fontSize: "18px" }}
-                          >
-                            {digit}
-                          </button>
-                        ))}
+                      <div className="font-mono text-4xl font-extrabold tracking-tight text-white">
+                        {currentAnswer ?? "—"}
+                      </div>
+                      {pendingAutoAdvance ? (
+                        <p className="text-sm font-semibold text-[var(--success)]">
+                          Continuing…
+                        </p>
+                      ) : (
                         <button
                           type="button"
-                          onClick={backspaceGuessDigit}
-                          disabled={
-                            !roundActive || typeof guessInput !== "number"
+                          disabled={challengeTransitioning}
+                          onClick={() =>
+                            advanceAfterTransitionOut(isLastChallenge)
                           }
-                          className="tap-press flex items-center justify-center rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 text-[#a0a0b0] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
-                          aria-label="Delete"
-                          style={{ padding: "14px 0", fontSize: "18px" }}
+                          className="inline-flex min-h-[48px] items-center justify-center rounded-[var(--radius-pill)] bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40"
                         >
-                          <svg
-                            width="28"
-                            height="28"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M21 5H9.5a2 2 0 0 0-1.4.58L3 10.67a2 2 0 0 0 0 2.83l5.1 5.09a2 2 0 0 0 1.4.58H21a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinejoin="round"
-                            />
-                            <path
-                              d="m15.5 9.5-5 5m0-5 5 5"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                            />
-                          </svg>
+                          {isLastChallenge
+                            ? "View daily summary"
+                            : "Next challenge"}
                         </button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
                         <button
+                          key={`digit-${digit}`}
                           type="button"
-                          onClick={() => appendGuessDigit(0)}
+                          onClick={() => appendGuessDigit(digit)}
                           disabled={!roundActive}
-                          className="tap-press rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
-                          style={{ padding: "14px 0", fontSize: "18px" }}
+                          className="tap-press border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
+                          style={{
+                            padding: "13px 0",
+                            fontSize: "18px",
+                            borderRadius: "10px",
+                          }}
                         >
-                          0
+                          {digit}
                         </button>
-                        <button
-                          type="button"
-                          onClick={submitGuessFromPad}
-                          disabled={
-                            !canSubmitGuess || typeof guessInput !== "number"
-                          }
-                          className="tap-press rounded-[9px] border-[0.5px] border-[#10b981] bg-[#10b981] px-0 font-medium text-white shadow-sm transition-[transform,filter,background-color,color,border-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:border-[#1a3a2e] disabled:bg-[#1a3a2e] disabled:text-[rgba(255,255,255,0.13)] disabled:opacity-100"
-                          style={{ padding: "14px 0", fontSize: "18px" }}
+                      ))}
+                      <button
+                        type="button"
+                        onClick={backspaceGuessDigit}
+                        disabled={
+                          !roundActive || typeof guessInput !== "number"
+                        }
+                        className="tap-press flex items-center justify-center border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 text-[#a0a0b0] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
+                        aria-label="Delete"
+                        style={{
+                          padding: "13px 0",
+                          fontSize: "18px",
+                          borderRadius: "10px",
+                        }}
+                      >
+                        <svg
+                          width="28"
+                          height="28"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
                         >
-                          ✓
-                        </button>
-                      </>
-                    )}
-                  </div>
+                          <path
+                            d="M21 5H9.5a2 2 0 0 0-1.4.58L3 10.67a2 2 0 0 0 0 2.83l5.1 5.09a2 2 0 0 0 1.4.58H21a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="m15.5 9.5-5 5m0-5 5 5"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => appendGuessDigit(0)}
+                        disabled={!roundActive}
+                        className="tap-press border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
+                        style={{
+                          padding: "13px 0",
+                          fontSize: "18px",
+                          borderRadius: "10px",
+                        }}
+                      >
+                        0
+                      </button>
+                      <button
+                        type="button"
+                        onClick={submitGuessFromPad}
+                        disabled={
+                          !canSubmitGuess || typeof guessInput !== "number"
+                        }
+                        className="tap-press border-[0.5px] border-[#10b981] bg-[#10b981] px-0 font-medium text-white shadow-sm transition-[transform,filter,background-color,color,border-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:border-[#1a3a2e] disabled:bg-[#1a3a2e] disabled:text-[rgba(255,255,255,0.13)] disabled:opacity-100"
+                        style={{
+                          padding: "13px 0",
+                          fontSize: "18px",
+                          borderRadius: "10px",
+                        }}
+                      >
+                        ✓
+                      </button>
+                    </>
+                  )}
                 </div>
               </>
             ) : null}
