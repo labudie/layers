@@ -1,3 +1,51 @@
+/*
+ * Outermost game wrapper `div` + next 3 levels (opening tags only; `return` → main column → `PullToRefresh` → branch wrapper → compact game root).
+ *
+ * <div
+ *   className="relative flex min-h-0 flex-1 flex-col"
+ *   style={
+ *     {
+ *       height: "100dvh",
+ *       overflow: "hidden",
+ *       ...(profilePreviewHandle != null
+ *         ? ({ touchAction: "none" } as React.CSSProperties)
+ *         : {}),
+ *     } as CSSProperties
+ *   }
+ * >
+ *
+ * <PullToRefresh
+ *   disabled={Boolean(modalImageUrl) || profilePreviewHandle != null}
+ *   className={`mx-auto flex w-full min-w-0 max-w-3xl flex-1 flex-col px-4 md:px-5 ${
+ *     compactGameplayMode ? "h-full min-h-0 overflow-hidden " : ""
+ *   }${
+ *     showNoChallengesHome
+ *       ? "bg-[#0f0520]"
+ *       : showDailyHome
+ *         ? "bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(124,58,237,0.35),transparent_55%),linear-gradient(180deg,#1e0b3a_0%,#0f0520_45%,#06020f_100%)]"
+ *         : ""
+ *   }`}
+ *   scrollAreaClassName={compactGameplayMode ? "overflow-y-hidden" : ""}
+ *   scrollAreaStyle={
+ *     compactGameplayMode ? { overflow: "hidden", height: "100%" } : undefined
+ *   }
+ *   contentClassName={
+ *     compactGameplayMode ? "h-full flex flex-col min-h-0 min-w-0" : ""
+ *   }
+ *   onRefresh={refreshTodayChallenges}
+ * >
+ *
+ * <div
+ *   className={
+ *     compactGameplayMode ? "h-full flex flex-col" : "flex min-h-0 min-w-0 flex-1 flex-col"
+ *   }
+ * >
+ *
+ * <div
+ *   className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+ *   style={{ flex: 1, minHeight: 0 } as CSSProperties}
+ * >
+ */
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
@@ -2270,9 +2318,13 @@ export function DailyGameClient({
       <div
         className="relative flex min-h-0 flex-1 flex-col"
         style={
-          profilePreviewHandle != null
-            ? ({ touchAction: "none" } as React.CSSProperties)
-            : undefined
+          {
+            height: "100dvh",
+            overflow: "hidden",
+            ...(profilePreviewHandle != null
+              ? ({ touchAction: "none" } as React.CSSProperties)
+              : {}),
+          } as CSSProperties
         }
       >
         <PullToRefresh
@@ -2289,23 +2341,19 @@ export function DailyGameClient({
           scrollAreaClassName={compactGameplayMode ? "overflow-y-hidden" : ""}
           scrollAreaStyle={
             compactGameplayMode
-              ? ({
-                  overflow: "hidden",
-                  overflowY: "hidden",
-                  overflowX: "hidden",
-                } satisfies CSSProperties)
+              ? { overflow: "hidden", height: "100%" }
               : undefined
           }
           contentClassName={
-            compactGameplayMode ? "flex h-full min-h-0 min-w-0 flex-col" : ""
+            compactGameplayMode ? "h-full flex flex-col min-h-0 min-w-0" : ""
           }
           onRefresh={refreshTodayChallenges}
         >
         <div
           className={
             compactGameplayMode
-              ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-0"
-              : "pb-[120px]"
+              ? "h-full flex flex-col"
+              : "flex min-h-0 min-w-0 flex-1 flex-col"
           }
         >
         {!gameDataReady && challenges.length > 0 ? (
@@ -2690,15 +2738,7 @@ export function DailyGameClient({
         ) : compactGameplayMode ? (
           <div
             className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-            style={
-              {
-                display: "flex",
-                flexDirection: "column",
-                height: "100%",
-                minHeight: 0,
-                overflow: "hidden",
-              } as CSSProperties
-            }
+            style={{ flex: 1, minHeight: 0 } as CSSProperties}
           >
             {currentChallenge ? (
               <>
@@ -2853,6 +2893,7 @@ export function DailyGameClient({
                         style={{
                           background: "transparent",
                           backgroundColor: "transparent",
+                          marginBottom: "10px",
                         }}
                       >
                         {currentChallenge.image_url ? (
@@ -2906,9 +2947,16 @@ export function DailyGameClient({
 
                 <div
                   className="flex w-full shrink-0 flex-col px-1"
-                  style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+                  style={{
+                    paddingBottom:
+                      "calc(env(safe-area-inset-bottom) + 16px)",
+                    flexShrink: 0,
+                  }}
                 >
-                  <div className="mt-0 mb-3 flex items-center justify-center rounded-[10px] border-[0.5px] border-[rgba(124,58,237,0.2)] bg-[#1a0a2e] px-4 py-[12px] text-center">
+                  <div
+                    className="mt-0 flex items-center justify-center rounded-[10px] border-[0.5px] border-[rgba(124,58,237,0.2)] bg-[#1a0a2e] px-4 py-[12px] text-center"
+                    style={{ marginBottom: "8px" }}
+                  >
                     <span
                       className="font-mono text-[22px] font-bold leading-none tracking-[0.06em]"
                       style={{
@@ -2922,7 +2970,10 @@ export function DailyGameClient({
                     </span>
                   </div>
 
-                  <div className="grid h-[200px] min-h-[200px] shrink-0 grid-cols-3 gap-[6px]">
+                  <div
+                    className="grid h-[200px] min-h-[200px] shrink-0 grid-cols-3"
+                    style={{ gap: "6px" }}
+                  >
                     {currentFinished ? (
                       <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
                         <div className="text-xs font-semibold uppercase tracking-wider text-white/70">
@@ -2958,7 +3009,8 @@ export function DailyGameClient({
                             type="button"
                             onClick={() => appendGuessDigit(digit)}
                             disabled={!roundActive}
-                            className="tap-press rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 py-[13px] text-[18px] font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
+                            className="tap-press rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
+                            style={{ padding: "14px 0", fontSize: "18px" }}
                           >
                             {digit}
                           </button>
@@ -2969,8 +3021,9 @@ export function DailyGameClient({
                           disabled={
                             !roundActive || typeof guessInput !== "number"
                           }
-                          className="tap-press flex items-center justify-center rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 py-[13px] text-[11px] text-[#a0a0b0] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
+                          className="tap-press flex items-center justify-center rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 text-[#a0a0b0] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
                           aria-label="Delete"
+                          style={{ padding: "14px 0", fontSize: "18px" }}
                         >
                           <svg
                             width="28"
@@ -2997,7 +3050,8 @@ export function DailyGameClient({
                           type="button"
                           onClick={() => appendGuessDigit(0)}
                           disabled={!roundActive}
-                          className="tap-press rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 py-[13px] text-[18px] font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
+                          className="tap-press rounded-[9px] border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
+                          style={{ padding: "14px 0", fontSize: "18px" }}
                         >
                           0
                         </button>
@@ -3007,7 +3061,8 @@ export function DailyGameClient({
                           disabled={
                             !canSubmitGuess || typeof guessInput !== "number"
                           }
-                          className="tap-press rounded-[9px] border-[0.5px] border-[#10b981] bg-[#10b981] px-0 py-[13px] text-[18px] font-medium text-white shadow-sm transition-[transform,filter,background-color,color,border-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:border-[#1a3a2e] disabled:bg-[#1a3a2e] disabled:text-[rgba(255,255,255,0.13)] disabled:opacity-100"
+                          className="tap-press rounded-[9px] border-[0.5px] border-[#10b981] bg-[#10b981] px-0 font-medium text-white shadow-sm transition-[transform,filter,background-color,color,border-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:border-[#1a3a2e] disabled:bg-[#1a3a2e] disabled:text-[rgba(255,255,255,0.13)] disabled:opacity-100"
+                          style={{ padding: "14px 0", fontSize: "18px" }}
                         >
                           ✓
                         </button>
