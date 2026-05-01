@@ -2773,7 +2773,11 @@ export function DailyGameClient({
                     ☰
                   </button>
                   <div className="flex min-w-0 flex-1 justify-center px-2">
-                    <img src="/Layers App Logo.svg" alt="Layers" height={22} />
+                    <img
+                      src="/Layers App Logo.svg"
+                      alt="Layers"
+                      style={{ height: "22px", width: "auto", display: "block" }}
+                    />
                   </div>
                   <div className="flex shrink-0 justify-end">
                     {typeof dayNumber === "number" && dayNumber > 0 ? (
@@ -2923,6 +2927,7 @@ export function DailyGameClient({
                   style={{
                     flex: 1,
                     minHeight: 0,
+                    maxHeight: "calc(100% - 320px)",
                     padding: "0 14px 8px",
                     display: "flex",
                     alignItems: "center",
@@ -3005,7 +3010,7 @@ export function DailyGameClient({
                     flexShrink: 0,
                     padding: "0 14px",
                     paddingBottom:
-                      "calc(env(safe-area-inset-bottom) + 12px)",
+                      "calc(env(safe-area-inset-bottom) + 16px)",
                     display: "grid",
                     gridTemplateColumns: "repeat(3, 1fr)",
                     gap: "6px",
