@@ -11,6 +11,7 @@ import {
   USERNAME_SPACE_ERROR,
 } from "@/lib/username-input";
 import { sanitizeUserTextField } from "@/lib/supabase-field-sanitize";
+import { claimUnlinkedCreatorChallenges } from "@/lib/claim-creator-challenges";
 import { needsUsernameOnboarding } from "@/lib/profile-onboarding";
 
 type CheckState = "idle" | "checking" | "available" | "taken" | "invalid";
@@ -150,6 +151,7 @@ export default function OnboardingPage() {
       setSaving(false);
       return;
     }
+    await claimUnlinkedCreatorChallenges(sb, userId, candidate);
     router.refresh();
     await router.replace("/");
   }

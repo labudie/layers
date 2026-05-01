@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { claimUnlinkedCreatorChallenges } from "@/lib/claim-creator-challenges";
 import { createSupabaseServerClient } from "@/lib/supabase";
 
 export async function GET(request: Request) {
@@ -56,6 +57,7 @@ export async function GET(request: Request) {
       }
 
       if (existingUsername.length > 0) {
+        await claimUnlinkedCreatorChallenges(supabase, user.id, existingUsername);
         return NextResponse.redirect(`${origin}/`);
       }
 
