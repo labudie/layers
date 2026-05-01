@@ -542,6 +542,19 @@ function GameplayCreatorProfileLink({
   );
 }
 
+const compactGameplayDialKeyStyle: CSSProperties = {
+  height: "52px",
+  borderRadius: "10px",
+  background: "#1a0a2e",
+  border: "0.5px solid rgba(255,255,255,0.07)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "18px",
+  fontWeight: "500",
+  color: "#f8f4ff",
+};
+
 function HomeGameSkeleton() {
   return (
     <div
@@ -2776,7 +2789,8 @@ export function DailyGameClient({
                     <img
                       src="/Layers App Logo.svg"
                       alt="Layers"
-                      style={{ height: "22px", width: "auto", display: "block" }}
+                      height={32}
+                      style={{ display: "block", width: "auto", height: "32px" }}
                     />
                   </div>
                   <div className="flex shrink-0 justify-end">
@@ -2927,7 +2941,8 @@ export function DailyGameClient({
                   style={{
                     flex: 1,
                     minHeight: 0,
-                    maxHeight: "calc(100% - 320px)",
+                    maxHeight:
+                      "calc(100dvh - 180px - 48px - 6px - (52px * 4) - (5px * 3) - max(env(safe-area-inset-bottom), 20px))",
                     padding: "0 14px 8px",
                     display: "flex",
                     alignItems: "center",
@@ -2987,35 +3002,41 @@ export function DailyGameClient({
                 <div
                   style={{
                     flexShrink: 0,
+                    height: "48px",
                     margin: "0 14px 6px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "#1a0a2e",
+                    borderRadius: "10px",
+                    border: "0.5px solid rgba(124,58,237,0.2)",
+                    fontSize: "20px",
+                    fontWeight: "700",
+                    color: "rgba(255,255,255,0.13)",
                   }}
                 >
-                  <div className="flex items-center justify-center rounded-[10px] border-[0.5px] border-[rgba(124,58,237,0.2)] bg-[#1a0a2e] px-4 py-[12px] text-center">
-                    <span
-                      className="font-mono text-[22px] font-bold leading-none tracking-[0.06em]"
-                      style={{
-                        color:
-                          typeof guessInput === "number"
-                            ? "#f8f4ff"
-                            : "rgba(255,255,255,0.13)",
-                      }}
-                    >
-                      {typeof guessInput === "number" ? guessInput : "—"}
-                    </span>
-                  </div>
+                  <span
+                    className="font-mono font-bold leading-none tracking-[0.06em] tabular-nums"
+                    style={{
+                      color:
+                        typeof guessInput === "number"
+                          ? "#f8f4ff"
+                          : undefined,
+                    }}
+                  >
+                    {typeof guessInput === "number" ? guessInput : "—"}
+                  </span>
                 </div>
 
                 <div
                   style={{
                     flexShrink: 0,
-                    padding: "0 14px",
-                    paddingBottom:
-                      "calc(env(safe-area-inset-bottom) + 16px)",
                     display: "grid",
                     gridTemplateColumns: "repeat(3, 1fr)",
-                    gap: "6px",
+                    gap: "5px",
+                    padding: "0 14px",
+                    paddingBottom: "max(env(safe-area-inset-bottom), 20px)",
                   }}
-                  className="h-[200px] min-h-[200px]"
                 >
                   {currentFinished ? (
                     <div className="col-span-3 row-span-4 flex min-h-0 flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border border-white/10 bg-[rgba(26,10,46,0.6)] p-3 text-center">
@@ -3052,12 +3073,8 @@ export function DailyGameClient({
                           type="button"
                           onClick={() => appendGuessDigit(digit)}
                           disabled={!roundActive}
-                          className="tap-press border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
-                          style={{
-                            padding: "13px 0",
-                            fontSize: "18px",
-                            borderRadius: "10px",
-                          }}
+                          className="tap-press transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-35"
+                          style={compactGameplayDialKeyStyle}
                         >
                           {digit}
                         </button>
@@ -3068,12 +3085,11 @@ export function DailyGameClient({
                         disabled={
                           !roundActive || typeof guessInput !== "number"
                         }
-                        className="tap-press flex items-center justify-center border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 text-[#a0a0b0] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
+                        className="tap-press transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-35"
                         aria-label="Delete"
                         style={{
-                          padding: "13px 0",
-                          fontSize: "18px",
-                          borderRadius: "10px",
+                          ...compactGameplayDialKeyStyle,
+                          color: "#a0a0b0",
                         }}
                       >
                         <svg
@@ -3101,12 +3117,8 @@ export function DailyGameClient({
                         type="button"
                         onClick={() => appendGuessDigit(0)}
                         disabled={!roundActive}
-                        className="tap-press border-[0.5px] border-[rgba(255,255,255,0.07)] bg-[#1a0a2e] px-0 font-medium text-[#f8f4ff] shadow-sm transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:bg-[#24103f] disabled:opacity-35"
-                        style={{
-                          padding: "13px 0",
-                          fontSize: "18px",
-                          borderRadius: "10px",
-                        }}
+                        className="tap-press transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-35"
+                        style={compactGameplayDialKeyStyle}
                       >
                         0
                       </button>
@@ -3116,11 +3128,21 @@ export function DailyGameClient({
                         disabled={
                           !canSubmitGuess || typeof guessInput !== "number"
                         }
-                        className="tap-press border-[0.5px] border-[#10b981] bg-[#10b981] px-0 font-medium text-white shadow-sm transition-[transform,filter,background-color,color,border-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:border-[#1a3a2e] disabled:bg-[#1a3a2e] disabled:text-[rgba(255,255,255,0.13)] disabled:opacity-100"
+                        className="tap-press transition-[transform,filter,background-color,color,border-color] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-100"
                         style={{
-                          padding: "13px 0",
-                          fontSize: "18px",
-                          borderRadius: "10px",
+                          ...compactGameplayDialKeyStyle,
+                          ...(!canSubmitGuess ||
+                          typeof guessInput !== "number"
+                            ? {
+                                background: "#1a3a2e",
+                                border: "0.5px solid #1a3a2e",
+                                color: "rgba(255,255,255,0.13)",
+                              }
+                            : {
+                                background: "#10b981",
+                                border: "0.5px solid #10b981",
+                                color: "#fff",
+                              }),
                         }}
                       >
                         ✓

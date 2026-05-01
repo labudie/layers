@@ -373,7 +373,8 @@ export function AppSiteChrome({
               <img
                 src="/Layers App Logo.svg"
                 alt="Layers"
-                style={{ height: "22px", width: "auto", display: "block" }}
+                height={32}
+                style={{ display: "block", width: "auto", height: "32px" }}
               />
             ) : (
               title
