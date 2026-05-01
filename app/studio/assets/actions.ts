@@ -5,43 +5,29 @@ import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import { getPosition } from "@/lib/asset-difficulty";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
-
-const ADMIN_EMAIL = "rjlabudie@gmail.com".toLowerCase();
+import { assertSupabaseImageUrlIsPngOrJpeg } from "@/lib/server-image-magic";
+import { isStudioAdminSession } from "@/lib/studio-admin";
+import {
+  parseValidatedLayerCount,
+  sanitizeUserTextField,
+} from "@/lib/supabase-field-sanitize";
 
 type AdminGate =
   | { ok: true; sb: ReturnType<typeof createSupabaseServerClient> }
   | { ok: false; error: string };
 
 async function getAdminSupabase(): Promise<AdminGate> {
-  const sb = createSupabaseServerClient(await cookies());
-  const {
-    data: { user },
-  } = await sb.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-
-  let email = (user.email ?? "").trim().toLowerCase();
-  if (!email && typeof user.user_metadata?.email === "string") {
-    email = user.user_metadata.email.trim().toLowerCase();
+  try {
+    const sb = createSupabaseServerClient(await cookies());
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
+    if (!user) return { ok: false, error: "Not signed in." };
+    if (!(await isStudioAdminSession(sb, user))) return { ok: false, error: "Access denied." };
+    return { ok: true, sb };
+  } catch {
+    return { ok: false, error: "Could not verify admin session." };
   }
-  if (!email && Array.isArray(user.identities)) {
-    for (const ident of user.identities as Array<{
-      identity_data?: { email?: string };
-    }>) {
-      const ie = ident?.identity_data?.email;
-      if (typeof ie === "string" && ie.trim()) {
-        email = ie.trim().toLowerCase();
-        break;
-      }
-    }
-  }
-  if (!email && user.id) {
-    const { data: prof } = await sb.from("profiles").select("email").eq("id", user.id).maybeSingle();
-    const pe = (prof as { email?: string | null } | null)?.email;
-    if (typeof pe === "string" && pe.trim()) email = pe.trim().toLowerCase();
-  }
-
-  if (email !== ADMIN_EMAIL) return { ok: false, error: "Access denied." };
-  return { ok: true, sb };
 }
 
 async function computeDayNumberForDate(
@@ -103,15 +89,25 @@ export type AutoSchedulePreviewRow = {
 };
 
 function validateAssetFields(f: AssetUpsertFields): string | null {
-  const title = String(f.title ?? "").trim();
-  const software = String(f.software ?? "").trim();
-  const category = String(f.category ?? "").trim();
-  const layerCount = Number(f.layer_count);
-  const sponsorName = String(f.sponsor_name ?? "").trim();
+  const title = sanitizeUserTextField(f.title, 500);
+  const creatorName = sanitizeUserTextField(f.creator_name, 200);
+  const software = sanitizeUserTextField(f.software, 120);
+  const category = sanitizeUserTextField(f.category, 120);
+  const lc = parseValidatedLayerCount(f.layer_count);
+  const sponsorName = sanitizeUserTextField(f.sponsor_name, 200);
+  const imageUrl = sanitizeUserTextField(f.image_url, 2048);
   if (!title || !software || !category) return "Title, software, and category are required.";
-  if (!Number.isFinite(layerCount) || layerCount < 0) return "Layer count must be a valid number.";
+  if (!lc.ok) return lc.error;
   if (f.is_sponsored && !sponsorName) return "Sponsor name is required when sponsored.";
-  if (!String(f.image_url ?? "").trim()) return "Image URL is required.";
+  if (!imageUrl) return "Image URL is required.";
+  // Normalize in-place for callers that read fields back
+  f.title = title;
+  f.creator_name = creatorName;
+  f.software = software;
+  f.category = category;
+  f.layer_count = lc.value;
+  f.sponsor_name = sponsorName;
+  f.image_url = imageUrl;
   return null;
 }
 
@@ -122,6 +118,9 @@ export async function insertReadyAssetAction(
   if (!gate.ok) return { ok: false, error: gate.error };
   const err = validateAssetFields(fields);
   if (err) return { ok: false, error: err };
+
+  const magic = await assertSupabaseImageUrlIsPngOrJpeg(fields.image_url);
+  if (!magic.ok) return { ok: false, error: magic.error };
 
   const { sb } = gate;
   console.log("[assets][insertReady][before]", {
@@ -178,6 +177,8 @@ export async function insertReadyAssetsBatchAction(
   for (const fields of fieldsList) {
     const err = validateAssetFields(fields);
     if (err) return { ok: false, error: err };
+    const magic = await assertSupabaseImageUrlIsPngOrJpeg(fields.image_url);
+    if (!magic.ok) return { ok: false, error: magic.error };
   }
 
   const userId = (await gate.sb.auth.getUser()).data.user?.id ?? null;
@@ -500,6 +501,11 @@ export async function updateAssetAction(
   const err = validateAssetFields(merged);
   if (err) return { ok: false, error: err };
 
+  if (merged.image_url) {
+    const magic = await assertSupabaseImageUrlIsPngOrJpeg(merged.image_url);
+    if (!magic.ok) return { ok: false, error: magic.error };
+  }
+
   const { error } = await sb.from("assets").update(patch).eq("id", id);
   if (error) {
     console.error("[assets] update", error);
@@ -540,6 +546,9 @@ export async function approveSubmissionToAssetAction(
   };
   const err = validateAssetFields(baseFields);
   if (err) return { ok: false, error: err };
+
+  const magic = await assertSupabaseImageUrlIsPngOrJpeg(baseFields.image_url);
+  if (!magic.ok) return { ok: false, error: magic.error };
 
   const userId = (await sb.auth.getUser()).data.user?.id ?? null;
   const { error: insertErr } = await sb.from("assets").insert({
@@ -584,7 +593,7 @@ export async function rejectSubmissionAction(
       status: "rejected",
       reviewed_at: new Date().toISOString(),
       reviewed_by: userId,
-      review_note: note.trim() || null,
+      review_note: sanitizeUserTextField(note, 4000) || null,
     })
     .eq("id", submissionId)
     .eq("status", "pending");
@@ -853,10 +862,15 @@ export async function publishScheduledDayAction(
   for (let p = 1; p <= 5; p++) {
     if (!byPos.has(p)) continue;
     const row = byPos.get(p)!;
-    if (!String(row.image_url ?? "").trim()) {
+    const rasterUrl = String(row.image_url ?? "").trim();
+    if (!rasterUrl) {
       return { ok: false, error: `Position ${p} is missing an image URL.` };
     }
     if (existingByPosition.has(p)) continue;
+
+    const magic = await assertSupabaseImageUrlIsPngOrJpeg(rasterUrl);
+    if (!magic.ok) return { ok: false, error: `Position ${p}: ${magic.error}` };
+
     insertPayload.push({
       title: String(row.title ?? "").trim() || "Untitled",
       creator_name: row.creator_name ? String(row.creator_name) : null,
@@ -868,7 +882,7 @@ export async function publishScheduledDayAction(
       position: p,
       is_sponsored: Boolean(row.is_sponsored),
       sponsor_name: row.is_sponsored ? (row.sponsor_name ? String(row.sponsor_name) : null) : null,
-      image_url: row.image_url ? String(row.image_url) : null,
+      image_url: rasterUrl,
     });
   }
 

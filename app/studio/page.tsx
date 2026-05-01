@@ -12,7 +12,13 @@ import {
 import type { AdvancedAdminAnalytics } from "@/lib/admin-studio-analytics";
 import { loadAdvancedAdminAnalytics } from "@/lib/admin-studio-analytics";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
+import { assertSupabaseImageUrlIsPngOrJpeg } from "@/lib/server-image-magic";
+import {
+  parseValidatedLayerCount,
+  sanitizeUserTextField,
+} from "@/lib/supabase-field-sanitize";
 import { createSupabaseServerClient } from "@/lib/supabase";
+import { isStudioAdminSession } from "@/lib/studio-admin";
 import { AdminSubmissionImage } from "@/app/studio/AdminSubmissionImage";
 import { AnalyticsExportButton } from "@/app/studio/AnalyticsExportButton";
 import { DeleteButton } from "@/app/studio/DeleteButton";
@@ -25,8 +31,6 @@ import {
   AtCreatorDisplay,
   AtUsernameDisplay,
 } from "@/lib/AtHandle";
-
-const ADMIN_EMAIL = "rjlabudie@gmail.com".toLowerCase();
 
 type ChallengeAdminRow = {
   id: string;
@@ -280,38 +284,15 @@ async function loadAdminAnalytics(
 
 /** Uses the same server Supabase client + session cookies as the rest of the page. */
 async function assertAdminOrNull(): Promise<boolean> {
-  const sb = createSupabaseServerClient(await cookies());
-  const {
-    data: { user },
-  } = await sb.auth.getUser();
-  if (!user) return false;
-
-  let email = (user.email ?? "").trim().toLowerCase();
-  if (!email && typeof user.user_metadata?.email === "string") {
-    email = user.user_metadata.email.trim().toLowerCase();
+  try {
+    const sb = createSupabaseServerClient(await cookies());
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
+    return await isStudioAdminSession(sb, user);
+  } catch {
+    return false;
   }
-  if (!email && Array.isArray(user.identities)) {
-    for (const ident of user.identities as Array<{
-      identity_data?: { email?: string };
-    }>) {
-      const ie = ident?.identity_data?.email;
-      if (typeof ie === "string" && ie.trim()) {
-        email = ie.trim().toLowerCase();
-        break;
-      }
-    }
-  }
-  if (!email && user.id) {
-    const { data: prof } = await sb
-      .from("profiles")
-      .select("email")
-      .eq("id", user.id)
-      .maybeSingle();
-    const pe = (prof as { email?: string | null } | null)?.email;
-    if (typeof pe === "string" && pe.trim()) email = pe.trim().toLowerCase();
-  }
-
-  return email === ADMIN_EMAIL;
 }
 
 async function getUpcomingChallenges(today: string) {
@@ -432,14 +413,14 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
 
     for (let i = 0; i < cards.length; i++) {
       const card = cards[i];
-      const title = String(card.title ?? "").trim();
-      const software = String(card.software ?? "").trim();
-      const category = String(card.category ?? "").trim();
-      const layerCount = Number(card.layer_count);
-      const creatorName = String(card.creator_name ?? "").trim();
+      const title = sanitizeUserTextField(card.title, 500);
+      const software = sanitizeUserTextField(card.software, 120);
+      const category = sanitizeUserTextField(card.category, 120);
+      const lc = parseValidatedLayerCount(card.layer_count);
+      const creatorName = sanitizeUserTextField(card.creator_name, 200);
       const isSponsored = Boolean(card.is_sponsored);
-      const sponsorName = String(card.sponsor_name ?? "").trim();
-      const imageUrl = String(card.image_url ?? "").trim();
+      const sponsorName = sanitizeUserTextField(card.sponsor_name, 200);
+      const imageUrl = sanitizeUserTextField(card.image_url, 2048);
 
       if (!title || !software || !category) {
         return {
@@ -448,9 +429,9 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
           publishedTitles: [],
         };
       }
-      if (!Number.isFinite(layerCount)) {
+      if (!lc.ok) {
         return {
-          error: `Card ${i + 1}: Layer Count must be a number.`,
+          error: `Card ${i + 1}: ${lc.error}`,
           publishedCount: 0,
           publishedTitles: [],
         };
@@ -470,6 +451,15 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
         };
       }
 
+      const magic = await assertSupabaseImageUrlIsPngOrJpeg(imageUrl);
+      if (!magic.ok) {
+        return {
+          error: `Card ${i + 1}: ${magic.error}`,
+          publishedCount: 0,
+          publishedTitles: [],
+        };
+      }
+
       const position = batchStart + i;
       insertPayload.push({
         title,
@@ -477,7 +467,7 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
         day_number: Math.trunc(dayNumber),
         software,
         category,
-        layer_count: Math.trunc(layerCount),
+        layer_count: lc.value,
         active_date: activeDate,
         position,
         is_sponsored: isSponsored,

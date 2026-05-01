@@ -129,12 +129,10 @@ export function GameplayProfileSheet({
       const prof = profileData as ProfileRow;
       setProfile(prof);
 
-      const { data: submissionRows, error: subErr } = await sb
-        .from("submissions")
-        .select("id, title, software, image_url, scheduled_challenge_id")
-        .eq("user_id", prof.id)
-        .eq("status", "approved")
-        .order("created_at", { ascending: false });
+      const { data: submissionRows, error: subErr } = await sb.rpc(
+        "get_public_profile_approved_submissions",
+        { p_profile_user_id: prof.id },
+      );
 
       if (subErr) {
         setWorkItems([]);

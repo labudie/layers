@@ -49,6 +49,7 @@
 "use client";
 
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -554,6 +555,166 @@ const compactGameplayDialKeyStyle: CSSProperties = {
   fontWeight: "500",
   color: "#f8f4ff",
 };
+
+const GuessRoundPips = memo(function GuessRoundPips({
+  challengeId,
+  guessLen,
+  roundActive,
+  pipKeySuffix,
+}: {
+  challengeId: string;
+  guessLen: number;
+  roundActive: boolean;
+  pipKeySuffix: string;
+}) {
+  return (
+    <>
+      {Array.from({ length: MAX_GUESSES }).map((_, i) => {
+        const isUsed = i < guessLen;
+        const isActive =
+          !isUsed &&
+          i === guessLen &&
+          roundActive &&
+          guessLen < MAX_GUESSES;
+        return (
+          <span
+            key={`${challengeId}-${pipKeySuffix}-${i}`}
+            className="inline-block h-[5px] w-[28px] rounded-[3px]"
+            style={{
+              backgroundColor: isActive
+                ? "#7c3aed"
+                : isUsed
+                  ? "#ef4444"
+                  : "#ffffff15",
+            }}
+          />
+        );
+      })}
+    </>
+  );
+});
+
+const DialDigitButton = memo(function DialDigitButton({
+  digit,
+  disabled,
+  onPick,
+}: {
+  digit: number;
+  disabled: boolean;
+  onPick: (digit: number) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(digit)}
+      disabled={disabled}
+      className="tap-press transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-35"
+      style={compactGameplayDialKeyStyle}
+    >
+      {digit}
+    </button>
+  );
+});
+
+const CompactChallengeMotionImage = memo(function CompactChallengeMotionImage({
+  challengeId,
+  src,
+  alt,
+  loaded,
+  feedbackClassName,
+  onLoaded,
+  onOpenZoom,
+}: {
+  challengeId: string;
+  src: string;
+  alt: string;
+  loaded: boolean;
+  feedbackClassName: string;
+  onLoaded: () => void;
+  onOpenZoom: () => void;
+}) {
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.img
+        key={challengeId}
+        src={src}
+        alt={alt}
+        loading="eager"
+        decoding="async"
+        onLoad={onLoaded}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{
+          opacity: loaded ? 1 : 0,
+          scale: 1,
+        }}
+        exit={{ opacity: 0 }}
+        transition={{
+          duration: 0.25,
+          ease: "easeOut",
+        }}
+        className={`cursor-zoom-in ${feedbackClassName}`}
+        onClick={onOpenZoom}
+        style={{
+          maxWidth: "100%",
+          maxHeight: "100%",
+          objectFit: "contain",
+          borderRadius: "12px",
+          display: "block",
+        }}
+      />
+    </AnimatePresence>
+  );
+});
+
+const StandardChallengeMotionImage = memo(function StandardChallengeMotionImage({
+  challengeId,
+  src,
+  alt,
+  loaded,
+  onLoaded,
+  onOpenZoom,
+}: {
+  challengeId: string;
+  src: string;
+  alt: string;
+  loaded: boolean;
+  onLoaded: () => void;
+  onOpenZoom: () => void;
+}) {
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.img
+        key={challengeId}
+        src={src}
+        alt={alt}
+        loading="eager"
+        decoding="async"
+        onLoad={onLoaded}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{
+          opacity: loaded ? 1 : 0,
+          scale: 1,
+        }}
+        exit={{ opacity: 0 }}
+        transition={{
+          duration: 0.25,
+          ease: "easeOut",
+        }}
+        className="block h-full max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain"
+        style={{
+          borderRadius: "14px",
+          overflow: "hidden",
+          display: "block",
+          width: "100%",
+          height: "100%",
+          background: "transparent",
+          backgroundColor: "transparent",
+        }}
+        onClick={onOpenZoom}
+      />
+    </AnimatePresence>
+  );
+});
 
 function HomeGameSkeleton() {
   return (
@@ -2195,6 +2356,10 @@ export function DailyGameClient({
     modalPullStartYRef.current = null;
   }, []);
 
+  const openActiveChallengeZoom = useCallback(() => {
+    if (displayChallengeImageUrl) openImageModal(displayChallengeImageUrl);
+  }, [displayChallengeImageUrl, openImageModal]);
+
   const clampScale = useCallback((value: number) => {
     return Math.max(1, Math.min(4, value));
   }, []);
@@ -2874,27 +3039,12 @@ export function DailyGameClient({
                       role="img"
                       aria-label={`Guesses used ${currentGuesses.length} of ${MAX_GUESSES}`}
                     >
-                      {Array.from({ length: MAX_GUESSES }).map((_, i) => {
-                        const isUsed = i < currentGuesses.length;
-                        const isActive =
-                          !isUsed &&
-                          i === currentGuesses.length &&
-                          roundActive &&
-                          currentGuesses.length < MAX_GUESSES;
-                        return (
-                          <span
-                            key={`${currentChallenge.id}-compact-pip-${i}`}
-                            className="inline-block h-[5px] w-[28px] rounded-[3px]"
-                            style={{
-                              backgroundColor: isActive
-                                ? "#7c3aed"
-                                : isUsed
-                                  ? "#ef4444"
-                                  : "#ffffff15",
-                            }}
-                          />
-                        );
-                      })}
+                      <GuessRoundPips
+                        challengeId={currentChallenge.id}
+                        guessLen={currentGuesses.length}
+                        roundActive={roundActive}
+                        pipKeySuffix="compact-pip"
+                      />
                     </div>
                     <div className="relative shrink-0">
                       <button
@@ -2972,38 +3122,15 @@ export function DailyGameClient({
                   }}
                 >
                   {currentChallenge.image_url ? (
-                    <AnimatePresence mode="wait" initial={false}>
-                      <motion.img
-                        key={currentChallenge.id}
-                        src={displayChallengeImageUrl ?? ""}
-                        alt={currentChallenge.title ?? "Challenge image"}
-                        loading="eager"
-                        decoding="async"
-                        onLoad={() => setChallengeMainImageLoaded(true)}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{
-                          opacity: challengeMainImageLoaded ? 1 : 0,
-                          scale: 1,
-                        }}
-                        exit={{ opacity: 0 }}
-                        transition={{
-                          duration: 0.25,
-                          ease: "easeOut",
-                        }}
-                        className={`cursor-zoom-in ${imageFeedbackClassName}`}
-                        onClick={() => {
-                          if (displayChallengeImageUrl)
-                            openImageModal(displayChallengeImageUrl);
-                        }}
-                        style={{
-                          maxWidth: "100%",
-                          maxHeight: "100%",
-                          objectFit: "contain",
-                          borderRadius: "12px",
-                          display: "block",
-                        }}
-                      />
-                    </AnimatePresence>
+                    <CompactChallengeMotionImage
+                      challengeId={currentChallenge.id}
+                      src={displayChallengeImageUrl ?? ""}
+                      alt={currentChallenge.title ?? "Challenge image"}
+                      loaded={challengeMainImageLoaded}
+                      feedbackClassName={imageFeedbackClassName}
+                      onLoaded={() => setChallengeMainImageLoaded(true)}
+                      onOpenZoom={openActiveChallengeZoom}
+                    />
                   ) : (
                     <canvas
                       ref={canvasRef}
@@ -3144,16 +3271,12 @@ export function DailyGameClient({
                   ) : (
                     <>
                       {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
-                        <button
+                        <DialDigitButton
                           key={`digit-${digit}`}
-                          type="button"
-                          onClick={() => appendGuessDigit(digit)}
+                          digit={digit}
                           disabled={!roundActive}
-                          className="tap-press transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-35"
-                          style={compactGameplayDialKeyStyle}
-                        >
-                          {digit}
-                        </button>
+                          onPick={appendGuessDigit}
+                        />
                       ))}
                       <button
                         type="button"
@@ -3189,15 +3312,11 @@ export function DailyGameClient({
                           />
                         </svg>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => appendGuessDigit(0)}
+                      <DialDigitButton
+                        digit={0}
                         disabled={!roundActive}
-                        className="tap-press transition-[transform,background-color,filter] duration-150 [transition-timing-function:var(--spring)] active:scale-[0.92] hover:brightness-110 disabled:opacity-35"
-                        style={compactGameplayDialKeyStyle}
-                      >
-                        0
-                      </button>
+                        onPick={appendGuessDigit}
+                      />
                       <button
                         type="button"
                         onClick={submitGuessFromPad}
@@ -3275,11 +3394,6 @@ export function DailyGameClient({
                         background: "transparent",
                         backgroundColor: "transparent",
                       }}
-                      onClick={() => {
-                        if (displayChallengeImageUrl) {
-                          openImageModal(displayChallengeImageUrl);
-                        }
-                      }}
                     >
                       <div
                         className="relative max-h-[54vh] w-full max-w-full"
@@ -3289,36 +3403,14 @@ export function DailyGameClient({
                         }}
                       >
                         {currentChallenge.image_url ? (
-                          <AnimatePresence mode="wait" initial={false}>
-                            <motion.img
-                              key={currentChallenge.id}
-                              src={displayChallengeImageUrl ?? ""}
-                              alt={currentChallenge.title ?? "Challenge image"}
-                              loading="eager"
-                              decoding="async"
-                              onLoad={() => setChallengeMainImageLoaded(true)}
-                              initial={{ opacity: 0, scale: 0.95 }}
-                              animate={{
-                                opacity: challengeMainImageLoaded ? 1 : 0,
-                                scale: 1,
-                              }}
-                              exit={{ opacity: 0 }}
-                              transition={{
-                                duration: 0.25,
-                                ease: "easeOut",
-                              }}
-                              className="block h-full max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain"
-                              style={{
-                                borderRadius: "14px",
-                                overflow: "hidden",
-                                display: "block",
-                                width: "100%",
-                                height: "100%",
-                                background: "transparent",
-                                backgroundColor: "transparent",
-                              }}
-                            />
-                          </AnimatePresence>
+                          <StandardChallengeMotionImage
+                            challengeId={currentChallenge.id}
+                            src={displayChallengeImageUrl ?? ""}
+                            alt={currentChallenge.title ?? "Challenge image"}
+                            loaded={challengeMainImageLoaded}
+                            onLoaded={() => setChallengeMainImageLoaded(true)}
+                            onOpenZoom={openActiveChallengeZoom}
+                          />
                         ) : (
                           <canvas
                             ref={canvasRef}
@@ -3354,27 +3446,12 @@ export function DailyGameClient({
                         role="img"
                         aria-label={`Guesses used ${currentGuesses.length} of ${MAX_GUESSES}`}
                       >
-                        {Array.from({ length: MAX_GUESSES }).map((_, i) => {
-                          const isUsed = i < currentGuesses.length;
-                          const isActive =
-                            !isUsed &&
-                            i === currentGuesses.length &&
-                            roundActive &&
-                            currentGuesses.length < MAX_GUESSES;
-                          return (
-                            <span
-                              key={`${currentChallenge.id}-pip-${i}`}
-                              className="inline-block h-[5px] w-[28px] rounded-[3px]"
-                              style={{
-                                backgroundColor: isActive
-                                  ? "#7c3aed"
-                                  : isUsed
-                                    ? "#ef4444"
-                                    : "#ffffff15",
-                              }}
-                            />
-                          );
-                        })}
+                        <GuessRoundPips
+                          challengeId={currentChallenge.id}
+                          guessLen={currentGuesses.length}
+                          roundActive={roundActive}
+                          pipKeySuffix="pip"
+                        />
                       </div>
                       <div className="relative">
                       <button

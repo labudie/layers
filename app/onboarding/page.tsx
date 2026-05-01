@@ -10,6 +10,7 @@ import {
   sanitizeUsernameLiveInput,
   USERNAME_SPACE_ERROR,
 } from "@/lib/username-input";
+import { sanitizeUserTextField } from "@/lib/supabase-field-sanitize";
 import { needsUsernameOnboarding } from "@/lib/profile-onboarding";
 
 type CheckState = "idle" | "checking" | "available" | "taken" | "invalid";
@@ -64,7 +65,7 @@ export default function OnboardingPage() {
     };
   }, [router]);
 
-  const normalized = normalizeUsernameForStorage(raw);
+  const normalized = normalizeUsernameForStorage(sanitizeUserTextField(raw, 128));
 
   const runAvailabilityCheck = useCallback(
     async (candidate: string, uid: string) => {

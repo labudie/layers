@@ -47,3 +47,15 @@ export function createSupabaseServerClient(cookieStore: SupabaseServerCookieStor
     },
   });
 }
+
+/** Anonymous reads (RLS as anon) — safe for globally cached public data like daily challenges. */
+export function createSupabasePublicServerClient() {
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return [];
+      },
+      setAll() {},
+    },
+  });
+}

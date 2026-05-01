@@ -18,6 +18,10 @@ import {
   type SoftwareOption,
   layerCountGuidanceForSoftware,
 } from "@/lib/software-options";
+import {
+  parseValidatedLayerCount,
+  sanitizeUserTextField,
+} from "@/lib/supabase-field-sanitize";
 
 const CATEGORY_OPTIONS = [
   "Branding",
@@ -132,14 +136,18 @@ export default function SubmitPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!userId) return;
-    if (!title.trim()) return setError("Title is required.");
-    const creatorStored = normalizeCreatorNameForStorage(creatorName);
+    const safeTitle = sanitizeUserTextField(title, 500);
+    if (!safeTitle) return setError("Title is required.");
+    const creatorStored = normalizeCreatorNameForStorage(
+      sanitizeUserTextField(creatorName, 64),
+    );
     if (!isValidUsernameNormalized(creatorStored)) {
       return setError(
         "Creator name must be 2–32 characters (letters, numbers, underscores and hyphens only).",
       );
     }
-    if (!Number.isFinite(Number(layerCount))) return setError("Layer count is required.");
+    const lc = parseValidatedLayerCount(layerCount);
+    if (!lc.ok) return setError(lc.error);
     if (!imageFile) return setError("Image is required.");
     if (!confirmOriginal) {
       return setError(
@@ -152,13 +160,12 @@ export default function SubmitPage() {
     setSuccess(null);
     try {
       const ext = imageFile.type === "image/jpeg" ? "jpg" : "png";
-      const safeTitle = title
-        .trim()
+      const slugTitle = safeTitle
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "")
         .slice(0, 60);
-      const path = `submissions/${userId}/${Date.now()}-${safeTitle || "art"}.${ext}`;
+      const path = `submissions/${userId}/${Date.now()}-${slugTitle || "art"}.${ext}`;
       const sb = supabase();
       const { error: uploadErr } = await sb.storage
         .from("challenge-images")
@@ -175,11 +182,11 @@ export default function SubmitPage() {
       const imageUrl = pub.publicUrl;
       const { error: insertErr } = await sb.from("submissions").insert({
         user_id: userId,
-        title: title.trim(),
+        title: safeTitle,
         creator_name: `@${creatorStored}`,
         software,
         category,
-        layer_count: Math.trunc(Number(layerCount)),
+        layer_count: lc.value,
         image_url: imageUrl,
         status: "pending",
       });

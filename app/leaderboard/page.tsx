@@ -216,16 +216,23 @@ export default async function LeaderboardPage({
     timeZone: "America/New_York",
   });
 
-  const { data: todayChallenges } = await supabase
-    .from("challenges")
-    .select("id")
-    .eq("active_date", today);
-
-  const todayIds = (todayChallenges ?? []).map((c) => c.id);
-
   let dailyRows: DailyLeaderboardRow[] = [];
+  let allTimeProfiles: ProfileRow[] | null = null;
+  let creatorRows: CreatorRow[] | null = null;
+  let challengeThumbRows: Array<{
+    creator_name?: string | null;
+    image_url?: string | null;
+  }> | null = null;
 
-  if (todayIds.length > 0) {
+  try {
+    const { data: todayChallenges } = await supabase
+      .from("challenges")
+      .select("id")
+      .eq("active_date", today);
+
+    const todayIds = (todayChallenges ?? []).map((c) => c.id);
+
+    if (todayIds.length > 0) {
     const { data: resultsData } = await supabase
       .from("results")
       .select("user_id, solved, attempts_used, challenge_id, created_at")
@@ -339,31 +346,38 @@ export default async function LeaderboardPage({
       if (fa !== fb) return fa - fb;
       return a.user_id.localeCompare(b.user_id);
     });
+    }
+
+    const { data: profilesOut } = await supabase
+      .from("profiles")
+      .select(
+        "id, username, total_solved, longest_streak, current_streak, avatar_url",
+      )
+      .order("total_solved", { ascending: false })
+      .order("longest_streak", { ascending: false })
+      .order("username", { ascending: true });
+
+    const { data: creatorsOut } = await supabase
+      .from("creator_leaderboard")
+      .select("creator_name, total_submissions, total_downloads, total_players")
+      .order("total_downloads", { ascending: false })
+      .order("total_submissions", { ascending: false })
+      .order("total_players", { ascending: false });
+
+    const { data: thumbsOut } = await supabase
+      .from("challenges")
+      .select("creator_name, image_url, active_date")
+      .not("image_url", "is", null)
+      .order("active_date", { ascending: false });
+
+    allTimeProfiles = profilesOut as ProfileRow[] | null;
+    creatorRows = creatorsOut as CreatorRow[] | null;
+    challengeThumbRows = thumbsOut;
+  } catch (e) {
+    console.error("[leaderboard] Supabase fetch failed", e);
   }
 
   const empty = !dailyRows.length;
-
-  const { data: allTimeProfiles } = await supabase
-    .from("profiles")
-    .select(
-      "id, username, total_solved, longest_streak, current_streak, avatar_url"
-    )
-    .order("total_solved", { ascending: false })
-    .order("longest_streak", { ascending: false })
-    .order("username", { ascending: true });
-
-  const { data: creatorRows } = await supabase
-    .from("creator_leaderboard")
-    .select("creator_name, total_submissions, total_downloads, total_players")
-    .order("total_downloads", { ascending: false })
-    .order("total_submissions", { ascending: false })
-    .order("total_players", { ascending: false });
-
-  const { data: challengeThumbRows } = await supabase
-    .from("challenges")
-    .select("creator_name, image_url, active_date")
-    .not("image_url", "is", null)
-    .order("active_date", { ascending: false });
 
   const thumbByCreator = new Map<string, string>();
   for (const raw of challengeThumbRows ?? []) {
@@ -463,7 +477,7 @@ export default async function LeaderboardPage({
                   </p>
                 ) : (
                   <div className="mt-6">
-                    {(allTimeProfiles as ProfileRow[]).map((row, i) => {
+                    {(allTimeProfiles ?? []).map((row, i) => {
                       const rank = i + 1;
                       const streak = Math.max(
                         0,
@@ -524,7 +538,7 @@ export default async function LeaderboardPage({
                 </p>
               ) : (
                 <div className="mt-6">
-                  {(creatorRows as CreatorRow[]).map((row, i) => {
+                  {(creatorRows ?? []).map((row, i) => {
                     const rank = i + 1;
                     const key = creatorKey(row.creator_name);
                     const thumb = key ? thumbByCreator.get(key) : undefined;

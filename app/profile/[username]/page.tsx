@@ -81,14 +81,18 @@ export default async function PublicProfilePage({
   const profile = profileData as ProfileRow;
   const earned = new Set((profile.badges ?? []) as BadgeId[]);
 
-  const { data: submissionRows } = await supabase
-    .from("submissions")
-    .select("id, title, software, image_url, scheduled_challenge_id")
-    .eq("user_id", profile.id)
-    .eq("status", "approved")
-    .order("created_at", { ascending: false });
-
-  const subs = (submissionRows as SubmissionRow[] | null) ?? [];
+  let subs: SubmissionRow[] = [];
+  try {
+    const { data: submissionRows, error: rpcErr } = await supabase.rpc(
+      "get_public_profile_approved_submissions",
+      { p_profile_user_id: profile.id },
+    );
+    if (!rpcErr && submissionRows) {
+      subs = submissionRows as SubmissionRow[];
+    }
+  } catch {
+    subs = [];
+  }
   const challengeIds = subs
     .map((s) => s.scheduled_challenge_id)
     .filter((id): id is string => Boolean(id));

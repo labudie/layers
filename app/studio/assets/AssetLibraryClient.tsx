@@ -266,9 +266,18 @@ export function AssetLibraryClient({
     for (const spec of specs) {
       if (!spec.raster) continue;
       let layerCount: number | null = null;
+      let psdError: string | null = null;
       if (spec.psd) {
-        const buf = await spec.psd.arrayBuffer();
-        layerCount = parsePsdLayerCount(buf);
+        try {
+          const buf = await spec.psd.arrayBuffer();
+          layerCount = parsePsdLayerCount(buf);
+          if (layerCount == null) {
+            psdError = `Could not read layer count from ${spec.psd.name}.`;
+          }
+        } catch {
+          psdError = `PSD parse failed (${spec.psd.name}).`;
+          layerCount = null;
+        }
       }
       next.push({
         key: spec.key,
@@ -284,7 +293,7 @@ export function AssetLibraryClient({
         sponsor_name: "",
         uploadProgress: 0,
         uploadPhase: "idle",
-        errorText: null,
+        errorText: psdError,
         successText: null,
       });
     }
@@ -374,13 +383,23 @@ export function AssetLibraryClient({
             upsert: true,
           });
         if (uploadErr) {
-          setToast({ type: "error", text: `Upload failed for ${row.title}: ${uploadErr.message}` });
-          return;
+          setDraftPairs((prev) =>
+            prev.map((r) =>
+              r.key === row.key ? { ...r, errorText: uploadErr.message } : r,
+            ),
+          );
+          continue;
         }
         const { data: pub } = sb.storage.from("challenge-images").getPublicUrl(storagePath);
         if (!pub?.publicUrl) {
-          setToast({ type: "error", text: `Could not resolve image URL for ${row.title}.` });
-          return;
+          setDraftPairs((prev) =>
+            prev.map((r) =>
+              r.key === row.key
+                ? { ...r, errorText: "Could not resolve image URL after upload." }
+                : r,
+            ),
+          );
+          continue;
         }
         payloads.push({
           title: row.title.trim(),
@@ -395,7 +414,10 @@ export function AssetLibraryClient({
         validKeys.push(row.key);
       }
       if (payloads.length === 0) {
-        setToast({ type: "error", text: "No valid upload pairs to save." });
+        setToast({
+          type: "error",
+          text: "No uploads completed. Fix per-file errors on the cards above.",
+        });
         return;
       }
       const res = await insertReadyAssetsBatchAction(payloads);

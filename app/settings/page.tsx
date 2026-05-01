@@ -17,6 +17,11 @@ import {
   sanitizeUsernameLiveInput,
   USERNAME_SPACE_ERROR,
 } from "@/lib/username-input";
+import {
+  sanitizeUserTextField,
+  validateInstagramHandle,
+  validateWebsiteUrl,
+} from "@/lib/supabase-field-sanitize";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -140,9 +145,17 @@ export default function SettingsPage() {
     setSuccess(null);
     try {
       const normalized = normalizeUsernameForStorage(displayName);
-      const normalizedBio = bio.trim().slice(0, 100);
-      const normalizedWebsite = websiteUrl.trim();
-      const normalizedInstagram = instagramHandle.trim().replace(/^@+/, "");
+      const normalizedBio = sanitizeUserTextField(bio, 100);
+      const web = validateWebsiteUrl(websiteUrl);
+      if (!web.ok) {
+        setError(web.error);
+        return;
+      }
+      const ig = validateInstagramHandle(instagramHandle);
+      if (!ig.ok) {
+        setError(ig.error);
+        return;
+      }
       if (!isValidUsernameNormalized(normalized)) {
         setError("Username must be 2–32 characters (letters, numbers, _ and - only).");
         return;
@@ -153,8 +166,8 @@ export default function SettingsPage() {
           username: normalized,
           avatar_url: avatarUrl,
           bio: normalizedBio.length ? normalizedBio : null,
-          website_url: normalizedWebsite.length ? normalizedWebsite : null,
-          instagram_handle: normalizedInstagram.length ? normalizedInstagram : null,
+          website_url: web.value,
+          instagram_handle: ig.value,
         },
         { onConflict: "id" }
       );
@@ -163,7 +176,7 @@ export default function SettingsPage() {
         return;
       }
       setDisplayName(normalized);
-      setInstagramHandle(normalizedInstagram);
+      setInstagramHandle(ig.value ?? "");
       setSuccess("Profile saved.");
       window.setTimeout(() => setSuccess(null), 2000);
     } finally {
@@ -206,14 +219,25 @@ export default function SettingsPage() {
         setError("Set a valid username (2–32 characters) before uploading a photo.");
         return;
       }
+      const normalizedBio = sanitizeUserTextField(bio, 100);
+      const web = validateWebsiteUrl(websiteUrl);
+      if (!web.ok) {
+        setError(web.error);
+        return;
+      }
+      const ig = validateInstagramHandle(instagramHandle);
+      if (!ig.ok) {
+        setError(ig.error);
+        return;
+      }
       const { error: upsertError } = await sb.from("profiles").upsert(
         {
           id: userId,
           username: normalized,
           avatar_url: pub.publicUrl,
-          bio: bio.trim().slice(0, 100) || null,
-          website_url: websiteUrl.trim() || null,
-          instagram_handle: instagramHandle.trim().replace(/^@+/, "") || null,
+          bio: normalizedBio.length ? normalizedBio : null,
+          website_url: web.value,
+          instagram_handle: ig.value,
         },
         { onConflict: "id" }
       );
