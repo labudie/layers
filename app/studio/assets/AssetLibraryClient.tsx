@@ -97,7 +97,19 @@ type DraftPairLocal = {
   uploadPhase: "idle" | "uploading" | "saving" | "done" | "error";
   errorText: string | null;
   successText: string | null;
+  /** When true, batch creator updates skip this row until "Apply to all" is toggled on again. */
+  creatorDetachedFromBatch?: boolean;
+  /** When true, batch software updates skip this row until "Apply to all" is toggled on again. */
+  softwareDetachedFromBatch?: boolean;
 };
+
+const BATCH_SOFTWARE_OPTIONS: SoftwareOption[] = [
+  "Photoshop",
+  "Illustrator",
+  "After Effects",
+  "Figma",
+  "Other",
+];
 
 const SOFTWARE_ICONS: Record<string, string> = {
   Photoshop: "Ps",
@@ -205,6 +217,10 @@ export function AssetLibraryClient({
   const [autoScheduleConfirmBusy, setAutoScheduleConfirmBusy] = useState(false);
   const [autoSchedulePreview, setAutoSchedulePreview] = useState<AutoSchedulePreviewRow[]>([]);
   const [autoScheduleUnplaced, setAutoScheduleUnplaced] = useState<Array<{ id: string; title: string }>>([]);
+  const [batchCreatorName, setBatchCreatorName] = useState("");
+  const [batchSoftware, setBatchSoftware] = useState<SoftwareOption>("Photoshop");
+  const [applyCreatorToAll, setApplyCreatorToAll] = useState(false);
+  const [applySoftwareToAll, setApplySoftwareToAll] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = () => router.refresh();
@@ -297,7 +313,22 @@ export function AssetLibraryClient({
         successText: null,
       });
     }
-    setDraftPairs(next);
+    let rows = next;
+    if (applyCreatorToAll) {
+      rows = rows.map((r) => ({
+        ...r,
+        creator_name: batchCreatorName,
+        creatorDetachedFromBatch: false,
+      }));
+    }
+    if (applySoftwareToAll) {
+      rows = rows.map((r) => ({
+        ...r,
+        software: batchSoftware,
+        softwareDetachedFromBatch: false,
+      }));
+    }
+    setDraftPairs(rows);
   };
 
   const saveReadyPair = async (row: DraftPairLocal) => {
@@ -653,6 +684,103 @@ export function AssetLibraryClient({
               {saveAllBusy ? "Saving..." : "Save All as Ready"}
             </button>
           </div>
+          <div
+            className="rounded-xl border border-white/10 p-3"
+            style={{ backgroundColor: "#7c3aed08" }}
+          >
+            <div
+              className="mb-3 text-[10px] font-semibold uppercase tracking-wide"
+              style={{ color: "#a855f7" }}
+            >
+              ⚡ Apply to all uploads
+            </div>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  className="min-w-[140px] flex-1 rounded border border-white/10 bg-black/30 px-2 py-1.5 text-sm text-white placeholder:text-white/35"
+                  placeholder="@creatorname"
+                  value={batchCreatorName}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBatchCreatorName(v);
+                    if (applyCreatorToAll) {
+                      setDraftPairs((list) =>
+                        list.map((r) =>
+                          r.creatorDetachedFromBatch ? r : { ...r, creator_name: v },
+                        ),
+                      );
+                    }
+                  }}
+                />
+                <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-white/70">
+                  <input
+                    type="checkbox"
+                    checked={applyCreatorToAll}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setApplyCreatorToAll(on);
+                      if (on) {
+                        setDraftPairs((list) =>
+                          list.map((r) => ({
+                            ...r,
+                            creator_name: batchCreatorName,
+                            creatorDetachedFromBatch: false,
+                          })),
+                        );
+                      }
+                    }}
+                    className="rounded border-white/30"
+                  />
+                  Apply to all
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  className="min-w-[140px] flex-1 rounded border border-white/10 bg-black/30 px-2 py-1.5 text-sm text-white"
+                  value={batchSoftware}
+                  onChange={(e) => {
+                    const v = e.target.value as SoftwareOption;
+                    setBatchSoftware(v);
+                    if (applySoftwareToAll) {
+                      setDraftPairs((list) =>
+                        list.map((r) =>
+                          r.softwareDetachedFromBatch ? r : { ...r, software: v },
+                        ),
+                      );
+                    }
+                  }}
+                >
+                  {BATCH_SOFTWARE_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+                <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-white/70">
+                  <input
+                    type="checkbox"
+                    checked={applySoftwareToAll}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setApplySoftwareToAll(on);
+                      if (on) {
+                        setDraftPairs((list) =>
+                          list.map((r) => ({
+                            ...r,
+                            software: batchSoftware,
+                            softwareDetachedFromBatch: false,
+                          })),
+                        );
+                      }
+                    }}
+                    className="rounded border-white/30"
+                  />
+                  Apply to all
+                </label>
+              </div>
+            </div>
+          </div>
           {draftPairs.map((row) => (
             <div key={row.key} className="rounded-xl border border-white/10 bg-black/25 p-3">
               <div className="flex gap-3">
@@ -663,9 +791,30 @@ export function AssetLibraryClient({
                 </div>
                 <div className="min-w-0 flex-1 space-y-1">
                   <input className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm text-white" value={row.title} onChange={(e) => setDraftPairs((list) => list.map((r) => r.key === row.key ? { ...r, title: e.target.value } : r))} />
-                  <CreatorAutocompleteInput value={row.creator_name} onChange={(v) => setDraftPairs((list) => list.map((r) => r.key === row.key ? { ...r, creator_name: v } : r))} />
+                  <CreatorAutocompleteInput
+                    value={row.creator_name}
+                    onChange={(v) =>
+                      setDraftPairs((list) =>
+                        list.map((r) =>
+                          r.key === row.key ? { ...r, creator_name: v, creatorDetachedFromBatch: true } : r,
+                        ),
+                      )
+                    }
+                  />
                   <div className="grid grid-cols-2 gap-2">
-                    <select className="rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-white" value={row.software} onChange={(e) => setDraftPairs((list) => list.map((r) => r.key === row.key ? { ...r, software: e.target.value as SoftwareOption } : r))}>
+                    <select
+                      className="rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-white"
+                      value={row.software}
+                      onChange={(e) =>
+                        setDraftPairs((list) =>
+                          list.map((r) =>
+                            r.key === row.key
+                              ? { ...r, software: e.target.value as SoftwareOption, softwareDetachedFromBatch: true }
+                              : r,
+                          ),
+                        )
+                      }
+                    >
                       {SOFTWARE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                     <input className="rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-white" value={row.layer_count} onChange={(e) => setDraftPairs((list) => list.map((r) => r.key === row.key ? { ...r, layer_count: e.target.value } : r))} placeholder="Layer count" />
