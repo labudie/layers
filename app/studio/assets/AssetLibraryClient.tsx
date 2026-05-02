@@ -1137,10 +1137,38 @@ export function AssetLibraryClient({
                 }}
                 onClick={() => setEditAsset(a)}
                 title="Drag to schedule"
-                className={`group relative flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 p-2 text-left hover:bg-black/35 transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
+                style={
+                  a.is_sponsored
+                    ? {
+                        border: "0.5px solid rgba(251, 191, 36, 0.4)",
+                        background: "rgba(251, 191, 36, 0.04)",
+                      }
+                    : undefined
+                }
+                className={`group relative flex items-center gap-2 rounded-xl p-2 text-left transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
+                  a.is_sponsored
+                    ? "hover:bg-[rgba(251,191,36,0.07)]"
+                    : "border border-white/10 bg-black/25 hover:bg-black/35"
+                } ${
                   draggingCardId === a.id ? "scale-105 rotate-2 shadow-[0_10px_24px_rgba(124,58,237,0.25)]" : "hover:shadow-[0_0_0_1px_rgba(124,58,237,0.5),0_0_18px_rgba(124,58,237,0.25)]"
                 }`}
               >
+                {a.is_sponsored ? (
+                  <span
+                    className="pointer-events-none absolute top-1.5 right-2 z-[2] leading-none"
+                    style={{
+                      background: "rgba(251, 191, 36, 0.15)",
+                      color: "#fbbf24",
+                      border: "0.5px solid rgba(251, 191, 36, 0.3)",
+                      fontSize: 9,
+                      fontWeight: 600,
+                      padding: "2px 7px",
+                      borderRadius: 20,
+                    }}
+                  >
+                    Sponsored
+                  </span>
+                ) : null}
                 <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-black/40">
                   {a.image_url ? <Image src={a.image_url} alt="" fill className="object-cover" sizes="56px" unoptimized /> : null}
                 </div>
@@ -1502,15 +1530,30 @@ function EditAssetModal({
   const [is_sponsored, setIs_sponsored] = useState(asset.is_sponsored);
   const [sponsor_name, setSponsor_name] = useState(asset.sponsor_name ?? "");
   const [saveUi, setSaveUi] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const autoCloseAfterSaveTimerRef = useRef<number | null>(null);
+
+  const clearAutoCloseAfterSaveTimer = () => {
+    if (autoCloseAfterSaveTimerRef.current != null) {
+      window.clearTimeout(autoCloseAfterSaveTimerRef.current);
+      autoCloseAfterSaveTimerRef.current = null;
+    }
+  };
+
+  const handleClose = () => {
+    clearAutoCloseAfterSaveTimer();
+    onClose();
+  };
 
   useEffect(() => {
+    clearAutoCloseAfterSaveTimer();
     setSaveUi("idle");
+    return () => clearAutoCloseAfterSaveTimer();
   }, [asset.id]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog">
       <div className="w-full max-w-lg rounded-2xl border border-white/15 bg-[#160828] p-5">
-        <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-bold text-white">Edit asset</h2><button type="button" onClick={onClose} className="text-sm text-white/60">Close</button></div>
+        <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-bold text-white">Edit asset</h2><button type="button" onClick={handleClose} className="text-sm text-white/60">Close</button></div>
         <div className="space-y-2">
           <input className="w-full rounded border border-white/10 bg-black/30 px-2 py-2 text-sm text-white" value={title} onChange={(e) => setTitle(e.target.value)} />
           <CreatorAutocompleteInput value={creator_name} onChange={setCreator_name} />
@@ -1560,7 +1603,11 @@ function EditAssetModal({
             };
             onSaveSuccess(patch);
             setSaveUi("success");
-            window.setTimeout(() => setSaveUi("idle"), 2000);
+            clearAutoCloseAfterSaveTimer();
+            autoCloseAfterSaveTimerRef.current = window.setTimeout(() => {
+              autoCloseAfterSaveTimerRef.current = null;
+              onClose();
+            }, 2000);
           }}
         >
           {saveUi === "success" ? "✅ Saved" : saveUi === "error" ? "⚠ Failed to save" : saveUi === "saving" ? "Saving…" : "Save"}
