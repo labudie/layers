@@ -135,6 +135,24 @@ const SLOT_LABELS = [
   "Slot 5 · Expert",
 ] as const;
 
+/** Calendar day-cell markers by scheduled slot position (1–5). */
+function calendarSlotDotColor(position1Based: number): string {
+  switch (position1Based) {
+    case 1:
+      return "#10b981";
+    case 2:
+      return "#3b82f6";
+    case 3:
+      return "#f59e0b";
+    case 4:
+      return "#ef4444";
+    case 5:
+      return "#a855f7";
+    default:
+      return "#6b7280";
+  }
+}
+
 const STUDIO_INGEST_PURPLE_GRADIENT = "linear-gradient(90deg, #7c3aed, #a855f7)";
 
 const SUGGEST_TITLE_BTN_STYLE: CSSProperties = {
@@ -1452,26 +1470,37 @@ export function AssetLibraryClient({
           const liveIcon =
             liveCount >= 5 ? "✅" : liveCount > 0 ? "⚠️" : null;
           const dot = count >= 5 ? "bg-emerald-400" : count > 0 ? "bg-amber-400" : "bg-white/0";
-          const thumbs = (scheduledByDate.slots[ymd] ?? []).filter(Boolean).slice(0, 3) as AssetRow[];
+          const daySlotsRow = (scheduledByDate.slots[ymd] ?? []) as (AssetRow | null)[];
+          const scheduledTitlesTooltip = daySlotsRow
+            .map((a) => (a?.title?.trim() ? a.title.trim() : null))
+            .filter(Boolean)
+            .join("\n");
           return (
-            <button key={ymd} type="button" onClick={() => setSelectedDate(ymd)} className={`rounded-lg border p-1 text-left ${selectedDate === ymd ? "border-[#7c3aed] bg-[#7c3aed]/20" : "border-white/10 bg-black/20"}`}>
+            <button
+              key={ymd}
+              type="button"
+              onClick={() => setSelectedDate(ymd)}
+              title={scheduledTitlesTooltip.length > 0 ? scheduledTitlesTooltip : undefined}
+              className={`rounded-lg border p-1 text-left ${selectedDate === ymd ? "border-[#7c3aed] bg-[#7c3aed]/20" : "border-white/10 bg-black/20"}`}
+            >
               <div className="flex items-center justify-between text-[11px] text-white"><span>{cell.getDate()}</span><span className={`h-1.5 w-1.5 rounded-full ${dot}`} /></div>
-              <div className="mt-1 flex gap-0.5">
-                {thumbs.map((t) => (
-                  <div key={t.id} className="relative h-4 w-4 overflow-hidden rounded bg-black/40">
-                    {t.image_url ? (
-                      <Image
-                        src={t.image_url}
-                        alt=""
-                        fill
-                        className="object-cover"
-                        sizes="16px"
-                        unoptimized
-                        loading="lazy"
-                      />
-                    ) : null}
-                  </div>
-                ))}
+              <div className="mt-1 flex min-h-[8px] flex-wrap items-center gap-0.5">
+                {daySlotsRow.map((asset, slotIdx) => {
+                  if (!asset) return null;
+                  const pos = slotIdx + 1;
+                  return (
+                    <div
+                      key={asset.id}
+                      className="shrink-0 rounded-[2px]"
+                      style={{
+                        width: 8,
+                        height: 8,
+                        backgroundColor: calendarSlotDotColor(pos),
+                      }}
+                      aria-hidden
+                    />
+                  );
+                })}
               </div>
               <div className="mt-1 flex items-center gap-1 text-[10px] text-white/75">
                 {liveIcon ? <span aria-hidden>{liveIcon}</span> : null}
@@ -1483,7 +1512,7 @@ export function AssetLibraryClient({
       </div>
 
       {selectedDate && (
-        <div className="mt-4 rounded-xl border border-white/10 bg-black/25 p-3">
+        <div key={selectedDate} className="mt-4 rounded-xl border border-white/10 bg-black/25 p-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-semibold text-white">{selectedDate}</p>
             <button type="button" disabled={publishBusy} onClick={() => void goLive()} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">Go Live</button>
@@ -1527,16 +1556,17 @@ export function AssetLibraryClient({
                     >
                       ✕
                     </button>
-                    <div className="relative mx-auto h-12 w-12 overflow-hidden rounded bg-black/40">
+                    <div className="mx-auto flex h-12 w-12 overflow-hidden rounded bg-black/40">
                       {slot.image_url ? (
-                        <Image
+                        // eslint-disable-next-line @next/next/no-img-element -- load only for this selected day; avoid next/image prefetch
+                        <img
                           src={slot.image_url}
                           alt=""
-                          fill
-                          className="object-cover"
-                          sizes="48px"
-                          unoptimized
+                          width={48}
+                          height={48}
+                          className="h-12 w-12 object-cover"
                           loading="lazy"
+                          decoding="async"
                         />
                       ) : null}
                     </div>
