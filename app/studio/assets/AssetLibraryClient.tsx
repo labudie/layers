@@ -23,12 +23,10 @@ import { CreatorAutocompleteInput } from "@/app/studio/AdminChallengeFormClient"
 import {
   approveSubmissionToAssetAction,
   confirmAutoScheduleAction,
-  confirmReconfigureScheduleAction,
   getDefaultUnscheduleFutureDateRangeAction,
   insertReadyAssetAction,
   insertReadyAssetsBatchAction,
   previewAutoScheduleAction,
-  previewReconfigureScheduleAction,
   previewUnscheduleFutureChallengesInRangeAction,
   publishScheduledDayAction,
   rejectSubmissionAction,
@@ -39,7 +37,6 @@ import {
   updateAssetAction,
   type AssetUpsertFields,
   type AutoSchedulePreviewRow,
-  type ReconfigurePreviewRow,
 } from "@/app/studio/assets/actions";
 
 export type AssetRow = {
@@ -224,20 +221,6 @@ function addDaysToYmd(ymd: string, days: number) {
   const d = new Date(`${ymd}T00:00:00`);
   d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function monthBoundsYmd(year: number, month0: number): { start: string; end: string } {
-  const cells = monthMatrix(year, month0)
-    .flat()
-    .filter((c): c is Date => c != null);
-  if (cells.length === 0) {
-    const t = todayYmdEastern();
-    return { start: t, end: t };
-  }
-  const tms = cells.map((c) => c.getTime());
-  const min = new Date(Math.min(...tms));
-  const max = new Date(Math.max(...tms));
-  return { start: toYmd(min), end: toYmd(max) };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -627,17 +610,7 @@ export function AssetLibraryClient({
   const [autoScheduleConfirmBusy, setAutoScheduleConfirmBusy] = useState(false);
   const [autoSchedulePreview, setAutoSchedulePreview] = useState<AutoSchedulePreviewRow[]>([]);
   const [autoScheduleUnplaced, setAutoScheduleUnplaced] = useState<Array<{ id: string; title: string }>>([]);
-  const [reconfigureOpen, setReconfigureOpen] = useState(false);
-  const [reconfigureStartDate, setReconfigureStartDate] = useState(todayYmdEastern());
-  const [reconfigureEndDate, setReconfigureEndDate] = useState(todayYmdEastern());
-  const [reconfigureOnlyIncompleteDays, setReconfigureOnlyIncompleteDays] = useState(true);
-  const [reconfigureRespectTiers, setReconfigureRespectTiers] = useState(true);
-  const [reconfigurePreviewBusy, setReconfigurePreviewBusy] = useState(false);
-  const [reconfigureConfirmBusy, setReconfigureConfirmBusy] = useState(false);
-  const [reconfigureTableRows, setReconfigureTableRows] = useState<ReconfigurePreviewRow[]>([]);
-  const [reconfigureAssignments, setReconfigureAssignments] = useState<AutoSchedulePreviewRow[]>([]);
-  const [reconfigureGapsFilled, setReconfigureGapsFilled] = useState(0);
-  const [reconfigureGapsUnfillable, setReconfigureGapsUnfillable] = useState(0);
+  const [autoScheduleRespectDifficultyTiers, setAutoScheduleRespectDifficultyTiers] = useState(true);
   const [goLiveAllProgress, setGoLiveAllProgress] = useState<{ current: number; total: number } | null>(
     null,
   );
@@ -1138,12 +1111,17 @@ export function AssetLibraryClient({
     setAutoScheduleEndDate(addDaysToYmd(todayEastern, 14));
     setAutoSchedulePreview([]);
     setAutoScheduleUnplaced([]);
+    setAutoScheduleRespectDifficultyTiers(true);
     setAutoScheduleOpen(true);
   };
 
   const previewAutoSchedule = async () => {
     setAutoSchedulePreviewBusy(true);
-    const result = await previewAutoScheduleAction(autoScheduleStartDate, autoScheduleEndDate);
+    const result = await previewAutoScheduleAction(
+      autoScheduleStartDate,
+      autoScheduleEndDate,
+      autoScheduleRespectDifficultyTiers,
+    );
     setAutoSchedulePreviewBusy(false);
     if (!result.ok) {
       setToast({ type: "error", text: result.error ?? "Preview failed." });
@@ -1156,7 +1134,11 @@ export function AssetLibraryClient({
 
   const confirmAutoSchedule = async () => {
     setAutoScheduleConfirmBusy(true);
-    const result = await confirmAutoScheduleAction(autoScheduleStartDate, autoScheduleEndDate);
+    const result = await confirmAutoScheduleAction(
+      autoScheduleStartDate,
+      autoScheduleEndDate,
+      autoScheduleRespectDifficultyTiers,
+    );
     setAutoScheduleConfirmBusy(false);
     if (!result.ok) {
       setToast({ type: "error", text: result.error ?? "Auto-schedule failed." });
@@ -1188,80 +1170,6 @@ export function AssetLibraryClient({
       text: `${result.scheduledCount ?? 0} assets auto-scheduled.`,
     });
     window.setTimeout(() => setToast(null), 2600);
-  };
-
-  const openReconfigureModal = () => {
-    const { start, end } = monthBoundsYmd(viewMonth.y, viewMonth.m);
-    setReconfigureStartDate(start);
-    setReconfigureEndDate(end);
-    setReconfigureOnlyIncompleteDays(true);
-    setReconfigureRespectTiers(true);
-    setReconfigureTableRows([]);
-    setReconfigureAssignments([]);
-    setReconfigureGapsFilled(0);
-    setReconfigureGapsUnfillable(0);
-    setReconfigureOpen(true);
-  };
-
-  const previewReconfigure = async () => {
-    setReconfigurePreviewBusy(true);
-    const r = await previewReconfigureScheduleAction(
-      reconfigureStartDate,
-      reconfigureEndDate,
-      reconfigureOnlyIncompleteDays,
-      reconfigureRespectTiers,
-    );
-    setReconfigurePreviewBusy(false);
-    if (!r.ok) {
-      window.alert(r.error ?? "Preview failed.");
-      return;
-    }
-    setReconfigureTableRows(r.tableRows ?? []);
-    setReconfigureAssignments(r.assignments ?? []);
-    setReconfigureGapsFilled(r.gapsFilled ?? 0);
-    setReconfigureGapsUnfillable(r.gapsUnfillable ?? 0);
-  };
-
-  const confirmReconfigure = async () => {
-    setReconfigureConfirmBusy(true);
-    const snapshot = reconfigureAssignments;
-    const r = await confirmReconfigureScheduleAction(
-      reconfigureStartDate,
-      reconfigureEndDate,
-      reconfigureOnlyIncompleteDays,
-      reconfigureRespectTiers,
-    );
-    setReconfigureConfirmBusy(false);
-    if (!r.ok) {
-      window.alert(r.error ?? "Confirm failed.");
-      return;
-    }
-    const assignmentKeys = new Set(
-      snapshot.map((row) => `${row.asset_id}-${row.active_date}-${row.position}`),
-    );
-    setAssets((prev) =>
-      prev.map((asset) => {
-        const match = snapshot.find((row) => row.asset_id === asset.id);
-        if (!match || !assignmentKeys.has(`${match.asset_id}-${match.active_date}-${match.position}`)) {
-          return asset;
-        }
-        return {
-          ...asset,
-          status: "scheduled",
-          scheduled_date: match.active_date,
-          scheduled_position: match.position,
-        };
-      }),
-    );
-    setReconfigureOpen(false);
-    setReconfigureTableRows([]);
-    setReconfigureAssignments([]);
-    setToast({
-      type: "success",
-      text: `${r.scheduledCount ?? 0} slot${(r.scheduledCount ?? 0) === 1 ? "" : "s"} filled from Ready.`,
-    });
-    window.setTimeout(() => setToast(null), 2600);
-    router.refresh();
   };
 
   const runGoLiveAll = async () => {
@@ -1749,19 +1657,6 @@ export function AssetLibraryClient({
         <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
           <button
             type="button"
-            disabled={goLiveAllProgress !== null || unscheduleAllProgress !== null}
-            onClick={openReconfigureModal}
-            className="rounded px-2.5 py-1.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40"
-            style={{
-              background: "rgba(245,158,11,0.15)",
-              color: "#f59e0b",
-              border: "0.5px solid rgba(245,158,11,0.3)",
-            }}
-          >
-            ⚡ Re-configure
-          </button>
-          <button
-            type="button"
             disabled={goLiveAllEligibleDates.length === 0 || goLiveAllProgress !== null || unscheduleAllProgress !== null}
             onClick={() => void runGoLiveAll()}
             className="rounded px-2.5 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
@@ -2014,6 +1909,15 @@ export function AssetLibraryClient({
               </div>
             </div>
 
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-white/85">
+              <input
+                type="checkbox"
+                checked={autoScheduleRespectDifficultyTiers}
+                onChange={(e) => setAutoScheduleRespectDifficultyTiers(e.target.checked)}
+              />
+              <span>Respect difficulty tiers</span>
+            </label>
+
             <div className="mt-4 max-h-[42vh] overflow-auto rounded-xl border border-white/10">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-white/5 text-xs uppercase tracking-wider text-white/55">
@@ -2071,137 +1975,6 @@ export function AssetLibraryClient({
                   setAutoScheduleOpen(false);
                   setAutoSchedulePreview([]);
                   setAutoScheduleUnplaced([]);
-                }}
-                className="rounded border border-white/20 px-3 py-2 text-sm font-semibold text-white/85"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {reconfigureOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/15 bg-[#160828] p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white">Re-configure Schedule</h2>
-              <button
-                type="button"
-                className="text-sm text-white/60"
-                onClick={() => {
-                  setReconfigureOpen(false);
-                  setReconfigureTableRows([]);
-                  setReconfigureAssignments([]);
-                }}
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-sm text-white/80">
-                <span className="mb-1 block text-xs uppercase text-white/55">Start date</span>
-                <input
-                  type="date"
-                  value={reconfigureStartDate}
-                  onChange={(e) => setReconfigureStartDate(e.target.value)}
-                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-2 text-white"
-                />
-              </label>
-              <label className="text-sm text-white/80">
-                <span className="mb-1 block text-xs uppercase text-white/55">End date</span>
-                <input
-                  type="date"
-                  value={reconfigureEndDate}
-                  onChange={(e) => setReconfigureEndDate(e.target.value)}
-                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-2 text-white"
-                />
-              </label>
-            </div>
-
-            <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-white/85">
-              <input
-                type="checkbox"
-                checked={reconfigureOnlyIncompleteDays}
-                onChange={(e) => setReconfigureOnlyIncompleteDays(e.target.checked)}
-              />
-              <span>Only re-configure incomplete days (recommended)</span>
-            </label>
-            <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-white/85">
-              <input
-                type="checkbox"
-                checked={reconfigureRespectTiers}
-                onChange={(e) => setReconfigureRespectTiers(e.target.checked)}
-              />
-              <span>Respect difficulty tiers</span>
-            </label>
-
-            <div className="mt-3">
-              <button
-                type="button"
-                disabled={reconfigurePreviewBusy}
-                onClick={() => void previewReconfigure()}
-                className="rounded bg-[#7c3aed] px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
-              >
-                {reconfigurePreviewBusy ? "Previewing…" : "Preview"}
-              </button>
-            </div>
-
-            <div className="mt-4 max-h-[36vh] overflow-auto rounded-xl border border-white/10">
-              <table className="min-w-full text-left text-sm">
-                <thead className="sticky top-0 bg-[#160828] text-xs uppercase tracking-wider text-white/55">
-                  <tr>
-                    <th className="px-3 py-2">Date</th>
-                    <th className="px-3 py-2">Slot</th>
-                    <th className="px-3 py-2">Current content</th>
-                    <th className="px-3 py-2">Proposed new content</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reconfigureTableRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-3 py-4 text-center text-white/60">
-                        Run Preview to see proposed fills for empty slots.
-                      </td>
-                    </tr>
-                  ) : (
-                    reconfigureTableRows.map((row) => (
-                      <tr key={`${row.active_date}-${row.position}`} className="border-t border-white/10">
-                        <td className="px-3 py-2 text-white/90">{row.active_date}</td>
-                        <td className="px-3 py-2 text-white/80">{row.position}</td>
-                        <td className="px-3 py-2 text-white/60">{row.current_title?.trim() ? row.current_title : "—"}</td>
-                        <td className="px-3 py-2 text-white">
-                          {row.proposed_title?.trim() ? row.proposed_title : "—"}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <p className="mt-3 text-sm text-white/85">
-              <span className="font-semibold text-emerald-300">{reconfigureGapsFilled}</span> gaps will be filled,{" "}
-              <span className="font-semibold text-amber-300">{reconfigureGapsUnfillable}</span> gaps cannot be filled
-              (insufficient assets)
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={reconfigureConfirmBusy || reconfigureAssignments.length === 0}
-                onClick={() => void confirmReconfigure()}
-                className="rounded bg-[#7c3aed] px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
-              >
-                {reconfigureConfirmBusy ? "Confirming…" : "Confirm"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setReconfigureOpen(false);
-                  setReconfigureTableRows([]);
-                  setReconfigureAssignments([]);
                 }}
                 className="rounded border border-white/20 px-3 py-2 text-sm font-semibold text-white/85"
               >

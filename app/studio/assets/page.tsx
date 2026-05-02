@@ -112,7 +112,7 @@ export default async function StudioAssetsPage() {
         </span>
       }
     >
-      {/* Re-configure, Go Live All, Unschedule All, and month stats are in AssetLibraryClient (calendar column). */}
+      {/* Auto-Schedule, Go Live All, Unschedule All, and month stats are in AssetLibraryClient (calendar column). */}
       <AssetLibraryClient
         initialAssets={assets}
         pendingSubmissions={pendingSubmissions}

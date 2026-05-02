@@ -239,10 +239,26 @@ function iterateDateRange(start: string, end: string): string[] {
   return out;
 }
 
+function tierMidLayerForPosition(position: number): number {
+  switch (position) {
+    case 1:
+      return 13;
+    case 2:
+      return 35;
+    case 3:
+      return 55;
+    case 4:
+      return 78;
+    default:
+      return 105;
+  }
+}
+
 async function buildAutoSchedulePreview(
   sb: ReturnType<typeof createSupabaseServerClient>,
   startDate: string,
   endDate: string,
+  respectDifficultyTiers: boolean,
 ): Promise<{
   assignments: AutoSchedulePreviewRow[];
   unplaced: Array<{ id: string; title: string }>;
@@ -314,15 +330,35 @@ async function buildAutoSchedulePreview(
     for (let position = 1; position <= 5; position++) {
       if (slotsByDate.get(date)?.has(position)) continue;
       const takenCreators = creatorsByDate.get(date) ?? new Set<string>();
-      const matchIndex = readyPool.findIndex((asset) => {
-        if (usedAssetIds.has(asset.id)) return false;
-        if (!asset.image_url) return false;
-        if (getPosition(asset.layer_count) !== position) return false;
-        if (asset.creator_key && takenCreators.has(asset.creator_key)) return false;
-        return true;
-      });
-      if (matchIndex === -1) continue;
-      const asset = readyPool[matchIndex];
+
+      let asset: (typeof readyPool)[number] | undefined;
+      if (respectDifficultyTiers) {
+        const matchIndex = readyPool.findIndex((a) => {
+          if (usedAssetIds.has(a.id)) return false;
+          if (!a.image_url) return false;
+          if (getPosition(a.layer_count) !== position) return false;
+          if (a.creator_key && takenCreators.has(a.creator_key)) return false;
+          return true;
+        });
+        if (matchIndex === -1) continue;
+        asset = readyPool[matchIndex];
+      } else {
+        const candidates = readyPool.filter(
+          (a) =>
+            !usedAssetIds.has(a.id) &&
+            Boolean(a.image_url) &&
+            (!a.creator_key || !takenCreators.has(a.creator_key)),
+        );
+        if (candidates.length === 0) continue;
+        const mid = tierMidLayerForPosition(position);
+        const sorted = [...candidates].sort((a, b) => {
+          const da = Math.abs(a.layer_count - mid);
+          const db = Math.abs(b.layer_count - mid);
+          if (da !== db) return da - db;
+          return a.id.localeCompare(b.id);
+        });
+        asset = sorted[0]!;
+      }
       usedAssetIds.add(asset.id);
       if (!slotsByDate.has(date)) slotsByDate.set(date, new Set<number>());
       slotsByDate.get(date)!.add(position);
@@ -366,21 +402,6 @@ export type ReconfigurePreviewRow = {
   proposed_title: string | null;
   proposed_asset_id: string | null;
 };
-
-function tierMidLayerForPosition(position: number): number {
-  switch (position) {
-    case 1:
-      return 13;
-    case 2:
-      return 35;
-    case 3:
-      return 55;
-    case 4:
-      return 78;
-    default:
-      return 105;
-  }
-}
 
 type ReadyPoolRow = {
   id: string;
@@ -722,6 +743,7 @@ export async function confirmReconfigureScheduleAction(
 export async function previewAutoScheduleAction(
   startDate: string,
   endDate: string,
+  respectDifficultyTiers: boolean,
 ): Promise<{
   ok: boolean;
   error?: string;
@@ -738,7 +760,7 @@ export async function previewAutoScheduleAction(
     return { ok: false, error: "Start date must be today or later (US Eastern)." };
   }
 
-  const result = await buildAutoSchedulePreview(gate.sb, startDate, endDate);
+  const result = await buildAutoSchedulePreview(gate.sb, startDate, endDate, respectDifficultyTiers);
   if (result.error) return { ok: false, error: result.error };
   return {
     ok: true,
@@ -750,6 +772,7 @@ export async function previewAutoScheduleAction(
 export async function confirmAutoScheduleAction(
   startDate: string,
   endDate: string,
+  respectDifficultyTiers: boolean,
 ): Promise<{
   ok: boolean;
   error?: string;
@@ -765,7 +788,7 @@ export async function confirmAutoScheduleAction(
     return { ok: false, error: "Start date must be today or later (US Eastern)." };
   }
 
-  const preview = await buildAutoSchedulePreview(gate.sb, startDate, endDate);
+  const preview = await buildAutoSchedulePreview(gate.sb, startDate, endDate, respectDifficultyTiers);
   if (preview.error) return { ok: false, error: preview.error };
   if (preview.assignments.length === 0) return { ok: true, scheduledCount: 0 };
 
