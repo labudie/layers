@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   buildPairSpecs,
@@ -103,6 +103,9 @@ type DraftPairLocal = {
   softwareDetachedFromBatch?: boolean;
   /** PSD layer-count phase for draft queue UI (ingest only). */
   psdParseStatus?: "counting" | "ready" | "error";
+  suggestTitleLoading?: boolean;
+  titleAiSuggested?: boolean;
+  suggestTitleError?: string;
 };
 
 const BATCH_SOFTWARE_OPTIONS: SoftwareOption[] = [
@@ -133,6 +136,29 @@ const SLOT_LABELS = [
 ] as const;
 
 const STUDIO_INGEST_PURPLE_GRADIENT = "linear-gradient(90deg, #7c3aed, #a855f7)";
+
+const SUGGEST_TITLE_BTN_STYLE: CSSProperties = {
+  padding: "4px 8px",
+  borderRadius: 6,
+  background: "#7c3aed22",
+  border: "0.5px solid #7c3aed44",
+  color: "#a855f7",
+  fontSize: 10,
+  fontWeight: 500,
+};
+
+async function rasterFileToImageBase64(file: File): Promise<{ imageBase64: string; mediaType: string }> {
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const chunk = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+  }
+  let mediaType = file.type?.startsWith("image/") ? file.type : "image/png";
+  if (mediaType === "image/jpg") mediaType = "image/jpeg";
+  return { imageBase64: btoa(binary), mediaType };
+}
 
 function toYmd(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -232,6 +258,54 @@ export function AssetLibraryClient({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = () => router.refresh();
+
+  const runSuggestTitle = async (row: DraftPairLocal) => {
+    const raster = row.spec.raster;
+    if (!raster || row.suggestTitleLoading) return;
+    setDraftPairs((list) =>
+      list.map((r) =>
+        r.key === row.key ? { ...r, suggestTitleLoading: true, suggestTitleError: undefined } : r,
+      ),
+    );
+    try {
+      const { imageBase64, mediaType } = await rasterFileToImageBase64(raster);
+      const res = await fetch("/api/suggest-title", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64, mediaType }),
+      });
+      const data = (await res.json()) as { title?: unknown };
+      const title =
+        typeof data.title === "string" && data.title.trim().length > 0 ? data.title.trim() : null;
+      if (!res.ok || !title) throw new Error("bad response");
+      setDraftPairs((list) =>
+        list.map((r) =>
+          r.key === row.key
+            ? {
+                ...r,
+                title,
+                suggestTitleLoading: false,
+                titleAiSuggested: true,
+                suggestTitleError: undefined,
+              }
+            : r,
+        ),
+      );
+    } catch {
+      setDraftPairs((list) =>
+        list.map((r) =>
+          r.key === row.key
+            ? { ...r, suggestTitleLoading: false, suggestTitleError: "Could not suggest title" }
+            : r,
+        ),
+      );
+      window.setTimeout(() => {
+        setDraftPairs((list) =>
+          list.map((r) => (r.key === row.key ? { ...r, suggestTitleError: undefined } : r)),
+        );
+      }, 3000);
+    }
+  };
 
   const scheduledByDate = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -894,7 +968,45 @@ export function AssetLibraryClient({
                   ) : null}
                 </div>
                 <div className="min-w-0 flex-1 space-y-1">
-                  <input className="w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-sm text-white" value={row.title} onChange={(e) => setDraftPairs((list) => list.map((r) => r.key === row.key ? { ...r, title: e.target.value } : r))} />
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <input
+                      className="min-w-0 flex-1 rounded border border-white/10 bg-black/30 px-2 py-1 text-sm text-white"
+                      value={row.title}
+                      onChange={(e) =>
+                        setDraftPairs((list) =>
+                          list.map((r) =>
+                            r.key === row.key
+                              ? { ...r, title: e.target.value, titleAiSuggested: false }
+                              : r,
+                          ),
+                        )
+                      }
+                    />
+                    {row.titleAiSuggested ? (
+                      <span className="shrink-0 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                        ✨ AI suggested
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      style={SUGGEST_TITLE_BTN_STYLE}
+                      className="inline-flex shrink-0 items-center justify-center gap-1 disabled:opacity-45"
+                      disabled={!row.spec.raster || Boolean(row.suggestTitleLoading)}
+                      onClick={() => void runSuggestTitle(row)}
+                    >
+                      {row.suggestTitleLoading ? (
+                        <span
+                          className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent opacity-90"
+                          aria-hidden
+                        />
+                      ) : (
+                        "✨ Suggest title"
+                      )}
+                    </button>
+                  </div>
+                  {row.suggestTitleError ? (
+                    <p className="text-[10px] text-red-300/95">{row.suggestTitleError}</p>
+                  ) : null}
                   <CreatorAutocompleteInput
                     value={row.creator_name}
                     onChange={(v) =>
