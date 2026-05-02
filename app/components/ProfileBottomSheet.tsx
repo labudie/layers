@@ -103,18 +103,35 @@ export function ProfileBottomSheet({
 
   // Block touch events from leaking to page behind the sheet.
   useEffect(() => {
+    if (typeof document === "undefined") return;
     if (!isOpen) return;
-    const prevent = (e: TouchEvent) => e.stopPropagation();
+
+    const prevent = (e: TouchEvent) => {
+      e.stopPropagation();
+    };
     const preventScroll = (e: TouchEvent) => {
       if (scrollRef.current && scrollRef.current.contains(e.target as Node)) return;
       e.preventDefault();
     };
-    document.addEventListener("touchmove", preventScroll, { passive: false });
-    document.addEventListener("touchstart", prevent, { passive: false });
+
+    const opts: AddEventListenerOptions = { passive: false };
+    document.addEventListener("touchmove", preventScroll, opts);
+    document.addEventListener("touchstart", prevent, opts);
+
     return () => {
-      document.removeEventListener("touchmove", preventScroll);
-      document.removeEventListener("touchstart", prevent);
+      console.log("cleaning up touch listeners");
+      document.removeEventListener("touchmove", preventScroll, opts);
+      document.removeEventListener("touchstart", prevent, opts);
+      document.body.style.overflow = "";
+      document.body.style.touchAction = "";
     };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (isOpen) return;
+    document.body.style.overflow = "";
+    document.body.style.touchAction = "";
   }, [isOpen]);
 
   useEffect(() => {

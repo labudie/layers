@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { cookies } from "next/headers";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { LeaderboardPullToRefresh } from "@/app/components/LeaderboardPullToRefresh";
+import { LeaderboardScrollUnlock } from "@/app/components/LeaderboardScrollUnlock";
 import {
   LeaderboardSwipeArea,
   LeaderboardTabBar,
@@ -401,6 +402,7 @@ export default async function LeaderboardPage({
   return (
     <AppSiteChrome title="Leaderboard">
       <LeaderboardPullToRefresh>
+        <LeaderboardScrollUnlock />
         <div className="mx-auto w-full max-w-2xl px-4 pt-6 pb-[100px] md:px-5 md:pb-[100px]">
           <p className="text-sm text-white/60">{tabSubline}</p>
 
