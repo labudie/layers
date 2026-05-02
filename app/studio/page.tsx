@@ -21,6 +21,7 @@ import { createSupabaseServerClient } from "@/lib/supabase";
 import { isStudioAdminSession } from "@/lib/studio-admin";
 import { AdminSubmissionImage } from "@/app/studio/AdminSubmissionImage";
 import { AnalyticsExportButton } from "@/app/studio/AnalyticsExportButton";
+import { SocialExportForSocialsButton } from "@/app/studio/SocialExportForSocialsButton";
 import { DeleteButton } from "@/app/studio/DeleteButton";
 import {
   AssetLibraryClient,
@@ -1192,9 +1193,12 @@ export default async function AdminPage({
                     &quot;Today&quot; and signup buckets use US Eastern ({today}). Data refreshes on each page load.
                   </p>
                 </div>
-                {advancedAnalytics ? (
-                  <AnalyticsExportButton rows={advancedAnalytics.exportRows} />
-                ) : null}
+                <div className="flex flex-shrink-0 flex-col gap-3 sm:items-end">
+                  {advancedAnalytics ? (
+                    <AnalyticsExportButton rows={advancedAnalytics.exportRows} />
+                  ) : null}
+                  <SocialExportForSocialsButton />
+                </div>
               </div>
 
               <section>
