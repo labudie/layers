@@ -101,6 +101,8 @@ type DraftPairLocal = {
   creatorDetachedFromBatch?: boolean;
   /** When true, batch software updates skip this row until "Apply to all" is toggled on again. */
   softwareDetachedFromBatch?: boolean;
+  /** PSD layer-count phase for draft queue UI (ingest only). */
+  psdParseStatus?: "counting" | "ready" | "error";
 };
 
 const BATCH_SOFTWARE_OPTIONS: SoftwareOption[] = [
@@ -129,6 +131,8 @@ const SLOT_LABELS = [
   "Slot 4 · Hard",
   "Slot 5 · Expert",
 ] as const;
+
+const STUDIO_INGEST_PURPLE_GRADIENT = "linear-gradient(90deg, #7c3aed, #a855f7)";
 
 function toYmd(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -221,6 +225,10 @@ export function AssetLibraryClient({
   const [batchSoftware, setBatchSoftware] = useState<SoftwareOption>("Photoshop");
   const [applyCreatorToAll, setApplyCreatorToAll] = useState(false);
   const [applySoftwareToAll, setApplySoftwareToAll] = useState(false);
+  const [batchIngestProgress, setBatchIngestProgress] = useState<{
+    total: number;
+    complete: number;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = () => router.refresh();
@@ -278,57 +286,113 @@ export function AssetLibraryClient({
   const ingestFiles = async (fileList: FileList | File[]) => {
     const files = Array.from(fileList).filter((f) => isRasterGameImage(f) || isPsdFile(f)).slice(0, 50);
     const specs = buildPairSpecs(files);
-    const next: DraftPairLocal[] = [];
-    for (const spec of specs) {
-      if (!spec.raster) continue;
-      let layerCount: number | null = null;
-      let psdError: string | null = null;
-      if (spec.psd) {
-        try {
-          const buf = await spec.psd.arrayBuffer();
-          layerCount = parsePsdLayerCount(buf);
-          if (layerCount == null) {
-            psdError = `Could not read layer count from ${spec.psd.name}.`;
-          }
-        } catch {
-          psdError = `PSD parse failed (${spec.psd.name}).`;
-          layerCount = null;
-        }
+    const rasterSpecs = specs.filter((s) => s.raster);
+    if (rasterSpecs.length === 0) {
+      setDraftPairs([]);
+      setBatchIngestProgress(null);
+      return;
+    }
+
+    setBatchIngestProgress({ total: rasterSpecs.length, complete: 0 });
+    setDraftPairs([]);
+
+    for (let i = 0; i < rasterSpecs.length; i++) {
+      const spec = rasterSpecs[i];
+      const previewUrl = URL.createObjectURL(spec.raster!);
+
+      if (!spec.psd) {
+        const row: DraftPairLocal = {
+          key: spec.key,
+          spec,
+          previewUrl,
+          layerCount: null,
+          title: formatTitleFromStem(spec.displayStem),
+          creator_name: "",
+          software: "Photoshop",
+          category: CATEGORY_OPTIONS[0],
+          layer_count: "",
+          is_sponsored: false,
+          sponsor_name: "",
+          uploadProgress: 0,
+          uploadPhase: "idle",
+          errorText: null,
+          successText: null,
+          psdParseStatus: "ready",
+        };
+        setDraftPairs((prev) => [...prev, row]);
+        setBatchIngestProgress({ total: rasterSpecs.length, complete: i + 1 });
+        continue;
       }
-      next.push({
+
+      const countingRow: DraftPairLocal = {
         key: spec.key,
         spec,
-        previewUrl: URL.createObjectURL(spec.raster),
-        layerCount,
+        previewUrl,
+        layerCount: null,
         title: formatTitleFromStem(spec.displayStem),
         creator_name: "",
         software: "Photoshop",
         category: CATEGORY_OPTIONS[0],
-        layer_count: layerCount != null ? String(layerCount) : "",
+        layer_count: "",
         is_sponsored: false,
         sponsor_name: "",
         uploadProgress: 0,
         uploadPhase: "idle",
-        errorText: psdError,
+        errorText: null,
         successText: null,
-      });
+        psdParseStatus: "counting",
+      };
+      setDraftPairs((prev) => [...prev, countingRow]);
+
+      let layerCount: number | null = null;
+      let psdError: string | null = null;
+      try {
+        const buf = await spec.psd.arrayBuffer();
+        layerCount = parsePsdLayerCount(buf);
+        if (layerCount == null) {
+          psdError = `Could not read layer count from ${spec.psd.name}.`;
+        }
+      } catch {
+        psdError = `PSD parse failed (${spec.psd.name}).`;
+        layerCount = null;
+      }
+
+      const psdParseStatus: "ready" | "error" = psdError ? "error" : "ready";
+      setDraftPairs((prev) =>
+        prev.map((r) =>
+          r.key === spec.key
+            ? {
+                ...r,
+                layerCount,
+                layer_count: layerCount != null ? String(layerCount) : "",
+                errorText: psdError,
+                psdParseStatus,
+              }
+            : r,
+        ),
+      );
+      setBatchIngestProgress({ total: rasterSpecs.length, complete: i + 1 });
     }
-    let rows = next;
-    if (applyCreatorToAll) {
-      rows = rows.map((r) => ({
-        ...r,
-        creator_name: batchCreatorName,
-        creatorDetachedFromBatch: false,
-      }));
-    }
-    if (applySoftwareToAll) {
-      rows = rows.map((r) => ({
-        ...r,
-        software: batchSoftware,
-        softwareDetachedFromBatch: false,
-      }));
-    }
-    setDraftPairs(rows);
+
+    setDraftPairs((prev) => {
+      let rows = prev;
+      if (applyCreatorToAll) {
+        rows = rows.map((r) => ({
+          ...r,
+          creator_name: batchCreatorName,
+          creatorDetachedFromBatch: false,
+        }));
+      }
+      if (applySoftwareToAll) {
+        rows = rows.map((r) => ({
+          ...r,
+          software: batchSoftware,
+          softwareDetachedFromBatch: false,
+        }));
+      }
+      return rows;
+    });
+    setBatchIngestProgress(null);
   };
 
   const saveReadyPair = async (row: DraftPairLocal) => {
@@ -672,8 +736,10 @@ export function AssetLibraryClient({
         />
       </div>
 
-      {draftPairs.length > 0 && (
+      {(draftPairs.length > 0 || batchIngestProgress !== null) && (
         <div className="mb-4 space-y-3">
+          {draftPairs.length > 0 ? (
+            <>
           <div className="flex justify-end">
             <button
               type="button"
@@ -781,10 +847,48 @@ export function AssetLibraryClient({
               </div>
             </div>
           </div>
-          {draftPairs.map((row) => (
-            <div key={row.key} className="rounded-xl border border-white/10 bg-black/25 p-3">
-              <div className="flex gap-3">
-                <div className="relative h-20 w-24 overflow-hidden rounded-lg bg-black/40">
+            </>
+          ) : null}
+          {batchIngestProgress !== null ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-white/85">
+                  Processing batch — {batchIngestProgress.complete} of {batchIngestProgress.total} complete
+                </span>
+                <span className="tabular-nums font-semibold" style={{ color: "#a855f7" }}>
+                  {batchIngestProgress.total > 0
+                    ? Math.round((batchIngestProgress.complete / batchIngestProgress.total) * 100)
+                    : 0}
+                  %
+                </span>
+              </div>
+              <div
+                className="w-full overflow-hidden rounded-[20px]"
+                style={{ height: 6, backgroundColor: "#ffffff10" }}
+              >
+                <div
+                  className="h-full rounded-[20px]"
+                  style={{
+                    width: `${batchIngestProgress.total > 0 ? (batchIngestProgress.complete / batchIngestProgress.total) * 100 : 0}%`,
+                    background: STUDIO_INGEST_PURPLE_GRADIENT,
+                    transition: "width 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+          {draftPairs.map((row) => {
+            const hasPsd = Boolean(row.spec.psd);
+            const parseStatus = row.psdParseStatus ?? "ready";
+            const statusIsCounting = hasPsd && parseStatus === "counting";
+            const statusIsError = hasPsd && parseStatus === "error";
+            return (
+            <div
+              key={row.key}
+              className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-black/25"
+            >
+              <div className="flex gap-3 p-3">
+                <div className="relative h-20 w-24 shrink-0 overflow-hidden rounded-lg bg-black/40">
                   {row.previewUrl ? (
                     <Image src={row.previewUrl} alt="" fill className="object-cover" sizes="96px" unoptimized />
                   ) : null}
@@ -822,8 +926,45 @@ export function AssetLibraryClient({
                   <button type="button" onClick={() => void saveReadyPair(row)} className="rounded bg-[#7c3aed] px-2 py-1 text-xs font-bold text-white">Save Ready</button>
                 </div>
               </div>
+              <div className="flex items-center gap-2 border-t border-white/[0.06] px-3 py-2 text-xs text-white/75">
+                {statusIsCounting ? (
+                  <>
+                    <span
+                      className="inline-block h-2 w-2 shrink-0 rounded-full"
+                      style={{
+                        background: "#f59e0b",
+                        animation: "studio-asset-ingest-dot-pulse 1s infinite",
+                      }}
+                      aria-hidden
+                    />
+                    <span>Counting layers...</span>
+                  </>
+                ) : statusIsError ? (
+                  <>
+                    <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#ef4444]" aria-hidden />
+                    <span>Error</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#10b981]" aria-hidden />
+                    <span>Ready</span>
+                  </>
+                )}
+              </div>
+              {statusIsCounting ? (
+                <div className="relative h-[3px] w-full overflow-hidden bg-[#ffffff10]">
+                  <div
+                    className="absolute inset-y-0 w-[38%] rounded-[20px]"
+                    style={{
+                      background: STUDIO_INGEST_PURPLE_GRADIENT,
+                      animation: "studio-asset-ingest-bar-sweep 1.35s ease-in-out infinite",
+                    }}
+                  />
+                </div>
+              ) : null}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

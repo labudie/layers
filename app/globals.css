@@ -461,6 +461,27 @@ tbody.leaderboard-stagger tr.lb-stagger-row {
   animation: calendar-month-fade 0.26s var(--smooth) both;
 }
 
+@keyframes studio-asset-ingest-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.88);
+  }
+}
+
+@keyframes studio-asset-ingest-bar-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-transition-shell {
     animation: none !important;
