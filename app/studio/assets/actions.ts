@@ -352,6 +352,366 @@ async function buildAutoSchedulePreview(
   return { assignments, unplaced };
 }
 
+export type ReconfigurePreviewRow = {
+  active_date: string;
+  position: number;
+  current_title: string | null;
+  proposed_title: string | null;
+  proposed_asset_id: string | null;
+};
+
+function tierMidLayerForPosition(position: number): number {
+  switch (position) {
+    case 1:
+      return 13;
+    case 2:
+      return 35;
+    case 3:
+      return 55;
+    case 4:
+      return 78;
+    default:
+      return 105;
+  }
+}
+
+type ReadyPoolRow = {
+  id: string;
+  title: string;
+  creator_name: string | null;
+  creator_key: string;
+  layer_count: number;
+  software: string;
+  category: string;
+  is_sponsored: boolean;
+  sponsor_name: string | null;
+  image_url: string | null;
+};
+
+async function buildReconfigureSchedulePreview(
+  sb: ReturnType<typeof createSupabaseServerClient>,
+  startDate: string,
+  endDate: string,
+  onlyIncompleteDays: boolean,
+  respectDifficultyTiers: boolean,
+): Promise<{
+  assignments: AutoSchedulePreviewRow[];
+  tableRows: ReconfigurePreviewRow[];
+  gapsFilled: number;
+  gapsUnfillable: number;
+  error?: string;
+}> {
+  const { data: schedRows, error: schedErr } = await sb
+    .from("assets")
+    .select(
+      "id,title,creator_name,layer_count,software,category,is_sponsored,sponsor_name,image_url,scheduled_date,scheduled_position",
+    )
+    .eq("status", "scheduled")
+    .gte("scheduled_date", startDate)
+    .lte("scheduled_date", endDate);
+  if (schedErr) return { assignments: [], tableRows: [], gapsFilled: 0, gapsUnfillable: 0, error: schedErr.message };
+
+  const { data: readyRows, error: readyErr } = await sb
+    .from("assets")
+    .select("id,title,creator_name,layer_count,software,category,is_sponsored,sponsor_name,image_url")
+    .eq("status", "ready")
+    .order("created_at", { ascending: true });
+  if (readyErr) return { assignments: [], tableRows: [], gapsFilled: 0, gapsUnfillable: 0, error: readyErr.message };
+
+  const dates = iterateDateRange(startDate, endDate);
+  const slotByDate = new Map<string, (ReadyPoolRow | null)[]>();
+  for (const d of dates) {
+    slotByDate.set(d, [null, null, null, null, null]);
+  }
+
+  for (const row of (schedRows ?? []) as Array<{
+    id: string;
+    title: string | null;
+    creator_name: string | null;
+    layer_count: number | null;
+    software?: string | null;
+    category?: string | null;
+    is_sponsored?: boolean | null;
+    sponsor_name?: string | null;
+    image_url?: string | null;
+    scheduled_date: string | null;
+    scheduled_position: number | null;
+  }>) {
+    const d = row.scheduled_date ?? "";
+    const p = Number(row.scheduled_position ?? 0);
+    if (!d || p < 1 || p > 5) continue;
+    const arr = slotByDate.get(d);
+    if (!arr) continue;
+    arr[p - 1] = {
+      id: row.id,
+      title: (row.title ?? "Untitled").trim() || "Untitled",
+      creator_name: (row.creator_name ?? "").trim() || null,
+      creator_key: (row.creator_name ?? "").trim().toLowerCase(),
+      layer_count: Math.max(0, Math.trunc(Number(row.layer_count ?? 0))),
+      software: String(row.software ?? "Other"),
+      category: String(row.category ?? "Other"),
+      is_sponsored: row.is_sponsored === true,
+      sponsor_name: row.is_sponsored ? (row.sponsor_name ?? null) : null,
+      image_url: row.image_url ?? null,
+    };
+  }
+
+  const readyPool: ReadyPoolRow[] = ((readyRows ?? []) as Array<{
+    id: string;
+    title: string | null;
+    creator_name: string | null;
+    layer_count: number | null;
+    software?: string | null;
+    category?: string | null;
+    is_sponsored?: boolean | null;
+    sponsor_name?: string | null;
+    image_url?: string | null;
+  }>).map((row) => ({
+    id: row.id,
+    title: (row.title ?? "Untitled").trim() || "Untitled",
+    creator_name: (row.creator_name ?? "").trim() || null,
+    creator_key: (row.creator_name ?? "").trim().toLowerCase(),
+    layer_count: Math.max(0, Math.trunc(Number(row.layer_count ?? 0))),
+    software: String(row.software ?? "Other"),
+    category: String(row.category ?? "Other"),
+    is_sponsored: row.is_sponsored === true,
+    sponsor_name: row.is_sponsored ? (row.sponsor_name ?? null) : null,
+    image_url: row.image_url ?? null,
+  }));
+
+  const assignments: AutoSchedulePreviewRow[] = [];
+  const tableRows: ReconfigurePreviewRow[] = [];
+  const usedAssetIds = new Set<string>();
+  let emptyTargeted = 0;
+
+  const pickReadyForPosition = (
+    position: number,
+    takenCreators: Set<string>,
+  ): ReadyPoolRow | null => {
+    const pool = readyPool.filter(
+      (a) =>
+        !usedAssetIds.has(a.id) &&
+        Boolean(a.image_url?.trim()) &&
+        (!a.creator_key || !takenCreators.has(a.creator_key)),
+    );
+    if (pool.length === 0) return null;
+    const exactTier = pool.filter((a) => getPosition(a.layer_count) === position);
+    if (exactTier.length > 0) {
+      return exactTier[0];
+    }
+    if (respectDifficultyTiers) return null;
+    const mid = tierMidLayerForPosition(position);
+    const sorted = [...pool].sort((a, b) => {
+      const da = Math.abs(a.layer_count - mid);
+      const db = Math.abs(b.layer_count - mid);
+      if (da !== db) return da - db;
+      return a.id.localeCompare(b.id);
+    });
+    return sorted[0] ?? null;
+  };
+
+  for (const date of dates) {
+    const slots = slotByDate.get(date) ?? [null, null, null, null, null];
+    const filled = slots.filter(Boolean).length;
+    if (filled >= 5) continue;
+    if (onlyIncompleteDays) {
+      if (filled === 0) continue;
+    }
+
+    const takenCreators = new Set<string>();
+    for (const s of slots) {
+      if (s?.creator_key) takenCreators.add(s.creator_key);
+    }
+
+    for (let position = 1; position <= 5; position++) {
+      const occupant = slots[position - 1];
+      if (occupant) continue;
+      emptyTargeted += 1;
+
+      const asset = pickReadyForPosition(position, takenCreators);
+      tableRows.push({
+        active_date: date,
+        position,
+        current_title: null,
+        proposed_title: asset?.title ?? null,
+        proposed_asset_id: asset?.id ?? null,
+      });
+
+      if (!asset) continue;
+      usedAssetIds.add(asset.id);
+      if (asset.creator_key) takenCreators.add(asset.creator_key);
+      assignments.push({
+        asset_id: asset.id,
+        active_date: date,
+        position,
+        title: asset.title,
+        creator_name: asset.creator_name,
+        layer_count: asset.layer_count,
+        software: asset.software,
+        category: asset.category,
+        is_sponsored: asset.is_sponsored,
+        sponsor_name: asset.sponsor_name,
+        image_url: asset.image_url,
+      });
+    }
+  }
+
+  assignments.sort((a, b) =>
+    a.active_date === b.active_date
+      ? a.position - b.position
+      : a.active_date.localeCompare(b.active_date),
+  );
+  tableRows.sort((a, b) =>
+    a.active_date === b.active_date
+      ? a.position - b.position
+      : a.active_date.localeCompare(b.active_date),
+  );
+
+  const gapsFilled = assignments.length;
+  const gapsUnfillable = Math.max(0, emptyTargeted - gapsFilled);
+
+  return { assignments, tableRows, gapsFilled, gapsUnfillable };
+}
+
+async function applyScheduleAssignmentsFromReady(
+  sb: ReturnType<typeof createSupabaseServerClient>,
+  assignments: AutoSchedulePreviewRow[],
+): Promise<{ ok: boolean; error?: string }> {
+  if (assignments.length === 0) return { ok: true };
+
+  const uniqueDates = Array.from(new Set(assignments.map((a) => a.active_date))).sort();
+  const dayNumberByDate = new Map<string, number>();
+  for (const date of uniqueDates) {
+    dayNumberByDate.set(date, await computeDayNumberForDate(sb, date));
+  }
+
+  const upsertChallenges = assignments.map((item) => ({
+    title: item.title,
+    creator_name: item.creator_name,
+    day_number: dayNumberByDate.get(item.active_date) ?? 1,
+    software: item.software,
+    category: item.category,
+    layer_count: item.layer_count,
+    active_date: item.active_date,
+    position: item.position,
+    is_sponsored: item.is_sponsored,
+    sponsor_name: item.is_sponsored ? item.sponsor_name : null,
+    image_url: item.image_url,
+  }));
+
+  const { error: upsertError } = await sb
+    .from("challenges")
+    .upsert(upsertChallenges, { onConflict: "active_date,position" });
+  if (upsertError) return { ok: false, error: upsertError.message };
+
+  const minD = uniqueDates[0];
+  const maxD = uniqueDates[uniqueDates.length - 1];
+  const { data: createdChallenges, error: challengeFetchError } = await sb
+    .from("challenges")
+    .select("id,active_date,position")
+    .gte("active_date", minD)
+    .lte("active_date", maxD);
+  if (challengeFetchError) return { ok: false, error: challengeFetchError.message };
+
+  const challengeIdByDatePosition = new Map<string, string>();
+  for (const row of (createdChallenges ?? []) as Array<{
+    id: string;
+    active_date: string | null;
+    position: number | null;
+  }>) {
+    if (!row.active_date || !row.position) continue;
+    challengeIdByDatePosition.set(`${row.active_date}-${row.position}`, row.id);
+  }
+
+  const assetUpdates = assignments.map((item) => ({
+    id: item.asset_id,
+    status: "scheduled" as const,
+    scheduled_date: item.active_date,
+    scheduled_position: item.position,
+    challenge_id: challengeIdByDatePosition.get(`${item.active_date}-${item.position}`) ?? null,
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error: assetsUpsertError } = await sb.from("assets").upsert(assetUpdates, { onConflict: "id" });
+  if (assetsUpsertError) return { ok: false, error: assetsUpsertError.message };
+
+  return { ok: true };
+}
+
+export async function previewReconfigureScheduleAction(
+  startDate: string,
+  endDate: string,
+  onlyIncompleteDays: boolean,
+  respectDifficultyTiers: boolean,
+): Promise<{
+  ok: boolean;
+  error?: string;
+  tableRows?: ReconfigurePreviewRow[];
+  assignments?: AutoSchedulePreviewRow[];
+  gapsFilled?: number;
+  gapsUnfillable?: number;
+}> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  if (!isYmd(startDate) || !isYmd(endDate)) {
+    return { ok: false, error: "Invalid date format." };
+  }
+  if (startDate > endDate) return { ok: false, error: "Start date must be before end date." };
+  if (startDate < toYmdEasternToday()) {
+    return { ok: false, error: "Start date must be today or later (US Eastern)." };
+  }
+
+  const result = await buildReconfigureSchedulePreview(
+    gate.sb,
+    startDate,
+    endDate,
+    onlyIncompleteDays,
+    respectDifficultyTiers,
+  );
+  if (result.error) return { ok: false, error: result.error };
+  return {
+    ok: true,
+    tableRows: result.tableRows,
+    assignments: result.assignments,
+    gapsFilled: result.gapsFilled,
+    gapsUnfillable: result.gapsUnfillable,
+  };
+}
+
+export async function confirmReconfigureScheduleAction(
+  startDate: string,
+  endDate: string,
+  onlyIncompleteDays: boolean,
+  respectDifficultyTiers: boolean,
+): Promise<{ ok: boolean; error?: string; scheduledCount?: number }> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  if (!isYmd(startDate) || !isYmd(endDate)) {
+    return { ok: false, error: "Invalid date format." };
+  }
+  if (startDate > endDate) return { ok: false, error: "Start date must be before end date." };
+  if (startDate < toYmdEasternToday()) {
+    return { ok: false, error: "Start date must be today or later (US Eastern)." };
+  }
+
+  const preview = await buildReconfigureSchedulePreview(
+    gate.sb,
+    startDate,
+    endDate,
+    onlyIncompleteDays,
+    respectDifficultyTiers,
+  );
+  if (preview.error) return { ok: false, error: preview.error };
+  if (preview.assignments.length === 0) return { ok: true, scheduledCount: 0 };
+
+  const applied = await applyScheduleAssignmentsFromReady(gate.sb, preview.assignments);
+  if (!applied.ok) return { ok: false, error: applied.error };
+
+  revalidatePath("/studio/assets");
+  revalidatePath("/studio");
+  return { ok: true, scheduledCount: preview.assignments.length };
+}
+
 export async function previewAutoScheduleAction(
   startDate: string,
   endDate: string,
@@ -402,61 +762,8 @@ export async function confirmAutoScheduleAction(
   if (preview.error) return { ok: false, error: preview.error };
   if (preview.assignments.length === 0) return { ok: true, scheduledCount: 0 };
 
-  const uniqueDates = Array.from(new Set(preview.assignments.map((a) => a.active_date))).sort();
-  const dayNumberByDate = new Map<string, number>();
-  for (const date of uniqueDates) {
-    dayNumberByDate.set(date, await computeDayNumberForDate(gate.sb, date));
-  }
-
-  const upsertChallenges = preview.assignments.map((item) => ({
-    title: item.title,
-    creator_name: item.creator_name,
-    day_number: dayNumberByDate.get(item.active_date) ?? 1,
-    software: item.software,
-    category: item.category,
-    layer_count: item.layer_count,
-    active_date: item.active_date,
-    position: item.position,
-    is_sponsored: item.is_sponsored,
-    sponsor_name: item.is_sponsored ? item.sponsor_name : null,
-    image_url: item.image_url,
-  }));
-
-  const { error: upsertError } = await gate.sb
-    .from("challenges")
-    .upsert(upsertChallenges, { onConflict: "active_date,position" });
-  if (upsertError) return { ok: false, error: upsertError.message };
-
-  const { data: createdChallenges, error: challengeFetchError } = await gate.sb
-    .from("challenges")
-    .select("id,active_date,position")
-    .gte("active_date", startDate)
-    .lte("active_date", endDate);
-  if (challengeFetchError) return { ok: false, error: challengeFetchError.message };
-
-  const challengeIdByDatePosition = new Map<string, string>();
-  for (const row of (createdChallenges ?? []) as Array<{
-    id: string;
-    active_date: string | null;
-    position: number | null;
-  }>) {
-    if (!row.active_date || !row.position) continue;
-    challengeIdByDatePosition.set(`${row.active_date}-${row.position}`, row.id);
-  }
-
-  const assetUpdates = preview.assignments.map((item) => ({
-    id: item.asset_id,
-    status: "scheduled" as const,
-    scheduled_date: item.active_date,
-    scheduled_position: item.position,
-    challenge_id: challengeIdByDatePosition.get(`${item.active_date}-${item.position}`) ?? null,
-    updated_at: new Date().toISOString(),
-  }));
-
-  const { error: assetsUpsertError } = await gate.sb
-    .from("assets")
-    .upsert(assetUpdates, { onConflict: "id" });
-  if (assetsUpsertError) return { ok: false, error: assetsUpsertError.message };
+  const applied = await applyScheduleAssignmentsFromReady(gate.sb, preview.assignments);
+  if (!applied.ok) return { ok: false, error: applied.error };
 
   revalidatePath("/studio/assets");
   revalidatePath("/studio");
@@ -801,7 +1108,8 @@ export async function reorderScheduledDayAction(
   return { ok: true };
 }
 
-export async function publishScheduledDayAction(
+async function publishScheduledDateCore(
+  sb: ReturnType<typeof createSupabaseServerClient>,
   scheduledDate: string,
 ): Promise<{
   ok: boolean;
@@ -810,10 +1118,6 @@ export async function publishScheduledDayAction(
   existingCount?: number;
   message?: string;
 }> {
-  const gate = await getAdminSupabase();
-  if (!gate.ok) return { ok: false, error: gate.error };
-  const { sb } = gate;
-
   const { data: slots } = await sb
     .from("assets")
     .select("*")
@@ -930,12 +1234,29 @@ export async function publishScheduledDayAction(
 
   const publishedCount = insertPayload.length;
   const existingCount = Math.max(0, slotPositions.length - publishedCount);
-  revalidatePath("/studio/assets");
-  revalidatePath("/studio");
   return {
     ok: true,
     publishedCount,
     existingCount,
     message: `${publishedCount} new challenge${publishedCount === 1 ? "" : "s"} published, ${existingCount} already existed`,
   };
+}
+
+export async function publishScheduledDayAction(
+  scheduledDate: string,
+): Promise<{
+  ok: boolean;
+  error?: string;
+  publishedCount?: number;
+  existingCount?: number;
+  message?: string;
+}> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const r = await publishScheduledDateCore(gate.sb, scheduledDate);
+  if (r.ok) {
+    revalidatePath("/studio/assets");
+    revalidatePath("/studio");
+  }
+  return r;
 }

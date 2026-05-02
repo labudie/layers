@@ -22,17 +22,20 @@ import { SOFTWARE_OPTIONS, type SoftwareOption } from "@/lib/software-options";
 import { CreatorAutocompleteInput } from "@/app/studio/AdminChallengeFormClient";
 import {
   approveSubmissionToAssetAction,
+  confirmAutoScheduleAction,
+  confirmReconfigureScheduleAction,
   insertReadyAssetAction,
   insertReadyAssetsBatchAction,
   previewAutoScheduleAction,
-  confirmAutoScheduleAction,
-  type AutoSchedulePreviewRow,
+  previewReconfigureScheduleAction,
   publishScheduledDayAction,
   rejectSubmissionAction,
   scheduleAssetAction,
   unscheduleAssetAction,
   updateAssetAction,
   type AssetUpsertFields,
+  type AutoSchedulePreviewRow,
+  type ReconfigurePreviewRow,
 } from "@/app/studio/assets/actions";
 
 export type AssetRow = {
@@ -217,6 +220,20 @@ function addDaysToYmd(ymd: string, days: number) {
   const d = new Date(`${ymd}T00:00:00`);
   d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function monthBoundsYmd(year: number, month0: number): { start: string; end: string } {
+  const cells = monthMatrix(year, month0)
+    .flat()
+    .filter((c): c is Date => c != null);
+  if (cells.length === 0) {
+    const t = todayYmdEastern();
+    return { start: t, end: t };
+  }
+  const tms = cells.map((c) => c.getTime());
+  const min = new Date(Math.min(...tms));
+  const max = new Date(Math.max(...tms));
+  return { start: toYmd(min), end: toYmd(max) };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -606,6 +623,20 @@ export function AssetLibraryClient({
   const [autoScheduleConfirmBusy, setAutoScheduleConfirmBusy] = useState(false);
   const [autoSchedulePreview, setAutoSchedulePreview] = useState<AutoSchedulePreviewRow[]>([]);
   const [autoScheduleUnplaced, setAutoScheduleUnplaced] = useState<Array<{ id: string; title: string }>>([]);
+  const [reconfigureOpen, setReconfigureOpen] = useState(false);
+  const [reconfigureStartDate, setReconfigureStartDate] = useState(todayYmdEastern());
+  const [reconfigureEndDate, setReconfigureEndDate] = useState(todayYmdEastern());
+  const [reconfigureOnlyIncompleteDays, setReconfigureOnlyIncompleteDays] = useState(true);
+  const [reconfigureRespectTiers, setReconfigureRespectTiers] = useState(true);
+  const [reconfigurePreviewBusy, setReconfigurePreviewBusy] = useState(false);
+  const [reconfigureConfirmBusy, setReconfigureConfirmBusy] = useState(false);
+  const [reconfigureTableRows, setReconfigureTableRows] = useState<ReconfigurePreviewRow[]>([]);
+  const [reconfigureAssignments, setReconfigureAssignments] = useState<AutoSchedulePreviewRow[]>([]);
+  const [reconfigureGapsFilled, setReconfigureGapsFilled] = useState(0);
+  const [reconfigureGapsUnfillable, setReconfigureGapsUnfillable] = useState(0);
+  const [goLiveAllProgress, setGoLiveAllProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
   const [batchCreatorName, setBatchCreatorName] = useState("");
   const [batchSoftware, setBatchSoftware] = useState<SoftwareOption>("Photoshop");
   const [applyCreatorToAll, setApplyCreatorToAll] = useState(false);
@@ -619,6 +650,18 @@ export function AssetLibraryClient({
   useEffect(() => {
     setReadyVisibleCount(20);
   }, [readyFilter, readySearch]);
+
+  useEffect(() => {
+    setAssets(initialAssets);
+  }, [initialAssets]);
+
+  useEffect(() => {
+    setLiveCounts(liveCountsByDate);
+  }, [liveCountsByDate]);
+
+  useEffect(() => {
+    setLiveChallengeMap(liveChallengeIdByDatePosition);
+  }, [liveChallengeIdByDatePosition]);
 
   const patchDraftRow = useCallback((key: string, partial: Partial<DraftPairLocal>) => {
     setDraftPairs((list) => list.map((r) => (r.key === key ? { ...r, ...partial } : r)));
@@ -748,6 +791,41 @@ export function AssetLibraryClient({
   const selectedSlots = selectedDate && scheduledByDate.slots[selectedDate]
     ? scheduledByDate.slots[selectedDate]
     : [null, null, null, null, null];
+
+  const goLiveAllEligibleDates = useMemo(() => {
+    const today = todayYmdEastern();
+    const countByDate = new Map<string, number>();
+    for (const a of assets) {
+      if (a.status !== "scheduled" || !a.scheduled_date) continue;
+      countByDate.set(a.scheduled_date, (countByDate.get(a.scheduled_date) ?? 0) + 1);
+    }
+    const dates: string[] = [];
+    for (const [date, n] of countByDate.entries()) {
+      if (n !== 5) continue;
+      if (date < today) continue;
+      const liveN = liveCounts[date] ?? 0;
+      if (liveN >= 5) continue;
+      dates.push(date);
+    }
+    dates.sort();
+    return dates;
+  }, [assets, liveCounts]);
+
+  const calendarMonthStats = useMemo(() => {
+    const m = monthMatrix(viewMonth.y, viewMonth.m);
+    let full = 0;
+    let incomplete = 0;
+    let empty = 0;
+    for (const cell of m.flat()) {
+      if (!cell) continue;
+      const ymd = toYmd(cell);
+      const c = scheduledByDate.counts[ymd] ?? 0;
+      if (c === 5) full += 1;
+      else if (c === 0) empty += 1;
+      else incomplete += 1;
+    }
+    return { full, incomplete, empty };
+  }, [viewMonth.y, viewMonth.m, scheduledByDate.counts]);
 
   const ingestFiles = async (fileList: FileList | File[]) => {
     const files = Array.from(fileList).filter((f) => isRasterGameImage(f) || isPsdFile(f)).slice(0, 50);
@@ -1069,6 +1147,121 @@ export function AssetLibraryClient({
       text: `${result.scheduledCount ?? 0} assets auto-scheduled.`,
     });
     window.setTimeout(() => setToast(null), 2600);
+  };
+
+  const openReconfigureModal = () => {
+    const { start, end } = monthBoundsYmd(viewMonth.y, viewMonth.m);
+    setReconfigureStartDate(start);
+    setReconfigureEndDate(end);
+    setReconfigureOnlyIncompleteDays(true);
+    setReconfigureRespectTiers(true);
+    setReconfigureTableRows([]);
+    setReconfigureAssignments([]);
+    setReconfigureGapsFilled(0);
+    setReconfigureGapsUnfillable(0);
+    setReconfigureOpen(true);
+  };
+
+  const previewReconfigure = async () => {
+    setReconfigurePreviewBusy(true);
+    const r = await previewReconfigureScheduleAction(
+      reconfigureStartDate,
+      reconfigureEndDate,
+      reconfigureOnlyIncompleteDays,
+      reconfigureRespectTiers,
+    );
+    setReconfigurePreviewBusy(false);
+    if (!r.ok) {
+      window.alert(r.error ?? "Preview failed.");
+      return;
+    }
+    setReconfigureTableRows(r.tableRows ?? []);
+    setReconfigureAssignments(r.assignments ?? []);
+    setReconfigureGapsFilled(r.gapsFilled ?? 0);
+    setReconfigureGapsUnfillable(r.gapsUnfillable ?? 0);
+  };
+
+  const confirmReconfigure = async () => {
+    setReconfigureConfirmBusy(true);
+    const snapshot = reconfigureAssignments;
+    const r = await confirmReconfigureScheduleAction(
+      reconfigureStartDate,
+      reconfigureEndDate,
+      reconfigureOnlyIncompleteDays,
+      reconfigureRespectTiers,
+    );
+    setReconfigureConfirmBusy(false);
+    if (!r.ok) {
+      window.alert(r.error ?? "Confirm failed.");
+      return;
+    }
+    const assignmentKeys = new Set(
+      snapshot.map((row) => `${row.asset_id}-${row.active_date}-${row.position}`),
+    );
+    setAssets((prev) =>
+      prev.map((asset) => {
+        const match = snapshot.find((row) => row.asset_id === asset.id);
+        if (!match || !assignmentKeys.has(`${match.asset_id}-${match.active_date}-${match.position}`)) {
+          return asset;
+        }
+        return {
+          ...asset,
+          status: "scheduled",
+          scheduled_date: match.active_date,
+          scheduled_position: match.position,
+        };
+      }),
+    );
+    setReconfigureOpen(false);
+    setReconfigureTableRows([]);
+    setReconfigureAssignments([]);
+    setToast({
+      type: "success",
+      text: `${r.scheduledCount ?? 0} slot${(r.scheduledCount ?? 0) === 1 ? "" : "s"} filled from Ready.`,
+    });
+    window.setTimeout(() => setToast(null), 2600);
+    router.refresh();
+  };
+
+  const runGoLiveAll = async () => {
+    const dates = goLiveAllEligibleDates;
+    if (dates.length === 0) return;
+    if (
+      !window.confirm(
+        `Push ${dates.length} fully scheduled days live? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setGoLiveAllProgress({ current: 0, total: dates.length });
+    for (let i = 0; i < dates.length; i++) {
+      const d = dates[i]!;
+      setGoLiveAllProgress({ current: i + 1, total: dates.length });
+      const r = await publishScheduledDayAction(d);
+      if (!r.ok) {
+        window.alert(`${d}: ${r.error ?? "Failed to publish."}`);
+        setGoLiveAllProgress(null);
+        router.refresh();
+        return;
+      }
+      setLiveChallengeMap((prev) => {
+        const next = { ...prev };
+        const cur = { ...(next[d] ?? {}) };
+        for (let p = 1; p <= 5; p++) {
+          if (!cur[p]) cur[p] = `live-${d}-${p}`;
+        }
+        next[d] = cur;
+        return next;
+      });
+      setLiveCounts((prev) => ({ ...prev, [d]: 5 }));
+    }
+    setGoLiveAllProgress(null);
+    setToast({
+      type: "success",
+      text: `${dates.length} day${dates.length === 1 ? "" : "s"} published.`,
+    });
+    window.setTimeout(() => setToast(null), 2800);
+    router.refresh();
   };
 
   const onDropToSlot = async (slotIndex: number) => {
@@ -1455,10 +1648,40 @@ export function AssetLibraryClient({
 
   const rightPanel = (
     <div className="h-fit w-full rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <button type="button" className="rounded border border-white/15 px-2 py-1 text-sm text-white/80" onClick={() => setViewMonth((v) => { const d = new Date(v.y, v.m - 1, 1); return { y: d.getFullYear(), m: d.getMonth() }; })}>←</button>
-        <p className="text-sm font-semibold text-white">{monthLabel}</p>
-        <button type="button" className="rounded border border-white/15 px-2 py-1 text-sm text-white/80" onClick={() => setViewMonth((v) => { const d = new Date(v.y, v.m + 1, 1); return { y: d.getFullYear(), m: d.getMonth() }; })}>→</button>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-2 sm:justify-start">
+          <button type="button" className="rounded border border-white/15 px-2 py-1 text-sm text-white/80" onClick={() => setViewMonth((v) => { const d = new Date(v.y, v.m - 1, 1); return { y: d.getFullYear(), m: d.getMonth() }; })}>←</button>
+          <p className="truncate text-sm font-semibold text-white">{monthLabel}</p>
+          <button type="button" className="rounded border border-white/15 px-2 py-1 text-sm text-white/80" onClick={() => setViewMonth((v) => { const d = new Date(v.y, v.m + 1, 1); return { y: d.getFullYear(), m: d.getMonth() }; })}>→</button>
+        </div>
+        <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
+          <button
+            type="button"
+            onClick={openReconfigureModal}
+            className="rounded px-2.5 py-1.5 text-xs font-bold"
+            style={{
+              background: "rgba(245,158,11,0.15)",
+              color: "#f59e0b",
+              border: "0.5px solid rgba(245,158,11,0.3)",
+            }}
+          >
+            ⚡ Re-configure
+          </button>
+          <button
+            type="button"
+            disabled={goLiveAllEligibleDates.length === 0 || goLiveAllProgress !== null}
+            onClick={() => void runGoLiveAll()}
+            className="rounded px-2.5 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ background: "#10b981" }}
+          >
+            ✓ Go Live All ({goLiveAllEligibleDates.length} days)
+          </button>
+        </div>
+      </div>
+      <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+        <span className="font-medium text-emerald-400">{calendarMonthStats.full} days fully scheduled</span>
+        <span className="font-medium text-amber-400">{calendarMonthStats.incomplete} days incomplete</span>
+        <span className="font-medium text-white/45">{calendarMonthStats.empty} days empty</span>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-white/40">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d) => <div key={d}>{d}</div>)}</div>
       <div className="mt-1 grid grid-cols-7 gap-1">
@@ -1748,6 +1971,145 @@ export function AssetLibraryClient({
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {reconfigureOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/15 bg-[#160828] p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-white">Re-configure Schedule</h2>
+              <button
+                type="button"
+                className="text-sm text-white/60"
+                onClick={() => {
+                  setReconfigureOpen(false);
+                  setReconfigureTableRows([]);
+                  setReconfigureAssignments([]);
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-sm text-white/80">
+                <span className="mb-1 block text-xs uppercase text-white/55">Start date</span>
+                <input
+                  type="date"
+                  value={reconfigureStartDate}
+                  onChange={(e) => setReconfigureStartDate(e.target.value)}
+                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-2 text-white"
+                />
+              </label>
+              <label className="text-sm text-white/80">
+                <span className="mb-1 block text-xs uppercase text-white/55">End date</span>
+                <input
+                  type="date"
+                  value={reconfigureEndDate}
+                  onChange={(e) => setReconfigureEndDate(e.target.value)}
+                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-2 text-white"
+                />
+              </label>
+            </div>
+
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-white/85">
+              <input
+                type="checkbox"
+                checked={reconfigureOnlyIncompleteDays}
+                onChange={(e) => setReconfigureOnlyIncompleteDays(e.target.checked)}
+              />
+              <span>Only re-configure incomplete days (recommended)</span>
+            </label>
+            <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-white/85">
+              <input
+                type="checkbox"
+                checked={reconfigureRespectTiers}
+                onChange={(e) => setReconfigureRespectTiers(e.target.checked)}
+              />
+              <span>Respect difficulty tiers</span>
+            </label>
+
+            <div className="mt-3">
+              <button
+                type="button"
+                disabled={reconfigurePreviewBusy}
+                onClick={() => void previewReconfigure()}
+                className="rounded bg-[#7c3aed] px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {reconfigurePreviewBusy ? "Previewing…" : "Preview"}
+              </button>
+            </div>
+
+            <div className="mt-4 max-h-[36vh] overflow-auto rounded-xl border border-white/10">
+              <table className="min-w-full text-left text-sm">
+                <thead className="sticky top-0 bg-[#160828] text-xs uppercase tracking-wider text-white/55">
+                  <tr>
+                    <th className="px-3 py-2">Date</th>
+                    <th className="px-3 py-2">Slot</th>
+                    <th className="px-3 py-2">Current content</th>
+                    <th className="px-3 py-2">Proposed new content</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reconfigureTableRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-4 text-center text-white/60">
+                        Run Preview to see proposed fills for empty slots.
+                      </td>
+                    </tr>
+                  ) : (
+                    reconfigureTableRows.map((row) => (
+                      <tr key={`${row.active_date}-${row.position}`} className="border-t border-white/10">
+                        <td className="px-3 py-2 text-white/90">{row.active_date}</td>
+                        <td className="px-3 py-2 text-white/80">{row.position}</td>
+                        <td className="px-3 py-2 text-white/60">{row.current_title?.trim() ? row.current_title : "—"}</td>
+                        <td className="px-3 py-2 text-white">
+                          {row.proposed_title?.trim() ? row.proposed_title : "—"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <p className="mt-3 text-sm text-white/85">
+              <span className="font-semibold text-emerald-300">{reconfigureGapsFilled}</span> gaps will be filled,{" "}
+              <span className="font-semibold text-amber-300">{reconfigureGapsUnfillable}</span> gaps cannot be filled
+              (insufficient assets)
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={reconfigureConfirmBusy || reconfigureAssignments.length === 0}
+                onClick={() => void confirmReconfigure()}
+                className="rounded bg-[#7c3aed] px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {reconfigureConfirmBusy ? "Confirming…" : "Confirm"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReconfigureOpen(false);
+                  setReconfigureTableRows([]);
+                  setReconfigureAssignments([]);
+                }}
+                className="rounded border border-white/20 px-3 py-2 text-sm font-semibold text-white/85"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {goLiveAllProgress ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="status" aria-live="polite">
+          <div className="rounded-xl border border-white/15 bg-[#160828] px-6 py-4 text-center text-sm font-semibold text-white">
+            Publishing day {goLiveAllProgress.current} of {goLiveAllProgress.total}…
           </div>
         </div>
       ) : null}
