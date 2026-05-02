@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   buildPairSpecs,
@@ -201,6 +201,352 @@ function addDaysToYmd(ymd: string, days: number) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const debounce = (fn: (...args: any[]) => void, ms: number) => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (...args: any[]) => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+};
+
+const ReadyAssetCard = memo(function ReadyAssetCard({
+  asset: a,
+  isDragging,
+  onSelect,
+  onDragStart,
+  onDragEnd,
+}: {
+  asset: AssetRow;
+  isDragging: boolean;
+  onSelect: (asset: AssetRow) => void;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      draggable
+      onDragStart={() => onDragStart(a.id)}
+      onDragEnd={onDragEnd}
+      onClick={() => onSelect(a)}
+      title="Drag to schedule"
+      style={
+        a.is_sponsored
+          ? {
+              border: "0.5px solid rgba(251, 191, 36, 0.4)",
+              background: "rgba(251, 191, 36, 0.04)",
+            }
+          : undefined
+      }
+      className={`group relative flex items-center gap-2 rounded-xl p-2 text-left transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
+        a.is_sponsored
+          ? "hover:bg-[rgba(251,191,36,0.07)]"
+          : "border border-white/10 bg-black/25 hover:bg-black/35"
+      } ${
+        isDragging
+          ? "scale-105 rotate-2 shadow-[0_10px_24px_rgba(124,58,237,0.25)]"
+          : "hover:shadow-[0_0_0_1px_rgba(124,58,237,0.5),0_0_18px_rgba(124,58,237,0.25)]"
+      }`}
+    >
+      {a.is_sponsored ? (
+        <span
+          className="pointer-events-none absolute top-1.5 right-2 z-[2] leading-none"
+          style={{
+            background: "rgba(251, 191, 36, 0.15)",
+            color: "#fbbf24",
+            border: "0.5px solid rgba(251, 191, 36, 0.3)",
+            fontSize: 9,
+            fontWeight: 600,
+            padding: "2px 7px",
+            borderRadius: 20,
+          }}
+        >
+          Sponsored
+        </span>
+      ) : null}
+      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-black/40">
+        {a.image_url ? (
+          <Image
+            src={a.image_url}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="56px"
+            unoptimized
+            loading="lazy"
+          />
+        ) : null}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <p className="truncate text-sm font-semibold text-white">{a.title}</p>
+          <span className="rounded bg-white/10 px-1 text-[10px] text-white/70">{SOFTWARE_ICONS[a.software] ?? "•"}</span>
+        </div>
+        <p className="truncate text-xs text-white/60">@{a.creator_name || "creator"}</p>
+        <div className="mt-0.5 flex items-center gap-2">
+          <DifficultyBadge layerCount={a.layer_count} />
+          <span className="text-[10px] text-white/45">{a.layer_count} layers</span>
+        </div>
+      </div>
+      <span className="pointer-events-none absolute -top-2 right-2 rounded bg-[#7c3aed] px-1.5 py-0.5 text-[10px] font-semibold text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        Drag to schedule
+      </span>
+    </button>
+  );
+});
+
+const DraftQueueRow = memo(function DraftQueueRow({
+  row,
+  onPatch,
+  onSaveReadyPair,
+  runSuggestTitle,
+}: {
+  row: DraftPairLocal;
+  onPatch: (key: string, partial: Partial<DraftPairLocal>) => void;
+  onSaveReadyPair: (row: DraftPairLocal) => void;
+  runSuggestTitle: (row: DraftPairLocal) => void;
+}) {
+  const [titleInput, setTitleInput] = useState(row.title);
+  const [layerInput, setLayerInput] = useState(row.layer_count);
+
+  useEffect(() => {
+    setTitleInput(row.title);
+  }, [row.title, row.key]);
+
+  useEffect(() => {
+    setLayerInput(row.layer_count);
+  }, [row.layer_count, row.key]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      if (titleInput !== row.title) {
+        onPatch(row.key, { title: titleInput, titleAiSuggested: false });
+      }
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [titleInput, row.title, row.key, onPatch]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      if (layerInput !== row.layer_count) {
+        onPatch(row.key, { layer_count: layerInput });
+      }
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [layerInput, row.layer_count, row.key, onPatch]);
+
+  const hasPsd = Boolean(row.spec.psd);
+  const parseStatus = row.psdParseStatus ?? "ready";
+  const statusIsCounting = hasPsd && parseStatus === "counting";
+  const statusIsError = hasPsd && parseStatus === "error";
+
+  return (
+    <div className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-black/25">
+      <div className="flex gap-3 p-3">
+        <div className="relative h-20 w-24 shrink-0 overflow-hidden rounded-lg bg-black/40">
+          {row.previewUrl ? (
+            <Image
+              src={row.previewUrl}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="96px"
+              unoptimized
+              loading="lazy"
+            />
+          ) : null}
+        </div>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <input
+              className="min-w-0 flex-1 rounded border border-white/10 bg-black/30 px-2 py-1 text-sm text-white"
+              value={titleInput}
+              onChange={(e) => {
+                const v = e.target.value;
+                setTitleInput(v);
+                if (row.titleAiSuggested) onPatch(row.key, { titleAiSuggested: false });
+              }}
+            />
+            {row.titleAiSuggested ? (
+              <span className="shrink-0 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                ✨ AI suggested
+              </span>
+            ) : null}
+            <button
+              type="button"
+              style={SUGGEST_TITLE_BTN_STYLE}
+              className="inline-flex shrink-0 items-center justify-center gap-1 disabled:opacity-45"
+              disabled={!row.spec.raster || Boolean(row.suggestTitleLoading)}
+              onClick={() => void runSuggestTitle(row)}
+            >
+              {row.suggestTitleLoading ? (
+                <span
+                  className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent opacity-90"
+                  aria-hidden
+                />
+              ) : (
+                "✨ Suggest title"
+              )}
+            </button>
+          </div>
+          {row.suggestTitleError ? (
+            <p className="text-[10px] text-red-300/95">{row.suggestTitleError}</p>
+          ) : null}
+          <CreatorAutocompleteInput
+            value={row.creator_name}
+            onChange={(v) =>
+              onPatch(row.key, { creator_name: v, creatorDetachedFromBatch: true })
+            }
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              className="rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-white"
+              value={row.software}
+              onChange={(e) =>
+                onPatch(row.key, {
+                  software: e.target.value as SoftwareOption,
+                  softwareDetachedFromBatch: true,
+                })
+              }
+            >
+              {SOFTWARE_OPTIONS.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            <input
+              className="rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-white"
+              value={layerInput}
+              onChange={(e) => setLayerInput(e.target.value)}
+              placeholder="Layer count"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              void onSaveReadyPair({ ...row, title: titleInput, layer_count: layerInput })
+            }
+            className="rounded bg-[#7c3aed] px-2 py-1 text-xs font-bold text-white"
+          >
+            Save Ready
+          </button>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 border-t border-white/[0.06] px-3 py-2 text-xs text-white/75">
+        {statusIsCounting ? (
+          <>
+            <span
+              className="inline-block h-2 w-2 shrink-0 rounded-full"
+              style={{
+                background: "#f59e0b",
+                animation: "studio-asset-ingest-dot-pulse 1s infinite",
+              }}
+              aria-hidden
+            />
+            <span>Counting layers...</span>
+          </>
+        ) : statusIsError ? (
+          <>
+            <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#ef4444]" aria-hidden />
+            <span>Error</span>
+          </>
+        ) : (
+          <>
+            <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#10b981]" aria-hidden />
+            <span>Ready</span>
+          </>
+        )}
+      </div>
+      {statusIsCounting ? (
+        <div className="relative h-[3px] w-full overflow-hidden bg-[#ffffff10]">
+          <div
+            className="absolute inset-y-0 w-[38%] rounded-[20px]"
+            style={{
+              background: STUDIO_INGEST_PURPLE_GRADIENT,
+              animation: "studio-asset-ingest-bar-sweep 1.35s ease-in-out infinite",
+            }}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+});
+
+const PendingReviewRow = memo(function PendingReviewRow({
+  s,
+  onRemoved,
+  onApproveRefresh,
+}: {
+  s: PendingSubmissionRow;
+  onRemoved: (id: number) => void;
+  onApproveRefresh: () => void;
+}) {
+  const [rejectNote, setRejectNote] = useState("");
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/25 p-2">
+      <div className="flex gap-2">
+        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-black/40">
+          {s.image_url ? (
+            <Image
+              src={s.image_url}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="56px"
+              unoptimized
+              loading="lazy"
+            />
+          ) : null}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-white">{s.title}</p>
+          <p className="truncate text-xs text-white/60">@{s.username || s.creator_name || "creator"}</p>
+          <div className="mt-0.5 flex items-center gap-2">
+            <DifficultyBadge layerCount={s.layer_count} />
+            <span className="text-[10px] text-white/45">{s.software}</span>
+          </div>
+        </div>
+      </div>
+      <input
+        className="mt-2 w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-white"
+        placeholder="Optional rejection note"
+        value={rejectNote}
+        onChange={(e) => setRejectNote(e.target.value)}
+      />
+      <div className="mt-2 flex gap-2">
+        <button
+          type="button"
+          className="rounded bg-emerald-600 px-2 py-1 text-xs font-bold text-white"
+          onClick={async () => {
+            const r = await approveSubmissionToAssetAction(s.id);
+            if (!r.ok) window.alert(r.error);
+            else {
+              onRemoved(s.id);
+              onApproveRefresh();
+            }
+          }}
+        >
+          Approve
+        </button>
+        <button
+          type="button"
+          className="rounded border border-red-400/40 px-2 py-1 text-xs font-bold text-red-200"
+          onClick={async () => {
+            const r = await rejectSubmissionAction(s.id, rejectNote);
+            if (!r.ok) window.alert(r.error);
+            else onRemoved(s.id);
+          }}
+        >
+          Reject
+        </button>
+      </div>
+    </div>
+  );
+});
+
 export function AssetLibraryClient({
   initialAssets,
   pendingSubmissions,
@@ -227,8 +573,10 @@ export function AssetLibraryClient({
     return { y: n.getFullYear(), m: n.getMonth() };
   });
   const [readyFilter, setReadyFilter] = useState<ReadyFilter>("all");
+  const [readySearchInput, setReadySearchInput] = useState("");
   const [readySearch, setReadySearch] = useState("");
-  const [rejectTextById, setRejectTextById] = useState<Record<number, string>>({});
+  const [readyVisibleCount, setReadyVisibleCount] = useState(20);
+  const applyReadySearchDebounced = useMemo(() => debounce((q: string) => setReadySearch(q), 300), []);
   const [draftPairs, setDraftPairs] = useState<DraftPairLocal[]>([]);
   const [editAsset, setEditAsset] = useState<AssetRow | null>(null);
   const [dragAssetId, setDragAssetId] = useState<string | null>(null);
@@ -257,9 +605,15 @@ export function AssetLibraryClient({
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const refresh = () => router.refresh();
+  useEffect(() => {
+    setReadyVisibleCount(20);
+  }, [readyFilter, readySearch]);
 
-  const runSuggestTitle = async (row: DraftPairLocal) => {
+  const patchDraftRow = useCallback((key: string, partial: Partial<DraftPairLocal>) => {
+    setDraftPairs((list) => list.map((r) => (r.key === key ? { ...r, ...partial } : r)));
+  }, []);
+
+  const runSuggestTitle = useCallback(async (row: DraftPairLocal) => {
     const raster = row.spec.raster;
     if (!raster || row.suggestTitleLoading) return;
     setDraftPairs((list) =>
@@ -305,7 +659,29 @@ export function AssetLibraryClient({
         );
       }, 3000);
     }
-  };
+  }, []);
+
+  const handleReadySelect = useCallback((a: AssetRow) => {
+    setEditAsset(a);
+  }, []);
+
+  const handleReadyDragStart = useCallback((id: string) => {
+    setDragAssetId(id);
+    setDraggingCardId(id);
+  }, []);
+
+  const handleReadyDragEnd = useCallback(() => {
+    setDraggingCardId(null);
+    setDragOverSlot(null);
+  }, []);
+
+  const handlePendingRemoved = useCallback((id: number) => {
+    setPending((list) => list.filter((x) => x.id !== id));
+  }, []);
+
+  const refreshAfterApprove = useCallback(() => {
+    router.refresh();
+  }, [router]);
 
   const scheduledByDate = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -345,6 +721,11 @@ export function AssetLibraryClient({
         return true;
       });
   }, [assets, readyFilter, readySearch, adminUserId]);
+
+  const readyPoolVisible = useMemo(
+    () => readyPool.slice(0, readyVisibleCount),
+    [readyPool, readyVisibleCount],
+  );
 
   const matrix = monthMatrix(viewMonth.y, viewMonth.m);
   const readyAssetCount = assets.filter((a) => a.status === "ready").length;
@@ -469,7 +850,7 @@ export function AssetLibraryClient({
     setBatchIngestProgress(null);
   };
 
-  const saveReadyPair = async (row: DraftPairLocal) => {
+  const saveReadyPair = useCallback(async (row: DraftPairLocal) => {
     if (!row.spec.raster) return;
     const layerCount = Number(row.layer_count);
     if (!row.title.trim() || !Number.isFinite(layerCount)) return;
@@ -521,8 +902,7 @@ export function AssetLibraryClient({
     setDraftPairs((list) => list.filter((r) => r.key !== row.key));
     setToast({ type: "success", text: "Saved to Ready." });
     window.setTimeout(() => setToast(null), 2200);
-    refresh();
-  };
+  }, [adminUserId]);
 
   const saveAllReadyPairs = async () => {
     if (draftPairs.length === 0) return;
@@ -617,7 +997,6 @@ export function AssetLibraryClient({
       setDraftPairs((list) => list.filter((row) => !validKeys.includes(row.key)));
       setToast({ type: "success", text: `${payloads.length} assets saved to Ready.` });
       window.setTimeout(() => setToast(null), 2400);
-      refresh();
     } finally {
       setSaveAllBusy(false);
     }
@@ -679,7 +1058,6 @@ export function AssetLibraryClient({
       text: `${result.scheduledCount ?? 0} assets auto-scheduled.`,
     });
     window.setTimeout(() => setToast(null), 2600);
-    refresh();
   };
 
   const onDropToSlot = async (slotIndex: number) => {
@@ -723,7 +1101,6 @@ export function AssetLibraryClient({
       window.alert(res.error ?? "Could not schedule asset.");
       return;
     }
-    refresh();
   };
 
   const goLive = async () => {
@@ -754,7 +1131,6 @@ export function AssetLibraryClient({
         `${r.publishedCount ?? 0} new challenges published, ${r.existingCount ?? 0} already existed`,
     });
     window.setTimeout(() => setToast(null), 2600);
-    refresh();
   };
   const unscheduleSlot = async (assetId: string) => {
     const before = assets;
@@ -951,132 +1327,15 @@ export function AssetLibraryClient({
               </div>
             </div>
           ) : null}
-          {draftPairs.map((row) => {
-            const hasPsd = Boolean(row.spec.psd);
-            const parseStatus = row.psdParseStatus ?? "ready";
-            const statusIsCounting = hasPsd && parseStatus === "counting";
-            const statusIsError = hasPsd && parseStatus === "error";
-            return (
-            <div
+          {draftPairs.map((row) => (
+            <DraftQueueRow
               key={row.key}
-              className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-black/25"
-            >
-              <div className="flex gap-3 p-3">
-                <div className="relative h-20 w-24 shrink-0 overflow-hidden rounded-lg bg-black/40">
-                  {row.previewUrl ? (
-                    <Image src={row.previewUrl} alt="" fill className="object-cover" sizes="96px" unoptimized />
-                  ) : null}
-                </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <input
-                      className="min-w-0 flex-1 rounded border border-white/10 bg-black/30 px-2 py-1 text-sm text-white"
-                      value={row.title}
-                      onChange={(e) =>
-                        setDraftPairs((list) =>
-                          list.map((r) =>
-                            r.key === row.key
-                              ? { ...r, title: e.target.value, titleAiSuggested: false }
-                              : r,
-                          ),
-                        )
-                      }
-                    />
-                    {row.titleAiSuggested ? (
-                      <span className="shrink-0 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-                        ✨ AI suggested
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      style={SUGGEST_TITLE_BTN_STYLE}
-                      className="inline-flex shrink-0 items-center justify-center gap-1 disabled:opacity-45"
-                      disabled={!row.spec.raster || Boolean(row.suggestTitleLoading)}
-                      onClick={() => void runSuggestTitle(row)}
-                    >
-                      {row.suggestTitleLoading ? (
-                        <span
-                          className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent opacity-90"
-                          aria-hidden
-                        />
-                      ) : (
-                        "✨ Suggest title"
-                      )}
-                    </button>
-                  </div>
-                  {row.suggestTitleError ? (
-                    <p className="text-[10px] text-red-300/95">{row.suggestTitleError}</p>
-                  ) : null}
-                  <CreatorAutocompleteInput
-                    value={row.creator_name}
-                    onChange={(v) =>
-                      setDraftPairs((list) =>
-                        list.map((r) =>
-                          r.key === row.key ? { ...r, creator_name: v, creatorDetachedFromBatch: true } : r,
-                        ),
-                      )
-                    }
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      className="rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-white"
-                      value={row.software}
-                      onChange={(e) =>
-                        setDraftPairs((list) =>
-                          list.map((r) =>
-                            r.key === row.key
-                              ? { ...r, software: e.target.value as SoftwareOption, softwareDetachedFromBatch: true }
-                              : r,
-                          ),
-                        )
-                      }
-                    >
-                      {SOFTWARE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                    <input className="rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-white" value={row.layer_count} onChange={(e) => setDraftPairs((list) => list.map((r) => r.key === row.key ? { ...r, layer_count: e.target.value } : r))} placeholder="Layer count" />
-                  </div>
-                  <button type="button" onClick={() => void saveReadyPair(row)} className="rounded bg-[#7c3aed] px-2 py-1 text-xs font-bold text-white">Save Ready</button>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 border-t border-white/[0.06] px-3 py-2 text-xs text-white/75">
-                {statusIsCounting ? (
-                  <>
-                    <span
-                      className="inline-block h-2 w-2 shrink-0 rounded-full"
-                      style={{
-                        background: "#f59e0b",
-                        animation: "studio-asset-ingest-dot-pulse 1s infinite",
-                      }}
-                      aria-hidden
-                    />
-                    <span>Counting layers...</span>
-                  </>
-                ) : statusIsError ? (
-                  <>
-                    <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#ef4444]" aria-hidden />
-                    <span>Error</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#10b981]" aria-hidden />
-                    <span>Ready</span>
-                  </>
-                )}
-              </div>
-              {statusIsCounting ? (
-                <div className="relative h-[3px] w-full overflow-hidden bg-[#ffffff10]">
-                  <div
-                    className="absolute inset-y-0 w-[38%] rounded-[20px]"
-                    style={{
-                      background: STUDIO_INGEST_PURPLE_GRADIENT,
-                      animation: "studio-asset-ingest-bar-sweep 1.35s ease-in-out infinite",
-                    }}
-                  />
-                </div>
-              ) : null}
-            </div>
-            );
-          })}
+              row={row}
+              onPatch={patchDraftRow}
+              onSaveReadyPair={saveReadyPair}
+              runSuggestTitle={runSuggestTitle}
+            />
+          ))}
         </div>
       )}
 
@@ -1118,77 +1377,41 @@ export function AssetLibraryClient({
                               : f}
               </button>
             ))}
-            <input className="min-w-[170px] flex-1 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white" placeholder="Search title or creator" value={readySearch} onChange={(e) => setReadySearch(e.target.value)} />
+            <input
+              className="min-w-[170px] flex-1 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white"
+              placeholder="Search title or creator"
+              value={readySearchInput}
+              onChange={(e) => {
+                const v = e.target.value;
+                setReadySearchInput(v);
+                applyReadySearchDebounced(v);
+              }}
+            />
           </div>
 
           <div className="grid max-h-[62vh] grid-cols-1 gap-2 overflow-y-auto pr-1">
-            {readyPool.map((a) => (
-              <button
+            {readyPoolVisible.map((a) => (
+              <ReadyAssetCard
                 key={a.id}
-                type="button"
-                draggable
-                onDragStart={() => {
-                  setDragAssetId(a.id);
-                  setDraggingCardId(a.id);
-                }}
-                onDragEnd={() => {
-                  setDraggingCardId(null);
-                  setDragOverSlot(null);
-                }}
-                onClick={() => setEditAsset(a)}
-                title="Drag to schedule"
-                style={
-                  a.is_sponsored
-                    ? {
-                        border: "0.5px solid rgba(251, 191, 36, 0.4)",
-                        background: "rgba(251, 191, 36, 0.04)",
-                      }
-                    : undefined
-                }
-                className={`group relative flex items-center gap-2 rounded-xl p-2 text-left transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
-                  a.is_sponsored
-                    ? "hover:bg-[rgba(251,191,36,0.07)]"
-                    : "border border-white/10 bg-black/25 hover:bg-black/35"
-                } ${
-                  draggingCardId === a.id ? "scale-105 rotate-2 shadow-[0_10px_24px_rgba(124,58,237,0.25)]" : "hover:shadow-[0_0_0_1px_rgba(124,58,237,0.5),0_0_18px_rgba(124,58,237,0.25)]"
-                }`}
-              >
-                {a.is_sponsored ? (
-                  <span
-                    className="pointer-events-none absolute top-1.5 right-2 z-[2] leading-none"
-                    style={{
-                      background: "rgba(251, 191, 36, 0.15)",
-                      color: "#fbbf24",
-                      border: "0.5px solid rgba(251, 191, 36, 0.3)",
-                      fontSize: 9,
-                      fontWeight: 600,
-                      padding: "2px 7px",
-                      borderRadius: 20,
-                    }}
-                  >
-                    Sponsored
-                  </span>
-                ) : null}
-                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-black/40">
-                  {a.image_url ? <Image src={a.image_url} alt="" fill className="object-cover" sizes="56px" unoptimized /> : null}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1">
-                    <p className="truncate text-sm font-semibold text-white">{a.title}</p>
-                    <span className="rounded bg-white/10 px-1 text-[10px] text-white/70">{SOFTWARE_ICONS[a.software] ?? "•"}</span>
-                  </div>
-                  <p className="truncate text-xs text-white/60">@{a.creator_name || "creator"}</p>
-                  <div className="mt-0.5 flex items-center gap-2">
-                    <DifficultyBadge layerCount={a.layer_count} />
-                    <span className="text-[10px] text-white/45">{a.layer_count} layers</span>
-                  </div>
-                </div>
-                <span className="pointer-events-none absolute -top-2 right-2 rounded bg-[#7c3aed] px-1.5 py-0.5 text-[10px] font-semibold text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                  Drag to schedule
-                </span>
-              </button>
+                asset={a}
+                isDragging={draggingCardId === a.id}
+                onSelect={handleReadySelect}
+                onDragStart={handleReadyDragStart}
+                onDragEnd={handleReadyDragEnd}
+              />
             ))}
           </div>
+          {readyVisibleCount < readyPool.length ? (
+            <div className="mt-2 flex justify-center">
+              <button
+                type="button"
+                className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold text-white/85 hover:bg-white/10"
+                onClick={() => setReadyVisibleCount((c) => Math.min(c + 20, readyPool.length))}
+              >
+                Load more
+              </button>
+            </div>
+          ) : null}
           <div className="mt-3">
             <button
               type="button"
@@ -1207,26 +1430,12 @@ export function AssetLibraryClient({
       ) : (
         <div className="max-h-[62vh] space-y-2 overflow-y-auto pr-1">
           {pending.map((s) => (
-            <div key={s.id} className="rounded-xl border border-white/10 bg-black/25 p-2">
-              <div className="flex gap-2">
-                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-black/40">
-                  {s.image_url ? <Image src={s.image_url} alt="" fill className="object-cover" sizes="56px" unoptimized /> : null}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-white">{s.title}</p>
-                  <p className="truncate text-xs text-white/60">@{s.username || s.creator_name || "creator"}</p>
-                  <div className="mt-0.5 flex items-center gap-2">
-                    <DifficultyBadge layerCount={s.layer_count} />
-                    <span className="text-[10px] text-white/45">{s.software}</span>
-                  </div>
-                </div>
-              </div>
-              <input className="mt-2 w-full rounded border border-white/10 bg-black/30 px-2 py-1 text-xs text-white" placeholder="Optional rejection note" value={rejectTextById[s.id] ?? ""} onChange={(e) => setRejectTextById((m) => ({ ...m, [s.id]: e.target.value }))} />
-              <div className="mt-2 flex gap-2">
-                <button type="button" className="rounded bg-emerald-600 px-2 py-1 text-xs font-bold text-white" onClick={async () => { const r = await approveSubmissionToAssetAction(s.id); if (!r.ok) window.alert(r.error); else { setPending((list) => list.filter((x) => x.id !== s.id)); refresh(); } }}>Approve</button>
-                <button type="button" className="rounded border border-red-400/40 px-2 py-1 text-xs font-bold text-red-200" onClick={async () => { const r = await rejectSubmissionAction(s.id, rejectTextById[s.id] ?? ""); if (!r.ok) window.alert(r.error); else setPending((list) => list.filter((x) => x.id !== s.id)); }}>Reject</button>
-              </div>
-            </div>
+            <PendingReviewRow
+              key={s.id}
+              s={s}
+              onRemoved={handlePendingRemoved}
+              onApproveRefresh={refreshAfterApprove}
+            />
           ))}
         </div>
       )}
@@ -1257,7 +1466,17 @@ export function AssetLibraryClient({
               <div className="mt-1 flex gap-0.5">
                 {thumbs.map((t) => (
                   <div key={t.id} className="relative h-4 w-4 overflow-hidden rounded bg-black/40">
-                    {t.image_url ? <Image src={t.image_url} alt="" fill className="object-cover" sizes="16px" unoptimized /> : null}
+                    {t.image_url ? (
+                      <Image
+                        src={t.image_url}
+                        alt=""
+                        fill
+                        className="object-cover"
+                        sizes="16px"
+                        unoptimized
+                        loading="lazy"
+                      />
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -1316,7 +1535,17 @@ export function AssetLibraryClient({
                       ✕
                     </button>
                     <div className="relative mx-auto h-12 w-12 overflow-hidden rounded bg-black/40">
-                      {slot.image_url ? <Image src={slot.image_url} alt="" fill className="object-cover" sizes="48px" unoptimized /> : null}
+                      {slot.image_url ? (
+                        <Image
+                          src={slot.image_url}
+                          alt=""
+                          fill
+                          className="object-cover"
+                          sizes="48px"
+                          unoptimized
+                          loading="lazy"
+                        />
+                      ) : null}
                     </div>
                     <p className="line-clamp-2 text-center text-[11px] text-white">{slot.title}</p>
                     <div className="flex justify-center"><DifficultyBadge layerCount={slot.layer_count} /></div>
