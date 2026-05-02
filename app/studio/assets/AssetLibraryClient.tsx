@@ -1337,7 +1337,11 @@ export function AssetLibraryClient({
     window.setTimeout(() => setToast(null), 2600);
   };
   const unscheduleSlot = async (assetId: string) => {
-    const before = assets;
+    const r = await unscheduleAssetAction(assetId);
+    if (!r.ok) {
+      window.alert(r.error);
+      return;
+    }
     setAssets((prev) =>
       prev.map((a) =>
         a.id === assetId
@@ -1346,16 +1350,11 @@ export function AssetLibraryClient({
               status: "ready",
               scheduled_date: null,
               scheduled_position: null,
+              challenge_id: null,
             }
           : a,
       ),
     );
-    const r = await unscheduleAssetAction(assetId);
-    if (!r.ok) {
-      setAssets(before);
-      window.alert(r.error);
-      return;
-    }
   };
 
   const leftPanel = (

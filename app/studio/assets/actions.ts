@@ -1033,11 +1033,13 @@ export async function unscheduleAssetAction(assetId: string): Promise<{ ok: bool
   const row = asset as { challenge_id?: string | null; status?: string } | null;
   if (!row || row.status !== "scheduled") return { ok: false, error: "Asset is not scheduled." };
 
-  if (row.challenge_id) {
+  const challengeIdToDelete = row.challenge_id ? String(row.challenge_id) : null;
+
+  if (challengeIdToDelete) {
     const { data: challenge } = await sb
       .from("challenges")
       .select("id, active_date")
-      .eq("id", row.challenge_id)
+      .eq("id", challengeIdToDelete)
       .maybeSingle();
     const ch = challenge as { id?: string; active_date?: string | null } | null;
     if (ch?.id) {
@@ -1045,8 +1047,6 @@ export async function unscheduleAssetAction(assetId: string): Promise<{ ok: bool
       if (String(ch.active_date ?? "") <= today) {
         return { ok: false, error: "Cannot unschedule a live/past challenge." };
       }
-      const { error: delErr } = await sb.from("challenges").delete().eq("id", ch.id);
-      if (delErr) return { ok: false, error: delErr.message };
     }
   }
 
@@ -1063,6 +1063,11 @@ export async function unscheduleAssetAction(assetId: string): Promise<{ ok: bool
     .eq("status", "scheduled");
 
   if (error) return { ok: false, error: error.message };
+
+  if (challengeIdToDelete) {
+    const { error: delErr } = await sb.from("challenges").delete().eq("id", challengeIdToDelete);
+    if (delErr) return { ok: false, error: delErr.message };
+  }
   revalidatePath("/studio/assets");
   return { ok: true };
 }
