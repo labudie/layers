@@ -4,6 +4,7 @@ import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
+  addEasternDays,
   isoLowerBoundForLast14EasternSignups,
   last14EasternDaysEnding,
   nextEasternYmd,
@@ -22,6 +23,7 @@ import { isStudioAdminSession } from "@/lib/studio-admin";
 import { AdminSubmissionImage } from "@/app/studio/AdminSubmissionImage";
 import { AnalyticsExportButton } from "@/app/studio/AnalyticsExportButton";
 import { SocialExportForSocialsButton } from "@/app/studio/SocialExportForSocialsButton";
+import { StudioSocialTabClient } from "@/app/studio/StudioSocialTabClient";
 import { DeleteButton } from "@/app/studio/DeleteButton";
 import {
   AssetLibraryClient,
@@ -32,6 +34,10 @@ import {
   AtCreatorDisplay,
   AtUsernameDisplay,
 } from "@/lib/AtHandle";
+import {
+  groupChallengesIntoSocialDayCards,
+  type StudioSocialChallengeRowInput,
+} from "@/lib/studio-social-tab";
 
 type ChallengeAdminRow = {
   id: string;
@@ -733,7 +739,8 @@ export default async function AdminPage({
     params.tab === "workspace" ||
     params.tab === "submissions" ||
     params.tab === "users" ||
-    params.tab === "analytics"
+    params.tab === "analytics" ||
+    params.tab === "social"
       ? params.tab
       : "workspace";
 
@@ -885,6 +892,35 @@ export default async function AdminPage({
     }
   }
 
+  let studioSocialInitial: {
+    startYmd: string;
+    endYmd: string;
+    days: ReturnType<typeof groupChallengesIntoSocialDayCards>;
+  } | null = null;
+  if (tab === "social") {
+    const socialEndYmd = addEasternDays(today, 30);
+    const { data: socialChallengeRows, error: socialChallengeError } = await sb
+      .from("challenges")
+      .select("title,layer_count,image_url,position,creator_name,active_date")
+      .not("active_date", "is", null)
+      .gte("active_date", today)
+      .lte("active_date", socialEndYmd)
+      .order("active_date", { ascending: true })
+      .order("position", { ascending: true });
+    if (socialChallengeError) {
+      console.error("[studio][social] challenges fetch", socialChallengeError);
+    }
+    studioSocialInitial = {
+      startYmd: today,
+      endYmd: socialEndYmd,
+      days: groupChallengesIntoSocialDayCards(
+        (socialChallengeRows ?? []) as StudioSocialChallengeRowInput[],
+        today,
+        socialEndYmd,
+      ),
+    };
+  }
+
   const minScheduleDate = today;
 
   return (
@@ -938,6 +974,16 @@ export default async function AdminPage({
             }`}
           >
             Users
+          </Link>
+          <Link
+            href="/studio?tab=social"
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              tab === "social"
+                ? "bg-[var(--accent)] text-white"
+                : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            Social
           </Link>
           <Link
             href="/studio?tab=analytics"
@@ -1178,6 +1224,55 @@ export default async function AdminPage({
                 </div>
               )}
             </div>
+          </div>
+        ) : tab === "users" ? (
+          <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)]">
+            <table className="min-w-[1040px] w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
+                  <th className="px-4 py-3">Username</th>
+                  <th className="px-4 py-3">Avatar</th>
+                  <th className="px-4 py-3">Joined</th>
+                  <th className="px-4 py-3">Total solved</th>
+                  <th className="px-4 py-3">Current streak</th>
+                  <th className="px-4 py-3">Longest streak</th>
+                  <th className="px-4 py-3">Perfect days</th>
+                  <th className="px-4 py-3">Last played</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-b border-white/5 last:border-0">
+                    <td className="px-4 py-3 text-white/90">
+                      <AtUsernameDisplay
+                        raw={u.username}
+                        fallback={`player_${u.id.slice(0, 8)}`}
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-white/80">
+                      {u.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={u.avatar_url}
+                          alt=""
+                          className="h-8 w-8 rounded-full border border-white/15 object-cover"
+                        />
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-white/80">
+                      {formatAdminDate(u.created_at ? u.created_at.slice(0, 10) : null)}
+                    </td>
+                    <td className="px-4 py-3 text-white/80">{u.total_solved ?? 0}</td>
+                    <td className="px-4 py-3 text-white/80">{u.current_streak ?? 0}</td>
+                    <td className="px-4 py-3 text-white/80">{u.longest_streak ?? 0}</td>
+                    <td className="px-4 py-3 text-white/80">{u.perfect_days ?? 0}</td>
+                    <td className="px-4 py-3 text-white/80">{u.last_played_date ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : tab === "analytics" ? (
           !analytics ? (
@@ -1632,56 +1727,15 @@ export default async function AdminPage({
               </section>
             </div>
           )
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)]">
-            <table className="min-w-[1040px] w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wider text-white/50">
-                  <th className="px-4 py-3">Username</th>
-                  <th className="px-4 py-3">Avatar</th>
-                  <th className="px-4 py-3">Joined</th>
-                  <th className="px-4 py-3">Total solved</th>
-                  <th className="px-4 py-3">Current streak</th>
-                  <th className="px-4 py-3">Longest streak</th>
-                  <th className="px-4 py-3">Perfect days</th>
-                  <th className="px-4 py-3">Last played</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id} className="border-b border-white/5 last:border-0">
-                    <td className="px-4 py-3 text-white/90">
-                      <AtUsernameDisplay
-                        raw={u.username}
-                        fallback={`player_${u.id.slice(0, 8)}`}
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-white/80">
-                      {u.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={u.avatar_url}
-                          alt=""
-                          className="h-8 w-8 rounded-full border border-white/15 object-cover"
-                        />
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-white/80">
-                      {formatAdminDate(u.created_at ? u.created_at.slice(0, 10) : null)}
-                    </td>
-                    <td className="px-4 py-3 text-white/80">{u.total_solved ?? 0}</td>
-                    <td className="px-4 py-3 text-white/80">{u.current_streak ?? 0}</td>
-                    <td className="px-4 py-3 text-white/80">{u.longest_streak ?? 0}</td>
-                    <td className="px-4 py-3 text-white/80">{u.perfect_days ?? 0}</td>
-                    <td className="px-4 py-3 text-white/80">{u.last_played_date ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        ) : tab === "social" ? (
+          studioSocialInitial ? (
+            <StudioSocialTabClient
+              initialStartYmd={studioSocialInitial.startYmd}
+              initialEndYmd={studioSocialInitial.endYmd}
+              initialDays={studioSocialInitial.days}
+            />
+          ) : null
+        ) : null}
       </div>
     </AppSiteChrome>
   );
