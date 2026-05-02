@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   buildPairSpecs,
@@ -1476,9 +1476,8 @@ export function AssetLibraryClient({
         <EditAssetModal
           asset={editAsset}
           onClose={() => setEditAsset(null)}
-          onSaved={() => {
-            setEditAsset(null);
-            refresh();
+          onSaveSuccess={(patch) => {
+            setAssets((prev) => prev.map((a) => (a.id === patch.id ? { ...a, ...patch } : a)));
           }}
         />
       )}
@@ -1486,7 +1485,15 @@ export function AssetLibraryClient({
   );
 }
 
-function EditAssetModal({ asset, onClose, onSaved }: { asset: AssetRow; onClose: () => void; onSaved: () => void; }) {
+function EditAssetModal({
+  asset,
+  onClose,
+  onSaveSuccess,
+}: {
+  asset: AssetRow;
+  onClose: () => void;
+  onSaveSuccess: (patch: Partial<AssetRow> & { id: string }) => void;
+}) {
   const [title, setTitle] = useState(asset.title);
   const [creator_name, setCreator_name] = useState(asset.creator_name ?? "");
   const [software, setSoftware] = useState(asset.software as SoftwareOption);
@@ -1494,6 +1501,11 @@ function EditAssetModal({ asset, onClose, onSaved }: { asset: AssetRow; onClose:
   const [layer_count, setLayer_count] = useState(String(asset.layer_count));
   const [is_sponsored, setIs_sponsored] = useState(asset.is_sponsored);
   const [sponsor_name, setSponsor_name] = useState(asset.sponsor_name ?? "");
+  const [saveUi, setSaveUi] = useState<"idle" | "saving" | "success" | "error">("idle");
+
+  useEffect(() => {
+    setSaveUi("idle");
+  }, [asset.id]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog">
@@ -1512,8 +1524,16 @@ function EditAssetModal({ asset, onClose, onSaved }: { asset: AssetRow; onClose:
         </div>
         <button
           type="button"
-          className="mt-3 w-full rounded-xl bg-[#7c3aed] py-2.5 text-sm font-bold text-white"
+          disabled={saveUi === "saving"}
+          className={`mt-3 w-full rounded-xl py-2.5 text-sm font-bold disabled:opacity-60 ${
+            saveUi === "error"
+              ? "bg-[#7c3aed] text-red-300"
+              : saveUi === "success"
+                ? "bg-[#7c3aed] text-emerald-200"
+                : "bg-[#7c3aed] text-white"
+          }`}
           onClick={async () => {
+            setSaveUi("saving");
             const r = await updateAssetAction(asset.id, {
               title,
               creator_name,
@@ -1523,11 +1543,27 @@ function EditAssetModal({ asset, onClose, onSaved }: { asset: AssetRow; onClose:
               is_sponsored,
               sponsor_name,
             });
-            if (!r.ok) window.alert(r.error);
-            else onSaved();
+            if (!r.ok) {
+              setSaveUi("error");
+              return;
+            }
+            const layerCountNum = Math.trunc(Number(layer_count));
+            const patch: Partial<AssetRow> & { id: string } = {
+              id: asset.id,
+              title: title.trim(),
+              creator_name: creator_name.trim() || null,
+              software,
+              category,
+              layer_count: layerCountNum,
+              is_sponsored,
+              sponsor_name: is_sponsored ? sponsor_name.trim() || null : null,
+            };
+            onSaveSuccess(patch);
+            setSaveUi("success");
+            window.setTimeout(() => setSaveUi("idle"), 2000);
           }}
         >
-          Save changes
+          {saveUi === "success" ? "✅ Saved" : saveUi === "error" ? "⚠ Failed to save" : saveUi === "saving" ? "Saving…" : "Save"}
         </button>
       </div>
     </div>
