@@ -7,7 +7,7 @@ import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   buildPairSpecs,
-  formatTitleFromStem,
+  cleanUploadQueueTitleFromStem,
   isPsdFile,
   isRasterGameImage,
   type FilePairSpec,
@@ -380,7 +380,7 @@ export function AssetLibraryClient({
           spec,
           previewUrl,
           layerCount: null,
-          title: formatTitleFromStem(spec.displayStem),
+          title: cleanUploadQueueTitleFromStem(spec.displayStem),
           creator_name: "",
           software: "Photoshop",
           category: CATEGORY_OPTIONS[0],
@@ -403,7 +403,7 @@ export function AssetLibraryClient({
         spec,
         previewUrl,
         layerCount: null,
-        title: formatTitleFromStem(spec.displayStem),
+        title: cleanUploadQueueTitleFromStem(spec.displayStem),
         creator_name: "",
         software: "Photoshop",
         category: CATEGORY_OPTIONS[0],

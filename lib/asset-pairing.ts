@@ -37,6 +37,30 @@ export function formatTitleFromStem(stem: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
 }
 
+const UPLOAD_QUEUE_TITLE_NOISE = new Set(["v1", "v2", "v3", "final", "copy", "template"]);
+
+/**
+ * Studio bulk-upload default title: stem without extension, noise tokens removed,
+ * title-cased. Used when rows are first added to the queue.
+ */
+export function cleanUploadQueueTitleFromStem(stem: string): string {
+  let s = stem.trim();
+  if (!s) return "";
+  s = s.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+  let words = s.split(" ").filter(Boolean);
+  words = words.filter((w) => !UPLOAD_QUEUE_TITLE_NOISE.has(w.toLowerCase()));
+  while (words.length > 0 && /^\d+$/.test(words[words.length - 1]!)) {
+    words.pop();
+  }
+  if (words.length === 0) {
+    return formatTitleFromStem(stem);
+  }
+  return words
+    .map((w) => (w.length ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ")
+    .trim();
+}
+
 export type FilePairSpec = {
   key: string;
   /** Original stem (before pairing normalization) for display title. */
