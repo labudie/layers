@@ -2,9 +2,7 @@ import type { User } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-
-/** Duplicated here on purpose — `@/` imports break Turbopack’s proxy→middleware bundle graph. */
-const STUDIO_ADMIN_EMAIL = "rjlabudie@gmail.com".toLowerCase();
+import { ADMIN_EMAILS } from "./lib/config";
 
 async function resolveStudioAdminEmailForProxy(
   sb: SupabaseClient,
@@ -42,7 +40,7 @@ async function resolveStudioAdminEmailForProxy(
 
 async function isStudioAdminForProxy(sb: SupabaseClient, user: User | null): Promise<boolean> {
   const email = await resolveStudioAdminEmailForProxy(sb, user);
-  return email === STUDIO_ADMIN_EMAIL;
+  return email !== null && ADMIN_EMAILS.includes(email);
 }
 
 export async function proxy(request: NextRequest) {

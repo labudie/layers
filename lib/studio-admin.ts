@@ -1,7 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
-
-export const STUDIO_ADMIN_EMAIL = "rjlabudie@gmail.com".toLowerCase();
+import { ADMIN_EMAILS } from "./config";
 
 /**
  * Same resolution order as studio pages (JWT email gaps on some OAuth layouts).
@@ -45,5 +44,5 @@ export async function isStudioAdminSession(
   user: User | null,
 ): Promise<boolean> {
   const email = await resolveSessionAdminEmail(sb, user);
-  return email === STUDIO_ADMIN_EMAIL;
+  return email !== null && ADMIN_EMAILS.includes(email);
 }
