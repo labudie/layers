@@ -243,7 +243,8 @@ select:focus-visible {
 .page-transition-shell {
   opacity: 0;
   animation: page-nav-fade 0.2s var(--smooth) forwards;
-  will-change: opacity;
+  animation-iteration-count: 1;
+  will-change: auto;
 }
 
 @keyframes page-nav-fade {
@@ -482,7 +483,26 @@ tbody.leaderboard-stagger tr.lb-stagger-row {
   }
 }
 
+.studio-ingest-dot--pulse {
+  animation: studio-asset-ingest-dot-pulse 1s infinite;
+}
+
+.studio-ingest-bar--sweep {
+  animation: studio-asset-ingest-bar-sweep 1.35s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .studio-ingest-dot--pulse {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .studio-ingest-bar--sweep {
+    animation: none !important;
+    transform: none !important;
+  }
+
   .page-transition-shell {
     animation: none !important;
     opacity: 1 !important;

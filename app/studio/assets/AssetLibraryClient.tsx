@@ -240,7 +240,7 @@ const ReadyAssetCard = memo(function ReadyAssetCard({
             }
           : undefined
       }
-      className={`group relative flex items-center gap-2 rounded-xl p-2 text-left transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
+      className={`group relative flex items-center gap-2 rounded-xl p-2 text-left transition-[transform,box-shadow,opacity,border-color] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
         a.is_sponsored
           ? "hover:bg-[rgba(251,191,36,0.07)]"
           : "border border-white/10 bg-black/25 hover:bg-black/35"
@@ -439,11 +439,7 @@ const DraftQueueRow = memo(function DraftQueueRow({
         {statusIsCounting ? (
           <>
             <span
-              className="inline-block h-2 w-2 shrink-0 rounded-full"
-              style={{
-                background: "#f59e0b",
-                animation: "studio-asset-ingest-dot-pulse 1s infinite",
-              }}
+              className="studio-ingest-dot--pulse inline-block h-2 w-2 shrink-0 rounded-full bg-[#f59e0b]"
               aria-hidden
             />
             <span>Counting layers...</span>
@@ -463,11 +459,8 @@ const DraftQueueRow = memo(function DraftQueueRow({
       {statusIsCounting ? (
         <div className="relative h-[3px] w-full overflow-hidden bg-[#ffffff10]">
           <div
-            className="absolute inset-y-0 w-[38%] rounded-[20px]"
-            style={{
-              background: STUDIO_INGEST_PURPLE_GRADIENT,
-              animation: "studio-asset-ingest-bar-sweep 1.35s ease-in-out infinite",
-            }}
+            className="studio-ingest-bar--sweep absolute inset-y-0 w-[38%] rounded-[20px]"
+            style={{ background: STUDIO_INGEST_PURPLE_GRADIENT }}
           />
         </div>
       ) : null}
@@ -1499,7 +1492,7 @@ export function AssetLibraryClient({
             {selectedSlots.map((slot, idx) => (
               <div
                 key={idx}
-                className={`min-h-[118px] overflow-visible rounded-lg border border-dashed p-2 transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
+                className={`min-h-[118px] overflow-visible rounded-lg border border-dashed p-2 transition-[transform,box-shadow,opacity,border-color] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
                   dragOverSlot === idx
                     ? "scale-[1.02] border-[#7c3aed] bg-[#7c3aed]/15 shadow-[0_0_0_1px_rgba(124,58,237,0.65),0_0_20px_rgba(124,58,237,0.35)]"
                     : "border-white/20 bg-black/20"
@@ -1522,7 +1515,7 @@ export function AssetLibraryClient({
                       setDraggingCardId(null);
                       setDragOverSlot(null);
                     }}
-                    className={`relative overflow-visible space-y-1 transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] ${
+                    className={`relative overflow-visible space-y-1 transition-[transform,box-shadow,opacity] duration-200 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] ${
                       slotPopKey === `${selectedDate}-${idx}-${slot.id}` ? "scale-100" : "scale-95"
                     } ${draggingCardId === slot.id ? "scale-105 rotate-2 shadow-[0_10px_24px_rgba(124,58,237,0.25)]" : ""}`}
                   >
@@ -1579,7 +1572,7 @@ export function AssetLibraryClient({
     <div className="mx-auto w-full max-w-[1280px] px-4 py-4 md:px-5 md:py-6">
       {toast ? (
         <div
-          className={`mb-3 rounded-xl border px-3 py-2 text-sm font-semibold transition-[all] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
+          className={`mb-3 rounded-xl border px-3 py-2 text-sm font-semibold transition-[transform,box-shadow,opacity,border-color] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] ${
             toast.type === "success"
               ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
               : "border-red-400/40 bg-red-500/15 text-red-100"
