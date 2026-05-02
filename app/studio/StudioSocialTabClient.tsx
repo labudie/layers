@@ -2,7 +2,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchStudioSocialTabAction } from "@/app/studio/studio-social-tab-actions";
+import {
+  getCaptions,
+  type SocialCaptionChallenge,
+} from "@/lib/studio-social-captions";
 import type { StudioSocialDayCard } from "@/lib/studio-social-tab";
+
+function slotsToCaptionChallenges(slots: StudioSocialDayCard["slots"]): SocialCaptionChallenge[] {
+  return [1, 2, 3, 4, 5].map((position) => {
+    const s = slots[position - 1];
+    return {
+      position,
+      title: s?.title?.trim() ?? null,
+      layer_count: Math.max(0, Math.trunc(s?.layer_count ?? 0)),
+    };
+  });
+}
 
 function formatSocialDayHeader(dateYmd: string) {
   const parsed = new Date(`${dateYmd}T12:00:00`);
@@ -12,19 +27,6 @@ function formatSocialDayHeader(dateYmd: string) {
     day: "numeric",
     year: "numeric",
   });
-}
-
-function captionsFromExpert(slots: StudioSocialDayCard["slots"]) {
-  const expert = slots[4];
-  const title = expert?.title?.trim() || "[Expert challenge]";
-  const layer_count = expert?.layer_count ?? 0;
-  const xCaption = `${layer_count} layers. ${title}. Play today's 5 challenges free → layersgame.com`;
-  const instagramCaption =
-    `Today's expert challenge: ${title} — built with ${layer_count} layers in Photoshop. Can you guess it in 3 tries?\n\n` +
-    `Play free at layersgame.com (link in bio)\n\n` +
-    `#graphicdesign #photoshop #designchallenge #layersgame`;
-  const tiktokCaption = `${layer_count} layers in a ${title}. Come guess today's expert challenge on Layers — free daily game for designers. layersgame.com`;
-  return { xCaption, instagramCaption, tiktokCaption };
 }
 
 function SocialLightbox({
@@ -156,6 +158,8 @@ export function StudioSocialTabClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
+  /** Extra rotations after Regenerate (per Eastern date key). */
+  const [styleBumpByDateYmd, setStyleBumpByDateYmd] = useState<Record<string, number>>({});
 
   const loadRange = useCallback(async (start: string, end: string) => {
     setLoading(true);
@@ -167,6 +171,7 @@ export function StudioSocialTabClient({
       return;
     }
     setDays(res.days);
+    setStyleBumpByDateYmd({});
   }, []);
 
   async function applyRange() {
@@ -216,14 +221,33 @@ export function StudioSocialTabClient({
       </div>
 
       <div className="space-y-6">
-        {days.map((day) => {
-          const { xCaption, instagramCaption, tiktokCaption } = captionsFromExpert(day.slots);
+        {days.map((day, dayIndex) => {
+          const challenges = slotsToCaptionChallenges(day.slots);
+          const bump = styleBumpByDateYmd[day.dateYmd] ?? 0;
+          const captionBundle = getCaptions(challenges, dayIndex + bump);
+          const { x: xCaption, instagram: instagramCaption, tiktok: tiktokCaption, styleLabel } =
+            captionBundle;
+
           return (
             <div
               key={day.dateYmd}
               className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)] p-5"
             >
-              <div className="text-base font-extrabold text-white">{formatSocialDayHeader(day.dateYmd)}</div>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="text-base font-extrabold text-white">{formatSocialDayHeader(day.dateYmd)}</div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setStyleBumpByDateYmd((prev) => ({
+                      ...prev,
+                      [day.dateYmd]: (prev[day.dateYmd] ?? 0) + 1,
+                    }))
+                  }
+                  className="shrink-0 rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/15"
+                >
+                  Regenerate
+                </button>
+              </div>
               <div className="mt-4 flex gap-3 overflow-x-auto pb-1 pt-1">
                 {day.slots.map((slot, idx) => {
                   const pos = idx + 1;
@@ -266,11 +290,14 @@ export function StudioSocialTabClient({
                     <div className="text-sm font-extrabold text-white">𝕏</div>
                     <CopyCaptionButton text={xCaption} />
                   </div>
+                  <div className="mt-2 text-[11px] font-semibold text-white/55">
+                    Style: {styleLabel}
+                  </div>
                   <textarea
                     readOnly
                     value={xCaption}
                     rows={4}
-                    className="mt-3 w-full resize-y rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm leading-relaxed text-white/90"
+                    className="mt-2 w-full resize-y rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm leading-relaxed text-white/90"
                   />
                 </div>
 
@@ -279,11 +306,14 @@ export function StudioSocialTabClient({
                     <div className="text-sm font-extrabold text-white">Instagram</div>
                     <CopyCaptionButton text={instagramCaption} />
                   </div>
+                  <div className="mt-2 text-[11px] font-semibold text-white/55">
+                    Style: {styleLabel}
+                  </div>
                   <textarea
                     readOnly
                     value={instagramCaption}
                     rows={8}
-                    className="mt-3 w-full resize-y rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm leading-relaxed text-white/90"
+                    className="mt-2 w-full resize-y rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm leading-relaxed text-white/90"
                   />
                   <CarouselStrip slots={day.slots} onOpen={(src, alt) => setLightbox({ src, alt })} />
                 </div>
@@ -293,11 +323,14 @@ export function StudioSocialTabClient({
                     <div className="text-sm font-extrabold text-white">TikTok</div>
                     <CopyCaptionButton text={tiktokCaption} />
                   </div>
+                  <div className="mt-2 text-[11px] font-semibold text-white/55">
+                    Style: {styleLabel}
+                  </div>
                   <textarea
                     readOnly
                     value={tiktokCaption}
                     rows={6}
-                    className="mt-3 w-full resize-y rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm leading-relaxed text-white/90"
+                    className="mt-2 w-full resize-y rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm leading-relaxed text-white/90"
                   />
                   <CarouselStrip slots={day.slots} onOpen={(src, alt) => setLightbox({ src, alt })} />
                 </div>
