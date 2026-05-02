@@ -12,6 +12,7 @@ import {
 } from "@/lib/admin-eastern-dates";
 import type { AdvancedAdminAnalytics } from "@/lib/admin-studio-analytics";
 import { loadAdvancedAdminAnalytics } from "@/lib/admin-studio-analytics";
+import { dayNumberFromActiveDate } from "@/lib/challenge-day-number";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 import { assertSupabaseImageUrlIsPngOrJpeg } from "@/lib/server-image-magic";
 import {
@@ -348,17 +349,12 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
   if (!allowed) return { error: "Access denied", publishedCount: 0, publishedTitles: [] };
 
   const activeDate = String(formData.get("active_date") ?? "").trim();
-  const dayNumberRaw = formData.get("day_number");
-  const dayNumber =
-    typeof dayNumberRaw === "string" ? Number(dayNumberRaw) : Number(dayNumberRaw);
   const cardsJson = String(formData.get("cards_json") ?? "[]");
 
   if (!activeDate) {
     return { error: "Active Date is required.", publishedCount: 0, publishedTitles: [] };
   }
-  if (!Number.isFinite(dayNumber)) {
-    return { error: "Day Number must be a number.", publishedCount: 0, publishedTitles: [] };
-  }
+  const dayNumber = dayNumberFromActiveDate(activeDate);
 
   try {
     // Auth session from request cookies so Postgres RLS runs as the signed-in admin.
@@ -471,7 +467,7 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
       insertPayload.push({
         title,
         creator_name: creatorName || null,
-        day_number: Math.trunc(dayNumber),
+        day_number: dayNumber,
         software,
         category,
         layer_count: lc.value,
@@ -508,36 +504,6 @@ async function addChallengeAction(formData: FormData): Promise<AddChallengeState
 }
 
 /* eslint-enable @typescript-eslint/no-unused-vars */
-async function computeDayNumberForDate(targetDate: string) {
-  const sb = createSupabaseServerClient(await cookies());
-  const { data: rows } = await sb
-    .from("challenges")
-    .select("active_date, day_number")
-    .order("active_date", { ascending: true });
-
-  const list =
-    (rows as
-      | Array<{
-          active_date: string | null;
-          day_number: number | null;
-        }>
-      | null) ?? [];
-
-  const byDate = new Map<string, number | null>();
-  for (const r of list) {
-    const d = r.active_date ?? "";
-    if (!d) continue;
-    byDate.set(d, byDate.get(d) ?? r.day_number ?? null);
-  }
-
-  const dates = Array.from(byDate.keys()).sort();
-  const existing = byDate.get(targetDate);
-  if (typeof existing === "number" && Number.isFinite(existing)) {
-    return existing;
-  }
-  const insertIdx = dates.findIndex((d) => d > targetDate);
-  return insertIdx === -1 ? dates.length + 1 : insertIdx + 1;
-}
 
 async function approveSubmissionSaveForLaterAction(formData: FormData) {
   "use server";
@@ -600,7 +566,7 @@ async function approveAndScheduleSubmissionAction(formData: FormData) {
     .maybeSingle();
   if (existingAtSlot) return;
 
-  const dayNumber = await computeDayNumberForDate(activeDate);
+  const dayNumber = dayNumberFromActiveDate(activeDate);
   const { data: inserted, error: insertErr } = await sb
     .from("challenges")
     .insert({
@@ -666,7 +632,7 @@ async function assignApprovedSubmissionAction(formData: FormData) {
     .maybeSingle();
   if (existingAtSlot) return;
 
-  const dayNumber = await computeDayNumberForDate(activeDate);
+  const dayNumber = dayNumberFromActiveDate(activeDate);
   const { data: inserted, error: insertErr } = await sb
     .from("challenges")
     .insert({

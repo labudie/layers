@@ -7,6 +7,7 @@ import { getPosition } from "@/lib/asset-difficulty";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 import { assertSupabaseImageUrlIsPngOrJpeg } from "@/lib/server-image-magic";
 import { isStudioAdminSession } from "@/lib/studio-admin";
+import { dayNumberFromActiveDate } from "@/lib/challenge-day-number";
 import {
   parseValidatedLayerCount,
   sanitizeUserTextField,
@@ -28,39 +29,6 @@ async function getAdminSupabase(): Promise<AdminGate> {
   } catch {
     return { ok: false, error: "Could not verify admin session." };
   }
-}
-
-async function computeDayNumberForDate(
-  sb: ReturnType<typeof createSupabaseServerClient>,
-  targetDate: string,
-): Promise<number> {
-  const { data: rows } = await sb
-    .from("challenges")
-    .select("active_date, day_number")
-    .order("active_date", { ascending: true });
-
-  const list =
-    (rows as
-      | Array<{
-          active_date: string | null;
-          day_number: number | null;
-        }>
-      | null) ?? [];
-
-  const byDate = new Map<string, number | null>();
-  for (const r of list) {
-    const d = r.active_date ?? "";
-    if (!d) continue;
-    byDate.set(d, byDate.get(d) ?? r.day_number ?? null);
-  }
-
-  const dates = Array.from(byDate.keys()).sort();
-  const existing = byDate.get(targetDate);
-  if (typeof existing === "number" && Number.isFinite(existing)) {
-    return existing;
-  }
-  const insertIdx = dates.findIndex((d) => d > targetDate);
-  return insertIdx === -1 ? dates.length + 1 : insertIdx + 1;
 }
 
 export type AssetUpsertFields = {
@@ -608,15 +576,11 @@ async function applyScheduleAssignmentsFromReady(
   if (assignments.length === 0) return { ok: true };
 
   const uniqueDates = Array.from(new Set(assignments.map((a) => a.active_date))).sort();
-  const dayNumberByDate = new Map<string, number>();
-  for (const date of uniqueDates) {
-    dayNumberByDate.set(date, await computeDayNumberForDate(sb, date));
-  }
 
   const upsertChallenges = assignments.map((item) => ({
     title: item.title,
     creator_name: item.creator_name,
-    day_number: dayNumberByDate.get(item.active_date) ?? 1,
+    day_number: dayNumberFromActiveDate(item.active_date),
     software: item.software,
     category: item.category,
     layer_count: item.layer_count,
@@ -1291,7 +1255,7 @@ async function publishScheduledDateCore(
     const p = Number(row.scheduled_position);
     if (p >= 1 && p <= 5) byPos.set(p, row);
   }
-  const dayNumber = await computeDayNumberForDate(sb, scheduledDate);
+  const dayNumber = dayNumberFromActiveDate(scheduledDate);
   const slotPositions = Array.from(byPos.keys()).sort((a, b) => a - b);
   const { data: existingChallengesAtDate, error: existingErr } = await sb
     .from("challenges")
