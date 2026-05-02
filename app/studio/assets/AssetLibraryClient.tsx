@@ -24,14 +24,18 @@ import {
   approveSubmissionToAssetAction,
   confirmAutoScheduleAction,
   confirmReconfigureScheduleAction,
+  getDefaultUnscheduleFutureDateRangeAction,
   insertReadyAssetAction,
   insertReadyAssetsBatchAction,
   previewAutoScheduleAction,
   previewReconfigureScheduleAction,
+  previewUnscheduleFutureChallengesInRangeAction,
   publishScheduledDayAction,
   rejectSubmissionAction,
+  revalidateStudioAssetsCachesAction,
   scheduleAssetAction,
   unscheduleAssetAction,
+  unscheduleFutureChallengeByIdAction,
   updateAssetAction,
   type AssetUpsertFields,
   type AutoSchedulePreviewRow,
@@ -637,6 +641,17 @@ export function AssetLibraryClient({
   const [goLiveAllProgress, setGoLiveAllProgress] = useState<{ current: number; total: number } | null>(
     null,
   );
+  const [unscheduleAllOpen, setUnscheduleAllOpen] = useState(false);
+  const [unscheduleAllStart, setUnscheduleAllStart] = useState(todayYmdEastern());
+  const [unscheduleAllEnd, setUnscheduleAllEnd] = useState(todayYmdEastern());
+  const [unscheduleAllSummary, setUnscheduleAllSummary] = useState<{
+    count: number;
+    days: number;
+  } | null>(null);
+  const [unscheduleAllConfirmBusy, setUnscheduleAllConfirmBusy] = useState(false);
+  const [unscheduleAllProgress, setUnscheduleAllProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
   const [batchCreatorName, setBatchCreatorName] = useState("");
   const [batchSoftware, setBatchSoftware] = useState<SoftwareOption>("Photoshop");
   const [applyCreatorToAll, setApplyCreatorToAll] = useState(false);
@@ -662,6 +677,32 @@ export function AssetLibraryClient({
   useEffect(() => {
     setLiveChallengeMap(liveChallengeIdByDatePosition);
   }, [liveChallengeIdByDatePosition]);
+
+  useEffect(() => {
+    if (!unscheduleAllOpen) return;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void (async () => {
+        const p = await previewUnscheduleFutureChallengesInRangeAction(
+          unscheduleAllStart,
+          unscheduleAllEnd,
+        );
+        if (cancelled) return;
+        if (!p.ok) {
+          setUnscheduleAllSummary(null);
+          return;
+        }
+        setUnscheduleAllSummary({
+          count: p.challengeCount ?? 0,
+          days: p.distinctDayCount ?? 0,
+        });
+      })();
+    }, 280);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [unscheduleAllOpen, unscheduleAllStart, unscheduleAllEnd]);
 
   const patchDraftRow = useCallback((key: string, partial: Partial<DraftPairLocal>) => {
     setDraftPairs((list) => list.map((r) => (r.key === key ? { ...r, ...partial } : r)));
@@ -1264,6 +1305,58 @@ export function AssetLibraryClient({
     router.refresh();
   };
 
+  const openUnscheduleAllModal = async () => {
+    const d = await getDefaultUnscheduleFutureDateRangeAction();
+    if (!d.ok || !d.start || !d.end) {
+      window.alert(d.error ?? "Could not load default date range.");
+      return;
+    }
+    setUnscheduleAllStart(d.start);
+    setUnscheduleAllEnd(d.end);
+    setUnscheduleAllSummary(null);
+    setUnscheduleAllOpen(true);
+    const p = await previewUnscheduleFutureChallengesInRangeAction(d.start, d.end);
+    if (p.ok) {
+      setUnscheduleAllSummary({ count: p.challengeCount ?? 0, days: p.distinctDayCount ?? 0 });
+    }
+  };
+
+  const runConfirmUnscheduleAll = async () => {
+    const prev = await previewUnscheduleFutureChallengesInRangeAction(unscheduleAllStart, unscheduleAllEnd);
+    if (!prev.ok) {
+      window.alert(prev.error ?? "Preview failed.");
+      return;
+    }
+    const ids = prev.challengeIds ?? [];
+    if (ids.length === 0) {
+      setUnscheduleAllOpen(false);
+      return;
+    }
+    setUnscheduleAllConfirmBusy(true);
+    for (let i = 0; i < ids.length; i++) {
+      setUnscheduleAllProgress({ current: i + 1, total: ids.length });
+      const r = await unscheduleFutureChallengeByIdAction(ids[i]!);
+      if (!r.ok) {
+        window.alert(r.error ?? "Unschedule failed.");
+        setUnscheduleAllProgress(null);
+        setUnscheduleAllConfirmBusy(false);
+        void revalidateStudioAssetsCachesAction();
+        router.refresh();
+        return;
+      }
+    }
+    await revalidateStudioAssetsCachesAction();
+    setUnscheduleAllProgress(null);
+    setUnscheduleAllConfirmBusy(false);
+    setUnscheduleAllOpen(false);
+    setToast({
+      type: "success",
+      text: `Unscheduled ${ids.length} challenge${ids.length === 1 ? "" : "s"}.`,
+    });
+    window.setTimeout(() => setToast(null), 2800);
+    router.refresh();
+  };
+
   const onDropToSlot = async (slotIndex: number) => {
     if (!selectedDate || !dragAssetId) return;
     const previousAssets = assets;
@@ -1656,8 +1749,9 @@ export function AssetLibraryClient({
         <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
           <button
             type="button"
+            disabled={goLiveAllProgress !== null || unscheduleAllProgress !== null}
             onClick={openReconfigureModal}
-            className="rounded px-2.5 py-1.5 text-xs font-bold"
+            className="rounded px-2.5 py-1.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40"
             style={{
               background: "rgba(245,158,11,0.15)",
               color: "#f59e0b",
@@ -1668,12 +1762,25 @@ export function AssetLibraryClient({
           </button>
           <button
             type="button"
-            disabled={goLiveAllEligibleDates.length === 0 || goLiveAllProgress !== null}
+            disabled={goLiveAllEligibleDates.length === 0 || goLiveAllProgress !== null || unscheduleAllProgress !== null}
             onClick={() => void runGoLiveAll()}
             className="rounded px-2.5 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
             style={{ background: "#10b981" }}
           >
             ✓ Go Live All ({goLiveAllEligibleDates.length} days)
+          </button>
+          <button
+            type="button"
+            disabled={goLiveAllProgress !== null || unscheduleAllProgress !== null}
+            onClick={() => void openUnscheduleAllModal()}
+            className="rounded px-2.5 py-1.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40"
+            style={{
+              background: "rgba(239,68,68,0.1)",
+              color: "#ef4444",
+              border: "0.5px solid rgba(239,68,68,0.3)",
+            }}
+          >
+            ✕ Unschedule All
           </button>
         </div>
       </div>
@@ -2105,10 +2212,104 @@ export function AssetLibraryClient({
         </div>
       ) : null}
 
+      {unscheduleAllOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-lg rounded-2xl border border-white/15 bg-[#160828] p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-white">Unschedule future content</h2>
+              <button
+                type="button"
+                disabled={unscheduleAllConfirmBusy}
+                className="text-sm text-white/60 disabled:opacity-40"
+                onClick={() => {
+                  if (unscheduleAllConfirmBusy) return;
+                  setUnscheduleAllOpen(false);
+                  setUnscheduleAllSummary(null);
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-sm text-white/80">
+                <span className="mb-1 block text-xs uppercase text-white/55">Start date</span>
+                <input
+                  type="date"
+                  value={unscheduleAllStart}
+                  onChange={(e) => setUnscheduleAllStart(e.target.value)}
+                  disabled={unscheduleAllConfirmBusy}
+                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-2 text-white disabled:opacity-50"
+                />
+              </label>
+              <label className="text-sm text-white/80">
+                <span className="mb-1 block text-xs uppercase text-white/55">End date</span>
+                <input
+                  type="date"
+                  value={unscheduleAllEnd}
+                  onChange={(e) => setUnscheduleAllEnd(e.target.value)}
+                  disabled={unscheduleAllConfirmBusy}
+                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-2 text-white disabled:opacity-50"
+                />
+              </label>
+            </div>
+
+            <p className="mt-4 text-sm leading-relaxed text-white/80">
+              {unscheduleAllSummary ? (
+                <>
+                  This will unschedule{" "}
+                  <span className="font-semibold text-white">{unscheduleAllSummary.count}</span> challenges across{" "}
+                  <span className="font-semibold text-white">{unscheduleAllSummary.days}</span> days. Today and past
+                  dates will not be affected.
+                </>
+              ) : (
+                <span className="text-white/55">Updating summary…</span>
+              )}
+            </p>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={
+                  unscheduleAllConfirmBusy ||
+                  !unscheduleAllSummary ||
+                  unscheduleAllSummary.count === 0
+                }
+                onClick={() => void runConfirmUnscheduleAll()}
+                className="rounded px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                style={{ background: "#ef4444" }}
+              >
+                {unscheduleAllConfirmBusy ? "Working…" : "Confirm Unschedule"}
+              </button>
+              <button
+                type="button"
+                disabled={unscheduleAllConfirmBusy}
+                onClick={() => {
+                  if (unscheduleAllConfirmBusy) return;
+                  setUnscheduleAllOpen(false);
+                  setUnscheduleAllSummary(null);
+                }}
+                className="rounded border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {goLiveAllProgress ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="status" aria-live="polite">
           <div className="rounded-xl border border-white/15 bg-[#160828] px-6 py-4 text-center text-sm font-semibold text-white">
             Publishing day {goLiveAllProgress.current} of {goLiveAllProgress.total}…
+          </div>
+        </div>
+      ) : null}
+
+      {unscheduleAllProgress ? (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/60 p-4" role="status" aria-live="polite">
+          <div className="rounded-xl border border-white/15 bg-[#160828] px-6 py-4 text-center text-sm font-semibold text-white">
+            Unscheduling {unscheduleAllProgress.current} of {unscheduleAllProgress.total}…
           </div>
         </div>
       ) : null}

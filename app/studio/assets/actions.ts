@@ -218,6 +218,13 @@ function isYmd(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+function addDaysToYmd(ymd: string, days: number): string {
+  const [y, mo, d] = ymd.split("-").map(Number);
+  const dt = new Date(y, mo - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
 function iterateDateRange(start: string, end: string): string[] {
   const out: string[] = [];
   const cursor = new Date(`${start}T00:00:00`);
@@ -1069,6 +1076,129 @@ export async function unscheduleAssetAction(assetId: string): Promise<{ ok: bool
     if (delErr) return { ok: false, error: delErr.message };
   }
   revalidatePath("/studio/assets");
+  return { ok: true };
+}
+
+export async function getDefaultUnscheduleFutureDateRangeAction(): Promise<{
+  ok: boolean;
+  error?: string;
+  start?: string;
+  end?: string;
+}> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { sb } = gate;
+  const today = todayYYYYMMDDUSEastern();
+  const tomorrow = addDaysToYmd(today, 1);
+  const { data: maxRow, error } = await sb
+    .from("challenges")
+    .select("active_date")
+    .gt("active_date", today)
+    .order("active_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  const maxDate = (maxRow as { active_date?: string | null } | null)?.active_date ?? null;
+  const end =
+    maxDate && maxDate >= tomorrow ? maxDate : tomorrow;
+  return { ok: true, start: tomorrow, end };
+}
+
+export async function previewUnscheduleFutureChallengesInRangeAction(
+  startDate: string,
+  endDate: string,
+): Promise<{
+  ok: boolean;
+  error?: string;
+  challengeCount?: number;
+  distinctDayCount?: number;
+  challengeIds?: string[];
+}> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { sb } = gate;
+  if (!isYmd(startDate) || !isYmd(endDate)) {
+    return { ok: false, error: "Invalid date format." };
+  }
+  if (startDate > endDate) return { ok: false, error: "Start date must be before end date." };
+
+  const today = todayYYYYMMDDUSEastern();
+  const { data: rows, error } = await sb
+    .from("challenges")
+    .select("id, active_date")
+    .gt("active_date", today)
+    .gte("active_date", startDate)
+    .lte("active_date", endDate)
+    .order("active_date", { ascending: true });
+  if (error) return { ok: false, error: error.message };
+
+  const list = (rows ?? []) as Array<{ id: string; active_date: string | null }>;
+  const challengeIds = list.map((r) => r.id).filter(Boolean);
+  const daySet = new Set<string>();
+  for (const r of list) {
+    const d = r.active_date ?? "";
+    if (d) daySet.add(d);
+  }
+
+  return {
+    ok: true,
+    challengeCount: challengeIds.length,
+    distinctDayCount: daySet.size,
+    challengeIds,
+  };
+}
+
+/** Unlink asset(s) then delete one future challenge. Does not revalidate — caller should flush caches once. */
+export async function unscheduleFutureChallengeByIdAction(
+  challengeId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { sb } = gate;
+
+  const { data: chRow, error: chErr } = await sb
+    .from("challenges")
+    .select("id, active_date")
+    .eq("id", challengeId)
+    .maybeSingle();
+  if (chErr) return { ok: false, error: chErr.message };
+  const ch = chRow as { id?: string; active_date?: string | null } | null;
+  if (!ch?.id) return { ok: false, error: "Challenge not found." };
+
+  const today = todayYYYYMMDDUSEastern();
+  if (String(ch.active_date ?? "") <= today) {
+    return { ok: false, error: "Cannot unschedule today or past challenges." };
+  }
+
+  const { data: assetRows, error: aErr } = await sb.from("assets").select("id").eq("challenge_id", challengeId);
+  if (aErr) return { ok: false, error: aErr.message };
+
+  for (const row of (assetRows ?? []) as Array<{ id: string }>) {
+    const { error: uErr } = await sb
+      .from("assets")
+      .update({
+        scheduled_date: null,
+        scheduled_position: null,
+        status: "ready",
+        challenge_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", row.id)
+      .eq("challenge_id", challengeId);
+    if (uErr) return { ok: false, error: uErr.message };
+  }
+
+  const { error: delErr } = await sb.from("challenges").delete().eq("id", challengeId);
+  if (delErr) return { ok: false, error: delErr.message };
+
+  return { ok: true };
+}
+
+export async function revalidateStudioAssetsCachesAction(): Promise<{ ok: boolean; error?: string }> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  revalidatePath("/studio/assets");
+  revalidatePath("/studio");
   return { ok: true };
 }
 
