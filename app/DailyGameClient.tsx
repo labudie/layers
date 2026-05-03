@@ -1267,7 +1267,7 @@ export function DailyGameClient({
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  const autoAdvanceTimeoutRef = useRef<number | null>(null);
+  const autoAdvanceTimer = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
   const revealTimeoutRef = useRef<number | null>(null);
   const imageFeedbackTimeoutRef = useRef<number | null>(null);
@@ -1465,10 +1465,6 @@ export function DailyGameClient({
 
   useEffect(() => {
     return () => {
-      if (autoAdvanceTimeoutRef.current != null) {
-        window.clearTimeout(autoAdvanceTimeoutRef.current);
-        autoAdvanceTimeoutRef.current = null;
-      }
       if (fadeTimeoutRef.current != null) {
         window.clearTimeout(fadeTimeoutRef.current);
         fadeTimeoutRef.current = null;
@@ -1489,6 +1485,15 @@ export function DailyGameClient({
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (autoAdvanceTimer.current != null) {
+        clearTimeout(autoAdvanceTimer.current);
+        autoAdvanceTimer.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (showSummary) setChallengeTransitioning(false);
   }, [showSummary]);
 
@@ -1504,9 +1509,9 @@ export function DailyGameClient({
   }, [showSummary, challenges, currentChallengeIndex, posthog]);
 
   useEffect(() => {
-    if (autoAdvanceTimeoutRef.current != null) {
-      window.clearTimeout(autoAdvanceTimeoutRef.current);
-      autoAdvanceTimeoutRef.current = null;
+    if (autoAdvanceTimer.current != null) {
+      clearTimeout(autoAdvanceTimer.current);
+      autoAdvanceTimer.current = null;
     }
     if (fadeTimeoutRef.current != null) {
       window.clearTimeout(fadeTimeoutRef.current);
@@ -2396,9 +2401,9 @@ export function DailyGameClient({
 
   const advanceNow = useCallback(
     (isLast: boolean) => {
-      if (autoAdvanceTimeoutRef.current != null) {
-        window.clearTimeout(autoAdvanceTimeoutRef.current);
-        autoAdvanceTimeoutRef.current = null;
+      if (autoAdvanceTimer.current != null) {
+        clearTimeout(autoAdvanceTimer.current);
+        autoAdvanceTimer.current = null;
       }
       setPendingAutoAdvance(false);
       setPendingFailedAutoAdvance(false);
@@ -2409,22 +2414,22 @@ export function DailyGameClient({
 
   useEffect(() => {
     if (!failedWithMaxGuesses || showSummary) return;
-    if (autoAdvanceTimeoutRef.current != null) {
-      window.clearTimeout(autoAdvanceTimeoutRef.current);
-      autoAdvanceTimeoutRef.current = null;
+    if (autoAdvanceTimer.current != null) {
+      clearTimeout(autoAdvanceTimer.current);
+      autoAdvanceTimer.current = null;
     }
     setPendingFailedAutoAdvance(true);
     const isLast = currentChallengeIndex >= total - 1;
-    autoAdvanceTimeoutRef.current = window.setTimeout(() => {
-      autoAdvanceTimeoutRef.current = null;
+    autoAdvanceTimer.current = window.setTimeout(() => {
+      autoAdvanceTimer.current = null;
       setPendingFailedAutoAdvance(false);
       advanceAfterTransitionOut(isLast);
     }, 2000);
 
     return () => {
-      if (autoAdvanceTimeoutRef.current != null) {
-        window.clearTimeout(autoAdvanceTimeoutRef.current);
-        autoAdvanceTimeoutRef.current = null;
+      if (autoAdvanceTimer.current != null) {
+        clearTimeout(autoAdvanceTimer.current);
+        autoAdvanceTimer.current = null;
       }
       setPendingFailedAutoAdvance(false);
     };
@@ -2523,13 +2528,14 @@ export function DailyGameClient({
         setConfettiBursts((prev) => prev.filter((id) => id !== burstId));
       }, 900);
       confettiTimeoutsRef.current.push(confettiTimeout);
-      if (autoAdvanceTimeoutRef.current != null) {
-        window.clearTimeout(autoAdvanceTimeoutRef.current);
+      if (autoAdvanceTimer.current != null) {
+        clearTimeout(autoAdvanceTimer.current);
+        autoAdvanceTimer.current = null;
       }
       setPendingAutoAdvance(true);
       const listLength = challengesRef.current.length;
-      autoAdvanceTimeoutRef.current = window.setTimeout(() => {
-        autoAdvanceTimeoutRef.current = null;
+      autoAdvanceTimer.current = window.setTimeout(() => {
+        autoAdvanceTimer.current = null;
         const isLast = idx >= listLength - 1;
         advanceAfterTransitionOut(isLast);
       }, 750);
@@ -3729,9 +3735,7 @@ export function DailyGameClient({
                         <button
                           type="button"
                           disabled={challengeTransitioning}
-                          onClick={() =>
-                            advanceAfterTransitionOut(isLastChallenge)
-                          }
+                          onClick={() => void advanceNow(isLastChallenge)}
                           className="inline-flex min-h-[48px] items-center justify-center rounded-[var(--radius-pill)] bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40"
                         >
                           {isLastChallenge
@@ -4173,9 +4177,7 @@ export function DailyGameClient({
                               <button
                                 type="button"
                                 disabled={challengeTransitioning}
-                                onClick={() =>
-                                  advanceAfterTransitionOut(false)
-                                }
+                                onClick={() => void advanceNow(false)}
                                 className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40 md:rounded-xl"
                               >
                                 Next challenge
@@ -4184,7 +4186,7 @@ export function DailyGameClient({
                               <button
                                 type="button"
                                 disabled={challengeTransitioning}
-                                onClick={() => advanceAfterTransitionOut(true)}
+                                onClick={() => void advanceNow(true)}
                                 className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40 md:rounded-xl"
                               >
                                 View daily summary
@@ -4195,7 +4197,7 @@ export function DailyGameClient({
                           <button
                             type="button"
                             disabled={challengeTransitioning}
-                            onClick={() => advanceAfterTransitionOut(false)}
+                            onClick={() => void advanceNow(false)}
                             className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40 md:rounded-xl"
                           >
                             Next challenge
@@ -4204,7 +4206,7 @@ export function DailyGameClient({
                           <button
                             type="button"
                             disabled={challengeTransitioning}
-                            onClick={() => advanceAfterTransitionOut(true)}
+                            onClick={() => void advanceNow(true)}
                             className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40 md:rounded-xl"
                           >
                             View daily summary
