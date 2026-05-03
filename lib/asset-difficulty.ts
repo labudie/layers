@@ -22,6 +22,18 @@ export function difficultyFromLayerCount(layerCount: number): AdminDifficulty {
   return "Expert";
 }
 
+/** Short uppercase label for difficulty badges (Medium-Hard → MED-HARD to avoid overflow). */
+export function difficultyBadgeLabel(d: AdminDifficulty): string {
+  if (d === "Medium-Hard") return "MED-HARD";
+  return d.replace(/-/g, " ").toUpperCase();
+}
+
+/** CSV / plain text: only Medium-Hard is renamed; other tiers keep canonical names. */
+export function difficultyCsvLabel(d: AdminDifficulty): string {
+  if (d === "Medium-Hard") return "MED-HARD";
+  return d;
+}
+
 export function difficultyBadgeClass(d: AdminDifficulty): string {
   switch (d) {
     case "Easy":

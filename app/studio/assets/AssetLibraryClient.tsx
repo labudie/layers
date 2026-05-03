@@ -14,6 +14,7 @@ import {
 } from "@/lib/asset-pairing";
 import {
   difficultyBadgeClass,
+  difficultyBadgeLabel,
   difficultyFromLayerCount,
 } from "@/lib/asset-difficulty";
 import { CATEGORY_OPTIONS, type CategoryOption } from "@/lib/challenge-categories";
@@ -135,7 +136,7 @@ const SOFTWARE_ICONS: Record<string, string> = {
 const SLOT_LABELS = [
   "Slot 1 · Easy",
   "Slot 2 · Medium",
-  "Slot 3 · Medium-Hard",
+  "Slot 3 · MED-HARD",
   "Slot 4 · Hard",
   "Slot 5 · Expert",
 ] as const;
@@ -204,8 +205,10 @@ function monthMatrix(year: number, month0: number): (Date | null)[][] {
 function DifficultyBadge({ layerCount }: { layerCount: number }) {
   const d = difficultyFromLayerCount(layerCount);
   return (
-    <span className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${difficultyBadgeClass(d)}`}>
-      {d}
+    <span
+      className={`inline-flex shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide ${difficultyBadgeClass(d)}`}
+    >
+      {difficultyBadgeLabel(d)}
     </span>
   );
 }
@@ -1580,7 +1583,7 @@ export function AssetLibraryClient({
                       : f === "Medium"
                         ? "Medium (26-45)"
                         : f === "Medium-Hard"
-                          ? "Medium-Hard (46-65)"
+                          ? "MED-HARD (46-65)"
                           : f === "Hard"
                             ? "Hard (66-90)"
                             : f === "Expert"

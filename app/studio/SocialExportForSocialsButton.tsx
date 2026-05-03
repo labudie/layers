@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
-import { difficultyFromLayerCount } from "@/lib/asset-difficulty";
+import { difficultyCsvLabel, difficultyFromLayerCount } from "@/lib/asset-difficulty";
 import { todayYYYYMMDDUSEastern } from "@/lib/today-us-eastern";
 import {
   fetchScheduledChallengesForSocialExportAction,
@@ -46,7 +46,7 @@ function buildScheduleCsv(rows: ScheduledChallengeSocialExportRow[]): string {
         escapeCsvCell(r.title ?? ""),
         escapeCsvCell(r.creator_name ?? ""),
         escapeCsvCell(r.layer_count),
-        escapeCsvCell(difficultyFromLayerCount(r.layer_count)),
+        escapeCsvCell(difficultyCsvLabel(difficultyFromLayerCount(r.layer_count))),
       ].join(","),
     ),
   ];
