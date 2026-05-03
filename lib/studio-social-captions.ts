@@ -4,7 +4,7 @@ export type SocialCaptionChallenge = {
   layer_count: number;
 };
 
-/** UI labels for the 6 rotating styles (T+1 posting: numbers = previous day, copy drives today). */
+/** UI labels for the 6 rotating styles. */
 export const SOCIAL_CAPTION_STYLE_LABELS = [
   "Shock",
   "Relatability",
@@ -23,22 +23,19 @@ export type SocialCaptionsBundle = {
 };
 
 /**
- * T+1 captions: `priorDayChallenges` should be the **previous Eastern calendar day's**
- * five slots (positions 1 & 5 used for easy/expert title + layer counts). When absent
- * (e.g. first day of range), placeholders are used.
- * `dayIndex` should incorporate any per-day regenerate offset (see caller).
+ * Caption drafts for one calendar day: pass that day's five challenges (positions 1 & 5
+ * supply easy/expert). `dayIndex` should incorporate any per-day regenerate offset (see caller).
  */
 export function getCaptions(
-  priorDayChallenges: SocialCaptionChallenge[] | null,
+  challenges: SocialCaptionChallenge[],
   dayIndex: number,
 ): SocialCaptionsBundle {
   const styleIndex = ((dayIndex % 6) + 6) % 6;
   const styleLabel = SOCIAL_CAPTION_STYLE_LABELS[styleIndex];
 
-  const list = priorDayChallenges ?? [];
-  const expertChallenge = list.find((c) => c.position === 5);
-  const easyChallenge = list.find((c) => c.position === 1);
-  const expertTitle = expertChallenge?.title?.trim() || "[Yesterday's expert challenge]";
+  const expertChallenge = challenges.find((c) => c.position === 5);
+  const easyChallenge = challenges.find((c) => c.position === 1);
+  const expertTitle = expertChallenge?.title?.trim() || "[Expert challenge]";
   const expertLayers = expertChallenge?.layer_count ?? 0;
   const easyLayers = easyChallenge?.layer_count ?? 0;
   const halfGuess = Math.round(expertLayers * 0.5);
