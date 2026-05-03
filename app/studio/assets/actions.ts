@@ -816,6 +816,73 @@ export async function updateAssetAction(
   return { ok: true };
 }
 
+/** Updates `challenges` (when linked) + `assets` display fields; no revalidate — caller patches React state. */
+export async function updateScheduledSlotDisplayAction(
+  challengeId: string | null,
+  assetId: string,
+  fields: {
+    title: string;
+    creator_name: string;
+    software: string;
+    category: string;
+    layer_count: number | string;
+    is_sponsored: boolean;
+    sponsor_name: string;
+  },
+): Promise<{ ok: boolean; error?: string }> {
+  const gate = await getAdminSupabase();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const { sb } = gate;
+
+  const title = sanitizeUserTextField(fields.title, 500);
+  const creatorName = sanitizeUserTextField(fields.creator_name, 200);
+  const software = sanitizeUserTextField(fields.software, 120);
+  const category = sanitizeUserTextField(fields.category, 120);
+  const sponsorName = sanitizeUserTextField(fields.sponsor_name, 200);
+  const lc = parseValidatedLayerCount(fields.layer_count);
+  if (!title || !software || !category) {
+    return { ok: false, error: "Title, software, and category are required." };
+  }
+  if (!lc.ok) return { ok: false, error: lc.error };
+  const isSponsored = Boolean(fields.is_sponsored);
+  if (isSponsored && !sponsorName) {
+    return { ok: false, error: "Sponsor name is required when sponsored." };
+  }
+
+  const challengePatch = {
+    title,
+    creator_name: creatorName || null,
+    software,
+    category,
+    layer_count: lc.value,
+    is_sponsored: isSponsored,
+    sponsor_name: isSponsored ? sponsorName || null : null,
+  };
+
+  if (challengeId) {
+    const { data: ch, error: chReadErr } = await sb
+      .from("challenges")
+      .select("id")
+      .eq("id", challengeId)
+      .maybeSingle();
+    if (chReadErr) return { ok: false, error: chReadErr.message };
+    if (!ch) return { ok: false, error: "Challenge not found." };
+    const { error: cErr } = await sb.from("challenges").update(challengePatch).eq("id", challengeId);
+    if (cErr) return { ok: false, error: cErr.message };
+  }
+
+  const { error: aErr } = await sb
+    .from("assets")
+    .update({
+      ...challengePatch,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", assetId);
+  if (aErr) return { ok: false, error: aErr.message };
+
+  return { ok: true };
+}
+
 export async function approveSubmissionToAssetAction(
   submissionId: number,
 ): Promise<{ ok: boolean; error?: string }> {

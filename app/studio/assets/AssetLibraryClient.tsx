@@ -35,6 +35,7 @@ import {
   unscheduleAssetAction,
   unscheduleFutureChallengeByIdAction,
   updateAssetAction,
+  updateScheduledSlotDisplayAction,
   type AssetUpsertFields,
   type AutoSchedulePreviewRow,
 } from "@/app/studio/assets/actions";
@@ -594,6 +595,12 @@ export function AssetLibraryClient({
   const applyReadySearchDebounced = useMemo(() => debounce((q: string) => setReadySearch(q), 300), []);
   const [draftPairs, setDraftPairs] = useState<DraftPairLocal[]>([]);
   const [editAsset, setEditAsset] = useState<AssetRow | null>(null);
+  const [slotEdit, setSlotEdit] = useState<{
+    slot: AssetRow;
+    slotIndex: number;
+    activeDateYmd: string;
+    isLive: boolean;
+  } | null>(null);
   const [dragAssetId, setDragAssetId] = useState<string | null>(null);
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
@@ -1776,40 +1783,58 @@ export function AssetLibraryClient({
                       type="button"
                       aria-label="Unschedule"
                       className="absolute right-[6px] top-[6px] z-10 inline-flex h-[18px] w-[18px] cursor-pointer items-center justify-center rounded-full border-0 bg-[rgba(0,0,0,0.6)] text-[10px] leading-none text-[#ef4444]"
-                      onClick={() => void unscheduleSlot(slot.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void unscheduleSlot(slot.id);
+                      }}
                     >
                       ✕
                     </button>
-                    <div className="mx-auto flex h-12 w-12 overflow-hidden rounded bg-black/40">
-                      {slot.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- load only for this selected day; avoid next/image prefetch
-                        <img
-                          src={slot.image_url}
-                          alt=""
-                          width={48}
-                          height={48}
-                          className="h-12 w-12 object-cover"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      ) : null}
-                    </div>
-                    <p className="line-clamp-2 text-center text-[11px] text-white">{slot.title}</p>
-                    <div className="flex justify-center"><DifficultyBadge layerCount={slot.layer_count} /></div>
-                    <div className="flex justify-center">
-                      {Boolean(
-                        selectedDate &&
-                          liveChallengeMap[selectedDate]?.[idx + 1],
-                      ) ? (
-                        <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
-                          Live
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-[#7c3aed]/25 px-2 py-0.5 text-[10px] font-semibold text-[#d8b4fe]">
-                          Scheduled
-                        </span>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      draggable={false}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!selectedDate) return;
+                        setSlotEdit({
+                          slot,
+                          slotIndex: idx,
+                          activeDateYmd: selectedDate,
+                          isLive: Boolean(liveChallengeMap[selectedDate]?.[idx + 1]),
+                        });
+                      }}
+                      className="w-full cursor-pointer space-y-1 rounded-lg pb-1 pt-0.5 text-left outline-none ring-violet-500/40 hover:bg-white/[0.04] focus-visible:ring-2"
+                    >
+                      <div className="mx-auto flex h-12 w-12 overflow-hidden rounded bg-black/40">
+                        {slot.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- load only for this selected day; avoid next/image prefetch
+                          <img
+                            src={slot.image_url}
+                            alt=""
+                            width={48}
+                            height={48}
+                            className="h-12 w-12 object-cover"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : null}
+                      </div>
+                      <p className="line-clamp-2 text-center text-[11px] text-white">{slot.title}</p>
+                      <div className="flex justify-center">
+                        <DifficultyBadge layerCount={slot.layer_count} />
+                      </div>
+                      <div className="flex justify-center">
+                        {Boolean(selectedDate && liveChallengeMap[selectedDate]?.[idx + 1]) ? (
+                          <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
+                            Live
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-[#7c3aed]/25 px-2 py-0.5 text-[10px] font-semibold text-[#d8b4fe]">
+                            Scheduled
+                          </span>
+                        )}
+                      </div>
+                    </button>
                   </div>
                 ) : (
                   <div className="flex h-[84px] items-center justify-center rounded bg-white/[0.03] text-[11px] text-white/40">Drop asset here</div>
@@ -2087,6 +2112,19 @@ export function AssetLibraryClient({
         </div>
       ) : null}
 
+      {slotEdit ? (
+        <EditScheduledSlotModal
+          slot={slotEdit.slot}
+          slotNumber={slotEdit.slotIndex + 1}
+          activeDateYmd={slotEdit.activeDateYmd}
+          isLive={slotEdit.isLive}
+          onClose={() => setSlotEdit(null)}
+          onSaveSuccess={(patch) => {
+            setAssets((prev) => prev.map((a) => (a.id === patch.id ? { ...a, ...patch } : a)));
+          }}
+        />
+      ) : null}
+
       {editAsset && (
         <EditAssetModal
           asset={editAsset}
@@ -2096,6 +2134,226 @@ export function AssetLibraryClient({
           }}
         />
       )}
+    </div>
+  );
+}
+
+function EditScheduledSlotModal({
+  slot,
+  slotNumber,
+  activeDateYmd,
+  isLive,
+  onClose,
+  onSaveSuccess,
+}: {
+  slot: AssetRow;
+  slotNumber: number;
+  activeDateYmd: string;
+  isLive: boolean;
+  onClose: () => void;
+  onSaveSuccess: (patch: Partial<AssetRow> & { id: string }) => void;
+}) {
+  const [title, setTitle] = useState(slot.title);
+  const [creator_name, setCreator_name] = useState(slot.creator_name ?? "");
+  const [software, setSoftware] = useState(slot.software as SoftwareOption);
+  const [category, setCategory] = useState(slot.category as CategoryOption);
+  const [layer_count, setLayer_count] = useState(String(slot.layer_count));
+  const [is_sponsored, setIs_sponsored] = useState(slot.is_sponsored);
+  const [sponsor_name, setSponsor_name] = useState(slot.sponsor_name ?? "");
+  const [saveUi, setSaveUi] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const autoCloseAfterSaveTimerRef = useRef<number | null>(null);
+
+  const clearAutoCloseAfterSaveTimer = () => {
+    if (autoCloseAfterSaveTimerRef.current != null) {
+      window.clearTimeout(autoCloseAfterSaveTimerRef.current);
+      autoCloseAfterSaveTimerRef.current = null;
+    }
+  };
+
+  const handleClose = () => {
+    if (saveUi === "saving") return;
+    clearAutoCloseAfterSaveTimer();
+    onClose();
+  };
+
+  useEffect(() => {
+    clearAutoCloseAfterSaveTimer();
+    setSaveUi("idle");
+    setErrorText(null);
+    setTitle(slot.title);
+    setCreator_name(slot.creator_name ?? "");
+    setSoftware(slot.software as SoftwareOption);
+    setCategory(slot.category as CategoryOption);
+    setLayer_count(String(slot.layer_count));
+    setIs_sponsored(slot.is_sponsored);
+    setSponsor_name(slot.sponsor_name ?? "");
+    return () => clearAutoCloseAfterSaveTimer();
+  }, [slot.id, activeDateYmd, slotNumber]);
+
+  const showLiveWarning = activeDateYmd <= todayYmdEastern();
+
+  return (
+    <div className="fixed inset-0 z-[52] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/15 bg-[#160828] p-5">
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-bold text-white">Edit Challenge</h2>
+            <p className="mt-1 text-xs text-white/55">
+              {activeDateYmd} · Slot {slotNumber} · {isLive ? "Live" : "Scheduled"}
+            </p>
+          </div>
+          <button type="button" onClick={handleClose} className="shrink-0 text-sm text-white/60">
+            Close
+          </button>
+        </div>
+
+        {showLiveWarning ? (
+          <div className="mb-3 rounded-lg border border-amber-400/35 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-100">
+            ⚠ This challenge is live. Changes take effect immediately for all users.
+          </div>
+        ) : null}
+
+        <div className="mb-4 flex justify-center">
+          <div className="relative h-28 w-28 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+            {slot.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={slot.image_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center text-[11px] text-white/40">No image</div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-[10px] font-semibold uppercase tracking-wide text-white/45">Title</label>
+          <input
+            className="w-full rounded border border-white/10 bg-black/30 px-2 py-2 text-sm text-white"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <label className="block text-[10px] font-semibold uppercase tracking-wide text-white/45">Creator name</label>
+          <CreatorAutocompleteInput value={creator_name} onChange={setCreator_name} />
+          <label className="block text-[10px] font-semibold uppercase tracking-wide text-white/45">Layer count</label>
+          <input
+            type="number"
+            min={0}
+            className="w-full rounded border border-white/10 bg-black/30 px-2 py-2 text-sm text-white"
+            value={layer_count}
+            onChange={(e) => setLayer_count(e.target.value)}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-white/45">
+                Software
+              </label>
+              <select
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-2 text-sm text-white"
+                value={software}
+                onChange={(e) => setSoftware(e.target.value as SoftwareOption)}
+              >
+                {SOFTWARE_OPTIONS.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-white/45">
+                Category
+              </label>
+              <select
+                className="w-full rounded border border-white/10 bg-black/30 px-2 py-2 text-sm text-white"
+                value={category}
+                onChange={(e) => setCategory(e.target.value as CategoryOption)}
+              >
+                {CATEGORY_OPTIONS.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <label className="block text-[10px] font-semibold uppercase tracking-wide text-white/45">Sponsor name</label>
+          <input
+            className="w-full rounded border border-white/10 bg-black/30 px-2 py-2 text-sm text-white"
+            value={sponsor_name}
+            onChange={(e) => setSponsor_name(e.target.value)}
+            placeholder="Sponsor name"
+            disabled={!is_sponsored}
+          />
+          <label className="flex items-center gap-2 text-sm text-white/80">
+            <input type="checkbox" checked={is_sponsored} onChange={(e) => setIs_sponsored(e.target.checked)} />
+            Is sponsored
+          </label>
+        </div>
+
+        {errorText ? (
+          <p className="mt-2 text-xs font-semibold text-red-300">{errorText}</p>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={saveUi === "saving"}
+            onClick={handleClose}
+            className="flex-1 rounded-xl border border-white/20 py-2.5 text-sm font-bold text-white/90 hover:bg-white/5 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saveUi === "saving" || saveUi === "success"}
+            className={`flex-1 rounded-xl py-2.5 text-sm font-bold disabled:opacity-60 ${
+              saveUi === "error"
+                ? "bg-red-600/80 text-white"
+                : saveUi === "success"
+                  ? "bg-emerald-600/40 text-emerald-100"
+                  : "bg-[#7c3aed] text-white"
+            }`}
+            onClick={async () => {
+              setSaveUi("saving");
+              setErrorText(null);
+              const r = await updateScheduledSlotDisplayAction(slot.challenge_id, slot.id, {
+                title,
+                creator_name,
+                software,
+                category,
+                layer_count,
+                is_sponsored,
+                sponsor_name,
+              });
+              if (!r.ok) {
+                setSaveUi("error");
+                setErrorText(r.error ?? "Save failed.");
+                return;
+              }
+              const layerCountNum = Math.max(0, Math.trunc(Number(layer_count)));
+              const patch: Partial<AssetRow> & { id: string } = {
+                id: slot.id,
+                title: title.trim(),
+                creator_name: creator_name.trim() || null,
+                software,
+                category,
+                layer_count: layerCountNum,
+                is_sponsored,
+                sponsor_name: is_sponsored ? sponsor_name.trim() || null : null,
+              };
+              onSaveSuccess(patch);
+              setSaveUi("success");
+              clearAutoCloseAfterSaveTimer();
+              autoCloseAfterSaveTimerRef.current = window.setTimeout(() => {
+                autoCloseAfterSaveTimerRef.current = null;
+                onClose();
+              }, 2000);
+            }}
+          >
+            {saveUi === "success" ? "✅ Saved" : saveUi === "saving" ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
