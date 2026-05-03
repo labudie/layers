@@ -491,6 +491,15 @@ tbody.leaderboard-stagger tr.lb-stagger-row {
   animation: studio-asset-ingest-bar-sweep 1.35s ease-in-out infinite;
 }
 
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .studio-ingest-dot--pulse {
     animation: none !important;
@@ -519,6 +528,11 @@ tbody.leaderboard-stagger tr.lb-stagger-row {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
+  }
+
+  .challenge-complete-advance-btn {
+    animation: none !important;
+    opacity: 1 !important;
   }
 
   button:active:not(:disabled),

@@ -621,13 +621,62 @@ const challengeCompleteDividerStyle: CSSProperties = {
   margin: "10px auto",
 };
 
+type ChallengeCompleteOverlayActions = {
+  isLastChallenge: boolean;
+  onAdvance: () => void;
+  advanceDisabled: boolean;
+};
+
+function ChallengeCompleteAdvanceButton({
+  isLastChallenge,
+  onAdvance,
+  disabled,
+}: {
+  isLastChallenge: boolean;
+  onAdvance: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className="challenge-complete-advance-btn"
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        onAdvance();
+      }}
+      style={{
+        marginTop: 16,
+        background: "rgba(255,255,255,0.15)",
+        border: "1px solid rgba(255,255,255,0.25)",
+        color: "#fff",
+        fontSize: 14,
+        fontWeight: 600,
+        padding: "12px 32px",
+        borderRadius: 12,
+        cursor: disabled ? "not-allowed" : "pointer",
+        backdropFilter: "blur(4px)",
+        WebkitBackdropFilter: "blur(4px)",
+        opacity: 0,
+        animation: "fadeIn 0.3s ease forwards",
+      }}
+    >
+      {isLastChallenge ? "See Results →" : "Next →"}
+    </button>
+  );
+}
+
 /** Full-image reveal during auto-advance hold (mobile + desktop). */
 function ChallengeCompleteImageOverlay(
-  props:
-    | { variant: "solved"; answer: number; guessesUsed: number }
-    | { variant: "failed"; answer: number; guesses: GuessRow[] }
-    | { variant: "close"; answer: number; bestGuess: number },
+  props: ChallengeCompleteOverlayActions &
+    (
+      | { variant: "solved"; answer: number; guessesUsed: number }
+      | { variant: "failed"; answer: number; guesses: GuessRow[] }
+      | { variant: "close"; answer: number; bestGuess: number }
+    ),
 ) {
+  const { isLastChallenge, onAdvance, advanceDisabled } = props;
+
   if (props.variant === "solved") {
     return (
       <div
@@ -640,7 +689,6 @@ function ChallengeCompleteImageOverlay(
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          pointerEvents: "none",
           background:
             "linear-gradient(135deg, rgba(16,185,129,0.92), rgba(5,150,105,0.95))",
           backdropFilter: "blur(8px)",
@@ -660,6 +708,11 @@ function ChallengeCompleteImageOverlay(
           Solved in {props.guessesUsed}{" "}
           {props.guessesUsed === 1 ? "guess" : "guesses"}
         </div>
+        <ChallengeCompleteAdvanceButton
+          isLastChallenge={isLastChallenge}
+          onAdvance={onAdvance}
+          disabled={advanceDisabled}
+        />
       </div>
     );
   }
@@ -676,7 +729,6 @@ function ChallengeCompleteImageOverlay(
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          pointerEvents: "none",
           background:
             "linear-gradient(135deg, rgba(245,158,11,0.92), rgba(217,119,6,0.95))",
           backdropFilter: "blur(8px)",
@@ -695,6 +747,11 @@ function ChallengeCompleteImageOverlay(
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
           Your best guess: {props.bestGuess}
         </div>
+        <ChallengeCompleteAdvanceButton
+          isLastChallenge={isLastChallenge}
+          onAdvance={onAdvance}
+          disabled={advanceDisabled}
+        />
       </div>
     );
   }
@@ -729,7 +786,6 @@ function ChallengeCompleteImageOverlay(
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        pointerEvents: "none",
         background:
           "linear-gradient(135deg, rgba(15,5,32,0.92), rgba(28,10,50,0.96))",
         backdropFilter: "blur(8px)",
@@ -765,6 +821,11 @@ function ChallengeCompleteImageOverlay(
           </span>
         ))}
       </div>
+      <ChallengeCompleteAdvanceButton
+        isLastChallenge={isLastChallenge}
+        onAdvance={onAdvance}
+        disabled={advanceDisabled}
+      />
     </div>
   );
 }
@@ -3521,18 +3582,27 @@ export function DailyGameClient({
                           variant="solved"
                           answer={challengeCompleteOverlay.answer}
                           guessesUsed={challengeCompleteOverlay.guessesUsed}
+                          isLastChallenge={isLastChallenge}
+                          advanceDisabled={challengeTransitioning}
+                          onAdvance={() => void advanceNow(isLastChallenge)}
                         />
                       ) : challengeCompleteOverlay.variant === "close" ? (
                         <ChallengeCompleteImageOverlay
                           variant="close"
                           answer={challengeCompleteOverlay.answer}
                           bestGuess={challengeCompleteOverlay.bestGuess}
+                          isLastChallenge={isLastChallenge}
+                          advanceDisabled={challengeTransitioning}
+                          onAdvance={() => void advanceNow(isLastChallenge)}
                         />
                       ) : (
                         <ChallengeCompleteImageOverlay
                           variant="failed"
                           answer={challengeCompleteOverlay.answer}
                           guesses={challengeCompleteOverlay.guesses}
+                          isLastChallenge={isLastChallenge}
+                          advanceDisabled={challengeTransitioning}
+                          onAdvance={() => void advanceNow(isLastChallenge)}
                         />
                       )
                     ) : null}
@@ -3830,18 +3900,27 @@ export function DailyGameClient({
                               variant="solved"
                               answer={challengeCompleteOverlay.answer}
                               guessesUsed={challengeCompleteOverlay.guessesUsed}
+                              isLastChallenge={isLastChallenge}
+                              advanceDisabled={challengeTransitioning}
+                              onAdvance={() => void advanceNow(isLastChallenge)}
                             />
                           ) : challengeCompleteOverlay.variant === "close" ? (
                             <ChallengeCompleteImageOverlay
                               variant="close"
                               answer={challengeCompleteOverlay.answer}
                               bestGuess={challengeCompleteOverlay.bestGuess}
+                              isLastChallenge={isLastChallenge}
+                              advanceDisabled={challengeTransitioning}
+                              onAdvance={() => void advanceNow(isLastChallenge)}
                             />
                           ) : (
                             <ChallengeCompleteImageOverlay
                               variant="failed"
                               answer={challengeCompleteOverlay.answer}
                               guesses={challengeCompleteOverlay.guesses}
+                              isLastChallenge={isLastChallenge}
+                              advanceDisabled={challengeTransitioning}
+                              onAdvance={() => void advanceNow(isLastChallenge)}
                             />
                           )
                         ) : null}
