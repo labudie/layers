@@ -123,7 +123,9 @@ export function ProfileBottomSheet({
     document.addEventListener("touchstart", prevent, opts);
 
     return () => {
-      console.log("cleaning up touch listeners");
+      console.log(
+        "[ProfileBottomSheet] sheet closed — removed document touchmove/touchstart listeners (cleanup ran)",
+      );
       document.removeEventListener("touchmove", preventScroll, opts);
       document.removeEventListener("touchstart", prevent, opts);
       document.body.style.overflow = "";

@@ -9,6 +9,7 @@ export function LeaderboardPullToRefresh({ children }: { children: ReactNode }) 
   const router = useRouter();
   return (
     <PullToRefresh
+      disabled
       className="flex min-h-0 flex-1 flex-col"
       onRefresh={async () => {
         router.refresh();
