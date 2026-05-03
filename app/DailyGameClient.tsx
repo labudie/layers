@@ -532,7 +532,16 @@ function GuessPersistenceHints({
     gap: 4,
   };
   return (
-    <div className={className} style={style}>
+    <div
+      className={className}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        width: "100%",
+        ...style,
+      }}
+    >
       {showChips ? (
         <div
           style={{
@@ -540,6 +549,8 @@ function GuessPersistenceHints({
             flexWrap: "wrap",
             gap: 6,
             marginBottom: 6,
+            justifyContent: "center",
+            alignItems: "center",
           }}
         >
           {chips.map((g, i) => {
@@ -566,7 +577,7 @@ function GuessPersistenceHints({
         </div>
       ) : null}
       {rangeLine ? (
-        <p
+        <div
           style={{
             fontSize: 10,
             color: "#6b7280",
@@ -575,7 +586,7 @@ function GuessPersistenceHints({
           }}
         >
           {rangeLine}
-        </p>
+        </div>
       ) : null}
     </div>
   );
