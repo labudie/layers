@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchStudioSocialTabAction } from "@/app/studio/studio-social-tab-actions";
+import { previousEasternYmd } from "@/lib/admin-eastern-dates";
 import {
   getCaptions,
   type SocialCaptionChallenge,
@@ -222,9 +223,13 @@ export function StudioSocialTabClient({
 
       <div className="space-y-6">
         {days.map((day, dayIndex) => {
-          const challenges = slotsToCaptionChallenges(day.slots);
+          const priorYmd = previousEasternYmd(day.dateYmd);
+          const priorDay = days.find((d) => d.dateYmd === priorYmd);
+          const priorCaptionChallenges: SocialCaptionChallenge[] | null = priorDay
+            ? slotsToCaptionChallenges(priorDay.slots)
+            : null;
           const bump = styleBumpByDateYmd[day.dateYmd] ?? 0;
-          const captionBundle = getCaptions(challenges, dayIndex + bump);
+          const captionBundle = getCaptions(priorCaptionChallenges, dayIndex + bump);
           const { x: xCaption, instagram: instagramCaption, tiktok: tiktokCaption, styleLabel } =
             captionBundle;
 

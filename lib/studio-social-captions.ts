@@ -4,13 +4,14 @@ export type SocialCaptionChallenge = {
   layer_count: number;
 };
 
+/** UI labels for the 6 rotating styles (T+1 posting: numbers = previous day, copy drives today). */
 export const SOCIAL_CAPTION_STYLE_LABELS = [
-  "Tease",
-  "Obscured count",
-  "Range hint",
-  "Easy vs Expert contrast",
-  "Community challenge",
-  "Reveal",
+  "Shock",
+  "Relatability",
+  "Contrast",
+  "Community",
+  "Designer POV",
+  "Dare",
 ] as const;
 
 export type SocialCaptionsBundle = {
@@ -22,24 +23,25 @@ export type SocialCaptionsBundle = {
 };
 
 /**
- * Rotating caption drafts for the studio Social tab.
+ * T+1 captions: `priorDayChallenges` should be the **previous Eastern calendar day's**
+ * five slots (positions 1 & 5 used for easy/expert title + layer counts). When absent
+ * (e.g. first day of range), placeholders are used.
  * `dayIndex` should incorporate any per-day regenerate offset (see caller).
  */
 export function getCaptions(
-  challenges: SocialCaptionChallenge[],
+  priorDayChallenges: SocialCaptionChallenge[] | null,
   dayIndex: number,
 ): SocialCaptionsBundle {
   const styleIndex = ((dayIndex % 6) + 6) % 6;
   const styleLabel = SOCIAL_CAPTION_STYLE_LABELS[styleIndex];
 
-  const expertChallenge = challenges.find((c) => c.position === 5);
-  const easyChallenge = challenges.find((c) => c.position === 1);
-  const expertTitle = expertChallenge?.title?.trim() || "[Expert challenge]";
+  const list = priorDayChallenges ?? [];
+  const expertChallenge = list.find((c) => c.position === 5);
+  const easyChallenge = list.find((c) => c.position === 1);
+  const expertTitle = expertChallenge?.title?.trim() || "[Yesterday's expert challenge]";
   const expertLayers = expertChallenge?.layer_count ?? 0;
   const easyLayers = easyChallenge?.layer_count ?? 0;
-
-  const lowRange = Math.round(expertLayers * 0.6);
-  const highRange = Math.round(expertLayers * 1.5);
+  const halfGuess = Math.round(expertLayers * 0.5);
 
   switch (styleIndex) {
     case 0:
@@ -47,88 +49,110 @@ export function getCaptions(
         styleIndex,
         styleLabel,
         x:
-          `Today's expert challenge: ${expertTitle}. How many layers deep do you think it goes?\n\n` +
+          `${expertLayers} layers. One ${expertTitle}.\n\n` +
+          `Could you have guessed that?\n\n` +
+          `Today's expert is live now — and we're still not telling you the count.\n\n` +
           `Play free → layersgame.com`,
         instagram:
-          `Today's expert on Layers: ${expertTitle}. 🎮\n\n` +
-          `We're not telling you the layer count. You've got 3 guesses.\n\n` +
+          `${expertLayers} layers. 🤯\n\n` +
+          `That's how many layers were in yesterday's expert challenge — a ${expertTitle}.\n\n` +
+          `Today's expert is live. Can you guess it in 3 tries?\n\n` +
           `Play free — link in bio.\n\n` +
           `#graphicdesign #photoshop #designchallenge #layersgame #dailydesign`,
         tiktok:
-          `Today's expert challenge on Layers: ${expertTitle}. How many layers do you think it took? Drop your guess below 👇 layersgame.com`,
+          `${expertLayers} layers. In a ${expertTitle}. That was yesterday's expert challenge on Layers. Today's is live and we're not telling you a thing. layersgame.com`,
       };
     case 1:
       return {
         styleIndex,
         styleLabel,
         x:
-          `XXX layers. ${expertTitle}.\n\nYou've got 3 guesses. Play free → layersgame.com`,
+          `Be honest — would you have guessed ${expertLayers} layers in a ${expertTitle}?\n\n` +
+          `Most designers didn't.\n\n` +
+          `Today's expert is live. Play free → layersgame.com`,
         instagram:
-          `XXX layers. One Photoshop file. One expert challenge. 🖥️\n\n` +
-          `Can you guess the real number in 3 tries?\n\n` +
-          `Play Layers free — link in bio.\n\n` +
-          `#graphicdesign #adobephotoshop #designchallenge #layersgame`,
+          `Be honest 👀\n\n` +
+          `Would you have guessed ${expertLayers} layers in a ${expertTitle}?\n\n` +
+          `Most designers guess too low. Today's expert challenge is live — 3 tries to get it.\n\n` +
+          `Play free — link in bio.\n\n` +
+          `#graphicdesign #adobephotoshop #designchallenge #layersgame #dailydesign`,
         tiktok:
-          `XXX layers. That's today's expert on Layers. The real number might surprise you. Go guess → layersgame.com`,
+          `Be honest — would you have guessed ${expertLayers} layers just by looking at it? Most designers didn't. Today's expert is live on Layers. layersgame.com`,
       };
     case 2:
       return {
         styleIndex,
         styleLabel,
         x:
-          `Today's expert is somewhere between ${lowRange} and ${highRange} layers.\n\n` +
-          `Think you can narrow it down? → layersgame.com`,
+          `Yesterday on Layers:\n\n` +
+          `Easy → ${easyLayers} layers\n` +
+          `Expert → ${expertLayers} layers\n\n` +
+          `The gap is the game. Today's 5 challenges are live.\n\n` +
+          `Play free → layersgame.com`,
         instagram:
-          `Hint: today's expert challenge has somewhere between ${lowRange} and ${highRange} layers. 👀\n\n` +
-          `That's all you're getting. 3 guesses. Play free — link in bio.\n\n` +
-          `#graphicdesign #photoshop #layersgame #designchallenge`,
+          `Yesterday's range on Layers 👇\n\n` +
+          `🟢 Easy: ${easyLayers} layers\n` +
+          `🟣 Expert: ${expertLayers} layers\n\n` +
+          `Think you could have spotted the difference just by looking?\n\n` +
+          `Today's 5 challenges are live — play free at layersgame.com (link in bio)\n\n` +
+          `#graphicdesign #photoshop #designchallenge #layersgame #dailydesign`,
         tiktok:
-          `I'll give you a hint — today's expert has somewhere between ${lowRange} and ${highRange} layers. Can you guess it exactly? layersgame.com`,
+          `Yesterday's easy challenge: ${easyLayers} layers. Yesterday's expert: ${expertLayers} layers. Could you feel the difference just by looking? Today's game is live. layersgame.com`,
       };
     case 3:
       return {
         styleIndex,
         styleLabel,
         x:
-          `Today on Layers:\nEasy challenge → ${easyLayers} layers\nExpert challenge → ??? layers\n\n` +
-          `One of those numbers will surprise you. Play free → layersgame.com`,
+          `We showed designers a ${expertTitle} and asked them to guess the layer count.\n\n` +
+          `Most guessed under ${halfGuess}.\n\n` +
+          `It was ${expertLayers}.\n\n` +
+          `Today's expert is live — play free → layersgame.com`,
         instagram:
-          `Today's range on Layers:\n\n🟢 Easy: ${easyLayers} layers\n🟣 Expert: ??? layers\n\n` +
-          `The gap might surprise you. 5 challenges, 3 guesses each. Play free — link in bio.\n\n` +
-          `#graphicdesign #photoshop #designchallenge #layersgame #dailydesign`,
+          `We showed this ${expertTitle} to designers and asked them to guess the layer count. 🤔\n\n` +
+          `Most guessed under ${halfGuess}.\n\n` +
+          `It was ${expertLayers} layers.\n\n` +
+          `Think you would have gotten closer? Today's expert is live.\n\n` +
+          `Play free — link in bio.\n\n` +
+          `#graphicdesign #photoshop #designchallenge #layersgame`,
         tiktok:
-          `Easy challenge today: ${easyLayers} layers. Expert challenge: ??? layers. The difference will surprise you. Come play Layers — free daily design game.`,
+          `We asked designers to guess the layer count on a ${expertTitle}. Most said under ${halfGuess}. It was ${expertLayers}. Would you have been closer? Today's is live. layersgame.com`,
       };
     case 4:
       return {
         styleIndex,
         styleLabel,
         x:
-          `Drop your guess below 👇\n\nHow many layers does today's expert challenge have — ${expertTitle}?\n\n` +
-          `Answer at midnight. Play → layersgame.com`,
+          `Yesterday's expert designer used ${expertLayers} layers to build a single ${expertTitle}.\n\n` +
+          `What's your layer discipline like?\n\n` +
+          `Today's 5 challenges are live.\n\n` +
+          `Play free → layersgame.com`,
         instagram:
-          `How many layers does a ${expertTitle} have? 🤔\n\n` +
-          `Drop your guess in the comments — answer unlocks at midnight.\n\n` +
-          `Play the full game free at layersgame.com (link in bio)\n\n` +
-          `#graphicdesign #photoshop #designchallenge #layersgame`,
+          `${expertLayers} layers. One file. One designer. 🎨\n\n` +
+          `Yesterday's expert challenge was a ${expertTitle} — and the layer count says everything about how it was built.\n\n` +
+          `How does your Photoshop discipline stack up? Today's challenges are live.\n\n` +
+          `Play free — link in bio.\n\n` +
+          `#graphicdesign #adobephotoshop #photoshop #layersgame #designchallenge`,
         tiktok:
-          `Comment your guess: how many layers in today's ${expertTitle}? We'll see who's closest. Play the full game at layersgame.com`,
+          `Yesterday's expert used ${expertLayers} layers to build a ${expertTitle}. Are you a 20-layer designer or a 200-layer designer? Come find out on Layers. layersgame.com`,
       };
     default:
       return {
         styleIndex,
         styleLabel,
         x:
-          `${expertLayers} layers. ${expertTitle}.\n\n` +
-          `That was yesterday's expert challenge on Layers. Today's is live now — think you can beat it?\n\n` +
+          `Yesterday's expert: ${expertLayers} layers.\n\n` +
+          `Did you get it in one?\n\n` +
+          `Today's is live and the leaderboard is wide open.\n\n` +
           `Play free → layersgame.com`,
         instagram:
-          `${expertLayers} layers. 🤯\n\n` +
-          `That was yesterday's expert challenge — a ${expertTitle} built in Photoshop. Today's expert is live and we're not telling you the count.\n\n` +
+          `Yesterday's expert had ${expertLayers} layers. 🏆\n\n` +
+          `Did you guess it? The leaderboard doesn't lie.\n\n` +
+          `Today's 5 challenges are live — first one to a perfect day takes the top spot.\n\n` +
           `Play free — link in bio.\n\n` +
-          `#graphicdesign #adobephotoshop #designchallenge #layersgame #dailydesign`,
+          `#graphicdesign #photoshop #designchallenge #layersgame #dailydesign`,
         tiktok:
-          `${expertLayers} layers in a ${expertTitle}. That was yesterday's expert on Layers. Today's is live and harder. Free to play — layersgame.com`,
+          `Yesterday's expert: ${expertLayers} layers. Today's is live. The leaderboard resets every day — which means right now it's wide open. Come take the top spot. layersgame.com`,
       };
   }
 }
