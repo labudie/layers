@@ -958,13 +958,8 @@ const CompactChallengeMotionImage = memo(function CompactChallengeMotionImage({
 }) {
   return (
     <AnimatePresence mode="wait" initial={false}>
-      <motion.img
+      <motion.div
         key={challengeId}
-        src={src}
-        alt={alt}
-        loading="eager"
-        decoding="async"
-        onLoad={onLoaded}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{
           opacity: loaded ? 1 : 0,
@@ -975,16 +970,30 @@ const CompactChallengeMotionImage = memo(function CompactChallengeMotionImage({
           duration: 0.25,
           ease: "easeOut",
         }}
-        className={`cursor-zoom-in ${feedbackClassName}`}
-        onClick={onOpenZoom}
         style={{
+          position: "relative",
+          overflow: "hidden",
+          borderRadius: "12px",
           maxWidth: "100%",
           maxHeight: "100%",
-          objectFit: "contain",
-          borderRadius: "12px",
-          display: "block",
         }}
-      />
+      >
+        <img
+          src={src}
+          alt={alt}
+          loading="eager"
+          decoding="async"
+          onLoad={onLoaded}
+          className={`cursor-zoom-in ${feedbackClassName}`}
+          onClick={onOpenZoom}
+          style={{
+            maxWidth: "100%",
+            maxHeight: "100%",
+            objectFit: "contain",
+            display: "block",
+          }}
+        />
+      </motion.div>
     </AnimatePresence>
   );
 });
@@ -1006,13 +1015,8 @@ const StandardChallengeMotionImage = memo(function StandardChallengeMotionImage(
 }) {
   return (
     <AnimatePresence mode="wait" initial={false}>
-      <motion.img
+      <motion.div
         key={challengeId}
-        src={src}
-        alt={alt}
-        loading="eager"
-        decoding="async"
-        onLoad={onLoaded}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{
           opacity: loaded ? 1 : 0,
@@ -1023,18 +1027,30 @@ const StandardChallengeMotionImage = memo(function StandardChallengeMotionImage(
           duration: 0.25,
           ease: "easeOut",
         }}
-        className="block h-full max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain"
         style={{
-          borderRadius: "14px",
+          position: "relative",
           overflow: "hidden",
-          display: "block",
-          width: "100%",
-          height: "100%",
-          background: "transparent",
-          backgroundColor: "transparent",
+          borderRadius: "12px",
+          maxWidth: "100%",
+          maxHeight: "54vh",
         }}
-        onClick={onOpenZoom}
-      />
+      >
+        <img
+          src={src}
+          alt={alt}
+          loading="eager"
+          decoding="async"
+          onLoad={onLoaded}
+          className="block max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain"
+          style={{
+            display: "block",
+            height: "auto",
+            background: "transparent",
+            backgroundColor: "transparent",
+          }}
+          onClick={onOpenZoom}
+        />
+      </motion.div>
     </AnimatePresence>
   );
 });
@@ -3476,14 +3492,11 @@ export function DailyGameClient({
                   <div
                     style={{
                       position: "relative",
-                      width: "100%",
-                      height: "100%",
-                      minHeight: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
                       overflow: "hidden",
-                      borderRadius: 12,
+                      borderRadius: "12px",
+                      maxWidth: "100%",
+                      maxHeight: "100%",
+                      alignSelf: "center",
                     }}
                   >
                     {currentChallenge.image_url ? (
@@ -3497,18 +3510,25 @@ export function DailyGameClient({
                         onOpenZoom={openActiveChallengeZoom}
                       />
                     ) : (
-                      <canvas
-                        ref={canvasRef}
-                        className="bg-transparent"
+                      <div
                         style={{
+                          position: "relative",
+                          overflow: "hidden",
+                          borderRadius: "12px",
                           maxWidth: "100%",
                           maxHeight: "100%",
-                          display: "block",
-                          borderRadius: "12px",
-                          width: "100%",
-                          height: "100%",
                         }}
-                      />
+                      >
+                        <canvas
+                          ref={canvasRef}
+                          className="bg-transparent"
+                          style={{
+                            maxWidth: "100%",
+                            maxHeight: "100%",
+                            display: "block",
+                          }}
+                        />
+                      </div>
                     )}
                     {challengeCompleteOverlay.visible ? (
                       challengeCompleteOverlay.variant === "solved" ? (
@@ -3796,11 +3816,13 @@ export function DailyGameClient({
                       }}
                     >
                       <div
-                        className="relative max-h-[54vh] w-full max-w-full overflow-hidden"
+                        className="max-h-[54vh] w-full max-w-full"
                         style={{
+                          position: "relative",
+                          overflow: "hidden",
+                          borderRadius: "12px",
                           background: "transparent",
                           backgroundColor: "transparent",
-                          borderRadius: 12,
                         }}
                       >
                         {currentChallenge.image_url ? (
@@ -3813,14 +3835,24 @@ export function DailyGameClient({
                             onOpenZoom={openActiveChallengeZoom}
                           />
                         ) : (
-                          <canvas
-                            ref={canvasRef}
-                            className="block h-[54vh] w-full max-w-full"
+                          <div
                             style={{
-                              background: "transparent",
-                              backgroundColor: "transparent",
+                              position: "relative",
+                              overflow: "hidden",
+                              borderRadius: "12px",
+                              maxWidth: "100%",
+                              maxHeight: "54vh",
                             }}
-                          />
+                          >
+                            <canvas
+                              ref={canvasRef}
+                              className="block max-h-[54vh] w-full max-w-full bg-transparent"
+                              style={{
+                                background: "transparent",
+                                backgroundColor: "transparent",
+                              }}
+                            />
+                          </div>
                         )}
                         {challengeCompleteOverlay.visible ? (
                           challengeCompleteOverlay.variant === "solved" ? (
