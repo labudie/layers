@@ -507,6 +507,80 @@ function isChallengeFinished(
   );
 }
 
+/** Wrong-guess chips + range line during active play (derived from `currentGuesses`). */
+function GuessPersistenceHints({
+  showChips,
+  chips,
+  rangeLine,
+  className,
+  style,
+}: {
+  showChips: boolean;
+  chips: GuessRow[];
+  rangeLine: string | null;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  if (!showChips && !rangeLine) return null;
+  const chipBase: CSSProperties = {
+    padding: "5px 10px",
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 600,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+  };
+  return (
+    <div className={className} style={style}>
+      {showChips ? (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+            marginBottom: 6,
+          }}
+        >
+          {chips.map((g, i) => {
+            const tooLow = g.direction === "low";
+            const chipStyle: CSSProperties = tooLow
+              ? {
+                  ...chipBase,
+                  background: "rgba(239,68,68,0.08)",
+                  border: "0.5px solid rgba(239,68,68,0.3)",
+                  color: "#ef4444",
+                }
+              : {
+                  ...chipBase,
+                  background: "rgba(245,158,11,0.08)",
+                  border: "0.5px solid rgba(245,158,11,0.3)",
+                  color: "#f59e0b",
+                };
+            return (
+              <span key={`${g.value}-${i}`} style={chipStyle}>
+                {tooLow ? "↑" : "↓"} {g.value} · {tooLow ? "too low" : "too high"}
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+      {rangeLine ? (
+        <p
+          style={{
+            fontSize: 10,
+            color: "#6b7280",
+            textAlign: "center",
+            marginBottom: 4,
+          }}
+        >
+          {rangeLine}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function canvasSeedForChallenge(ch: Challenge): number {
   let h = 0;
   for (let i = 0; i < ch.id.length; i++) {
@@ -1287,6 +1361,43 @@ export function DailyGameClient({
   const canSubmitGuess = Boolean(
     roundActive && signedIn && userId
   );
+
+  const guessPersistence = useMemo(() => {
+    const solvedCorrect = currentGuesses.some((g) => g.verdict === "correct");
+    const wrongVerdictGuesses = currentGuesses.filter((g) => g.verdict === "wrong");
+    const nonCorrect = currentGuesses.filter((g) => g.verdict !== "correct");
+    if (solvedCorrect) {
+      return {
+        showChips: false,
+        chips: [] as GuessRow[],
+        rangeLine: null as string | null,
+      };
+    }
+    const showChips =
+      wrongVerdictGuesses.length === 1 || wrongVerdictGuesses.length === 2;
+    const lows = nonCorrect
+      .filter((g) => g.direction === "low")
+      .map((g) => g.value);
+    const highs = nonCorrect
+      .filter((g) => g.direction === "high")
+      .map((g) => g.value);
+    let rangeLine: string | null = null;
+    if (wrongVerdictGuesses.length >= 1) {
+      const maxLow = lows.length ? Math.max(...lows) : null;
+      const minHigh = highs.length ? Math.min(...highs) : null;
+      const lowerBound = maxLow != null ? maxLow + 1 : null;
+      const upperBound = minHigh != null ? minHigh - 1 : null;
+      if (maxLow != null && minHigh != null) {
+        rangeLine = `Answer is between ${lowerBound} and ${upperBound}`;
+      } else if (maxLow != null) {
+        rangeLine = `Answer is higher than ${maxLow}`;
+      } else if (minHigh != null) {
+        rangeLine = `Answer is lower than ${minHigh}`;
+      }
+    }
+    return { showChips, chips: wrongVerdictGuesses, rangeLine };
+  }, [currentGuesses]);
+
   const compactGameplayMode = Boolean(
     !showNoChallengesHome && !showDailyHome && !showSummary
   );
@@ -3147,6 +3258,14 @@ export function DailyGameClient({
                   )}
                 </div>
 
+                <GuessPersistenceHints
+                  showChips={guessPersistence.showChips}
+                  chips={guessPersistence.chips}
+                  rangeLine={guessPersistence.rangeLine}
+                  className={challengeVisualFadeClassName}
+                  style={{ margin: "0 14px" }}
+                />
+
                 {isMobile ? (
                   <div
                     style={{
@@ -3425,6 +3544,13 @@ export function DailyGameClient({
                     </div>
                     </div>
                   </div>
+
+                  <GuessPersistenceHints
+                    showChips={guessPersistence.showChips}
+                    chips={guessPersistence.chips}
+                    rangeLine={guessPersistence.rangeLine}
+                    className={challengeVisualFadeClassName}
+                  />
 
                   <div
                     className={`relative flex min-w-0 items-start justify-between gap-3 ${challengeVisualFadeClassName}`}
