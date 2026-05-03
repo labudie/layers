@@ -1223,10 +1223,6 @@ export function DailyGameClient({
   const showDailyHome = total > 0 && showSummary && !showResultsDetail;
   const showNoChallengesHome = total === 0;
 
-  /** After a correct submit, brief hold before auto-advance (no "Next" click). */
-  const [pendingAutoAdvance, setPendingAutoAdvance] = useState(false);
-  /** After a failed round (max guesses), auto-advance after short reveal delay. */
-  const [pendingFailedAutoAdvance, setPendingFailedAutoAdvance] = useState(false);
   /** Opacity fade on title, attempt rows, input — main challenge image uses its own load fade. */
   const [challengeTransitioning, setChallengeTransitioning] = useState(false);
   /** Hydration-safe: dynamic transition classes only after mount. */
@@ -1267,7 +1263,6 @@ export function DailyGameClient({
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  const autoAdvanceTimer = useRef<number | null>(null);
   const fadeTimeoutRef = useRef<number | null>(null);
   const revealTimeoutRef = useRef<number | null>(null);
   const imageFeedbackTimeoutRef = useRef<number | null>(null);
@@ -1485,15 +1480,6 @@ export function DailyGameClient({
   }, []);
 
   useEffect(() => {
-    return () => {
-      if (autoAdvanceTimer.current != null) {
-        clearTimeout(autoAdvanceTimer.current);
-        autoAdvanceTimer.current = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     if (showSummary) setChallengeTransitioning(false);
   }, [showSummary]);
 
@@ -1509,10 +1495,6 @@ export function DailyGameClient({
   }, [showSummary, challenges, currentChallengeIndex, posthog]);
 
   useEffect(() => {
-    if (autoAdvanceTimer.current != null) {
-      clearTimeout(autoAdvanceTimer.current);
-      autoAdvanceTimer.current = null;
-    }
     if (fadeTimeoutRef.current != null) {
       window.clearTimeout(fadeTimeoutRef.current);
       fadeTimeoutRef.current = null;
@@ -1521,7 +1503,6 @@ export function DailyGameClient({
       window.clearTimeout(revealTimeoutRef.current);
       revealTimeoutRef.current = null;
     }
-    setPendingAutoAdvance(false);
     setChallengeTransitioning(false);
   }, [challengeIdsKey]);
 
@@ -1607,10 +1588,7 @@ export function DailyGameClient({
       typeof currentAnswer === "number" &&
       currentAnswer > 0 &&
       currentFinished &&
-      ((solvedWithCorrect && pendingAutoAdvance) ||
-        (!solvedWithCorrect &&
-          failedWithMaxGuesses &&
-          pendingFailedAutoAdvance));
+      (solvedWithCorrect || failedWithMaxGuesses);
     if (!show) {
       return { visible: false as const };
     }
@@ -1652,8 +1630,6 @@ export function DailyGameClient({
     currentFinished,
     solvedWithCorrect,
     failedWithMaxGuesses,
-    pendingAutoAdvance,
-    pendingFailedAutoAdvance,
     currentGuesses,
   ]);
 
@@ -2384,7 +2360,6 @@ export function DailyGameClient({
     setChallengeTransitioning(true);
     fadeTimeoutRef.current = window.setTimeout(() => {
       fadeTimeoutRef.current = null;
-      setPendingAutoAdvance(false);
       if (isLast) {
         setShowResultsDetail(false);
         setShowSummary(true);
@@ -2401,45 +2376,10 @@ export function DailyGameClient({
 
   const advanceNow = useCallback(
     (isLast: boolean) => {
-      if (autoAdvanceTimer.current != null) {
-        clearTimeout(autoAdvanceTimer.current);
-        autoAdvanceTimer.current = null;
-      }
-      setPendingAutoAdvance(false);
-      setPendingFailedAutoAdvance(false);
       advanceAfterTransitionOut(isLast);
     },
     [advanceAfterTransitionOut]
   );
-
-  useEffect(() => {
-    if (!failedWithMaxGuesses || showSummary) return;
-    if (autoAdvanceTimer.current != null) {
-      clearTimeout(autoAdvanceTimer.current);
-      autoAdvanceTimer.current = null;
-    }
-    setPendingFailedAutoAdvance(true);
-    const isLast = currentChallengeIndex >= total - 1;
-    autoAdvanceTimer.current = window.setTimeout(() => {
-      autoAdvanceTimer.current = null;
-      setPendingFailedAutoAdvance(false);
-      advanceAfterTransitionOut(isLast);
-    }, 2000);
-
-    return () => {
-      if (autoAdvanceTimer.current != null) {
-        clearTimeout(autoAdvanceTimer.current);
-        autoAdvanceTimer.current = null;
-      }
-      setPendingFailedAutoAdvance(false);
-    };
-  }, [
-    failedWithMaxGuesses,
-    showSummary,
-    currentChallengeIndex,
-    total,
-    advanceAfterTransitionOut,
-  ]);
 
   const submitGuess = useCallback(async () => {
     if (!roundActive || typeof guessInput !== "number" || !currentAnswer) return;
@@ -2528,20 +2468,8 @@ export function DailyGameClient({
         setConfettiBursts((prev) => prev.filter((id) => id !== burstId));
       }, 900);
       confettiTimeoutsRef.current.push(confettiTimeout);
-      if (autoAdvanceTimer.current != null) {
-        clearTimeout(autoAdvanceTimer.current);
-        autoAdvanceTimer.current = null;
-      }
-      setPendingAutoAdvance(true);
-      const listLength = challengesRef.current.length;
-      autoAdvanceTimer.current = window.setTimeout(() => {
-        autoAdvanceTimer.current = null;
-        const isLast = idx >= listLength - 1;
-        advanceAfterTransitionOut(isLast);
-      }, 750);
     }
   }, [
-    advanceAfterTransitionOut,
     roundActive,
     signedIn,
     guessInput,
@@ -3727,22 +3655,16 @@ export function DailyGameClient({
                       <div className="font-mono text-4xl font-extrabold tracking-tight text-white">
                         {currentAnswer ?? "—"}
                       </div>
-                      {pendingAutoAdvance ? (
-                        <p className="text-sm font-semibold text-[var(--success)]">
-                          Continuing…
-                        </p>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={challengeTransitioning}
-                          onClick={() => void advanceNow(isLastChallenge)}
-                          className="inline-flex min-h-[48px] items-center justify-center rounded-[var(--radius-pill)] bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40"
-                        >
-                          {isLastChallenge
-                            ? "View daily summary"
-                            : "Next challenge"}
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        disabled={challengeTransitioning}
+                        onClick={() => void advanceNow(isLastChallenge)}
+                        className="inline-flex min-h-[48px] items-center justify-center rounded-[var(--radius-pill)] bg-[var(--accent)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--accent2)] disabled:opacity-40"
+                      >
+                        {isLastChallenge
+                          ? "View daily summary"
+                          : "Next challenge"}
+                      </button>
                     </div>
                   ) : (
                     <>
@@ -4146,11 +4068,6 @@ export function DailyGameClient({
                         ) : null}
                       </>
                     )}
-                    {failedWithMaxGuesses && pendingFailedAutoAdvance ? (
-                      <p className="text-center text-xs font-semibold text-white/60">
-                        Continuing in 2s...
-                      </p>
-                    ) : null}
                   </div>
 
                   {currentFinished && !failedWithMaxGuesses ? (
@@ -4167,11 +4084,7 @@ export function DailyGameClient({
                         </span>
                       </div>
                       <div className="mt-3">
-                        {pendingAutoAdvance ? (
-                          <p className="text-sm font-semibold text-[var(--success)]">
-                            Correct! Continuing…
-                          </p>
-                        ) : solvedWithCorrect ? (
+                        {solvedWithCorrect ? (
                           <>
                             {!isLastChallenge ? (
                               <button
