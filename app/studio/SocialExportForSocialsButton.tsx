@@ -53,6 +53,41 @@ function buildScheduleCsv(rows: ScheduledChallengeSocialExportRow[]): string {
   return lines.join("\n");
 }
 
+async function resizeImageForSocial(imageUrl: string): Promise<Blob> {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("Image load failed"));
+    img.src = imageUrl;
+  });
+
+  const MAX_WIDTH = 1080;
+  const scale = img.width > MAX_WIDTH ? MAX_WIDTH / img.width : 1;
+  const width = Math.round(img.width * scale);
+  const height = Math.round(img.height * scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No canvas context");
+
+  ctx.drawImage(img, 0, 0, width, height);
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("toBlob failed"));
+      },
+      "image/png",
+      0.92,
+    );
+  });
+}
+
 export function SocialExportForSocialsButton() {
   const defaults = useMemo(() => {
     const today = todayYYYYMMDDUSEastern();
@@ -96,7 +131,9 @@ export function SocialExportForSocialsButton() {
         const url = row.image_url?.trim();
         if (!url || !imgFolder) continue;
         downloaded += 1;
-        setProgressLabel(`Downloading image ${downloaded} of ${totalImages}…`);
+        setProgressLabel(
+          `Downloading image ${downloaded} of ${totalImages}… Resizing for social (1080px max)…`,
+        );
 
         const stem = buildZipImageName(row).replace(/\.png$/i, "");
         let uniqueName = `${stem}.png`;
@@ -108,12 +145,10 @@ export function SocialExportForSocialsButton() {
         usedNames.add(uniqueName);
 
         try {
-          const imgRes = await fetch(url, { mode: "cors", credentials: "omit" });
-          if (!imgRes.ok) continue;
-          const buf = await imgRes.arrayBuffer();
-          imgFolder.file(uniqueName, buf);
+          const resized = await resizeImageForSocial(url);
+          imgFolder.file(uniqueName, resized);
         } catch {
-          /* skip failed downloads; row remains in CSV */
+          /* skip failed loads / resize; row remains in CSV */
         }
       }
 
