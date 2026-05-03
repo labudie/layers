@@ -85,7 +85,19 @@ type ReadyFilter =
   | "Hard"
   | "Expert"
   | "my"
-  | "community";
+  | "community"
+  | "scheduled";
+
+type ChallengeLibraryRow = {
+  id: string;
+  title: string;
+  creator_name: string | null;
+  active_date: string;
+  position: number;
+  layer_count: number;
+  image_url: string | null;
+  software: string | null;
+};
 
 type DraftPairLocal = {
   key: string;
@@ -237,6 +249,43 @@ const debounce = (fn: (...args: any[]) => void, ms: number) => {
   };
 };
 
+function escapeIlikeMetacharacters(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+/** Strip characters that break PostgREST `.or()` / filters; cap length before ilike. */
+function sanitizeChallengeSearchRaw(q: string): string {
+  return q
+    .replace(/[\r\n\u0000]/g, "")
+    .replace(/[(),]/g, " ")
+    .trim()
+    .slice(0, 80);
+}
+
+function mapDbRecordToAssetRow(r: Record<string, unknown>): AssetRow {
+  return {
+    id: String(r.id ?? ""),
+    title: String(r.title ?? ""),
+    creator_name: r.creator_name != null ? String(r.creator_name) : null,
+    software: String(r.software ?? "Photoshop"),
+    category: String(r.category ?? "Other"),
+    layer_count: Number(r.layer_count ?? 0) || 0,
+    is_sponsored: Boolean(r.is_sponsored),
+    sponsor_name: r.sponsor_name != null ? String(r.sponsor_name) : null,
+    image_url: r.image_url != null ? String(r.image_url) : null,
+    status: (r.status as AssetRow["status"]) ?? "draft",
+    scheduled_date: r.scheduled_date != null ? String(r.scheduled_date) : null,
+    scheduled_position:
+      r.scheduled_position != null && r.scheduled_position !== ""
+        ? Number(r.scheduled_position)
+        : null,
+    challenge_id: r.challenge_id != null ? String(r.challenge_id) : null,
+    source: (r.source as AssetRow["source"]) ?? null,
+    submission_id: r.submission_id != null ? Number(r.submission_id) : null,
+    uploaded_by: r.uploaded_by != null ? String(r.uploaded_by) : null,
+  };
+}
+
 const ReadyAssetCard = memo(function ReadyAssetCard({
   asset: a,
   isDragging,
@@ -319,6 +368,54 @@ const ReadyAssetCard = memo(function ReadyAssetCard({
       <span className="pointer-events-none absolute -top-2 right-2 rounded bg-[#7c3aed] px-1.5 py-0.5 text-[10px] font-semibold text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
         Drag to schedule
       </span>
+    </button>
+  );
+});
+
+const ScheduledChallengeRow = memo(function ScheduledChallengeRow({
+  row,
+  isLiveSlot,
+  onOpen,
+}: {
+  row: ChallengeLibraryRow;
+  isLiveSlot: boolean;
+  onOpen: (row: ChallengeLibraryRow) => void;
+}) {
+  const pos = Number(row.position) || 1;
+  const sw = row.software ?? "";
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(row)}
+      className="group flex w-full items-center gap-2 rounded-xl border border-white/10 bg-black/25 p-2 text-left transition-[transform,box-shadow,opacity,border-color] duration-200 hover:border-[#7c3aed]/50 hover:bg-black/35 hover:shadow-[0_0_0_1px_rgba(124,58,237,0.35)]"
+    >
+      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-black/40">
+        {row.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={row.image_url} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+        ) : null}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1">
+          <p className="truncate text-sm font-semibold text-white">{row.title}</p>
+          <span className="shrink-0 rounded bg-white/10 px-1 text-[10px] text-white/70">{SOFTWARE_ICONS[sw] ?? "•"}</span>
+        </div>
+        <p className="truncate text-xs text-white/60">@{row.creator_name?.trim() || "creator"}</p>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-[10px] text-white/50">{row.active_date}</span>
+          <span className="text-[10px] font-medium text-white/55">Slot {pos}</span>
+          <DifficultyBadge layerCount={row.layer_count} />
+          {isLiveSlot ? (
+            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
+              Live
+            </span>
+          ) : (
+            <span className="rounded-full bg-[#7c3aed]/25 px-2 py-0.5 text-[10px] font-semibold text-[#d8b4fe]">
+              Scheduled
+            </span>
+          )}
+        </div>
+      </div>
     </button>
   );
 });
@@ -596,6 +693,11 @@ export function AssetLibraryClient({
   const [readySearch, setReadySearch] = useState("");
   const [readyVisibleCount, setReadyVisibleCount] = useState(20);
   const applyReadySearchDebounced = useMemo(() => debounce((q: string) => setReadySearch(q), 300), []);
+  const [scheduledSearchInput, setScheduledSearchInput] = useState("");
+  const [scheduledSearch, setScheduledSearch] = useState("");
+  const applyScheduledSearchDebounced = useMemo(() => debounce((q: string) => setScheduledSearch(q), 300), []);
+  const [scheduledRows, setScheduledRows] = useState<ChallengeLibraryRow[]>([]);
+  const [scheduledFetchBusy, setScheduledFetchBusy] = useState(false);
   const [draftPairs, setDraftPairs] = useState<DraftPairLocal[]>([]);
   const [editAsset, setEditAsset] = useState<AssetRow | null>(null);
   const [slotEdit, setSlotEdit] = useState<{
@@ -648,6 +750,55 @@ export function AssetLibraryClient({
   useEffect(() => {
     setReadyVisibleCount(20);
   }, [readyFilter, readySearch]);
+
+  useEffect(() => {
+    if (readyFilter !== "scheduled") {
+      setScheduledRows([]);
+      setScheduledFetchBusy(false);
+    }
+  }, [readyFilter]);
+
+  useEffect(() => {
+    if (readyFilter !== "scheduled") return;
+    const q = scheduledSearch.trim();
+    if (q.length < 2) {
+      setScheduledRows([]);
+      setScheduledFetchBusy(false);
+      return;
+    }
+    let cancelled = false;
+    setScheduledFetchBusy(true);
+    void (async () => {
+      const raw = sanitizeChallengeSearchRaw(q);
+      if (raw.length < 2) {
+        if (!cancelled) {
+          setScheduledRows([]);
+          setScheduledFetchBusy(false);
+        }
+        return;
+      }
+      const pattern = `%${escapeIlikeMetacharacters(raw)}%`;
+      const sb = supabase();
+      const { data, error } = await sb
+        .from("challenges")
+        .select("id, title, creator_name, active_date, position, layer_count, image_url, software")
+        .or(`title.ilike.${pattern},creator_name.ilike.${pattern}`)
+        .order("active_date", { ascending: true })
+        .order("position", { ascending: true });
+      if (cancelled) return;
+      setScheduledFetchBusy(false);
+      if (error) {
+        setScheduledRows([]);
+        setToast({ type: "error", text: error.message });
+        return;
+      }
+      const rows = (data ?? []) as ChallengeLibraryRow[];
+      setScheduledRows(rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [readyFilter, scheduledSearch]);
 
   useEffect(() => {
     setAssets(initialAssets);
@@ -775,6 +926,7 @@ export function AssetLibraryClient({
   }, [assets]);
 
   const readyPool = useMemo(() => {
+    if (readyFilter === "scheduled") return [];
     return assets
       .filter((a) => a.status === "ready")
       .filter((a) => {
@@ -803,6 +955,38 @@ export function AssetLibraryClient({
   const readyPoolVisible = useMemo(
     () => readyPool.slice(0, readyVisibleCount),
     [readyPool, readyVisibleCount],
+  );
+
+  const handleScheduledChallengeOpen = useCallback(
+    async (ch: ChallengeLibraryRow) => {
+      const ymd = ch.active_date;
+      const pos = Number(ch.position) || 1;
+      const slotIndex = Math.min(4, Math.max(0, pos - 1));
+      const { data: assetRow, error } = await supabase()
+        .from("assets")
+        .select("*")
+        .eq("challenge_id", ch.id)
+        .maybeSingle();
+      if (error) {
+        setToast({ type: "error", text: error.message });
+        return;
+      }
+      if (!assetRow) {
+        setToast({
+          type: "error",
+          text: "No studio asset is linked to this challenge yet. Schedule it from the calendar first.",
+        });
+        return;
+      }
+      const slot = mapDbRecordToAssetRow(assetRow as Record<string, unknown>);
+      setSlotEdit({
+        slot,
+        slotIndex,
+        activeDateYmd: ymd,
+        isLive: Boolean(liveChallengeMap[ymd]?.[pos]),
+      });
+    },
+    [liveChallengeMap],
   );
 
   const matrix = monthMatrix(viewMonth.y, viewMonth.m);
@@ -1572,50 +1756,83 @@ export function AssetLibraryClient({
               "Expert",
               "my",
               "community",
+              "scheduled",
             ] as ReadyFilter[]).map((f) => (
               <button key={f} type="button" onClick={() => setReadyFilter(f)} className={`rounded-full px-2.5 py-1 text-xs ${readyFilter === f ? "bg-[#7c3aed] text-white" : "border border-white/15 text-white/70"}`}>
                 {f === "my"
                   ? "My Uploads"
                   : f === "community"
                     ? "Community"
-                    : f === "Easy"
-                      ? "Easy (5-25)"
-                      : f === "Medium"
-                        ? "Medium (26-45)"
-                        : f === "Medium-Hard"
-                          ? "MED-HARD (46-65)"
-                          : f === "Hard"
-                            ? "Hard (66-90)"
-                            : f === "Expert"
-                              ? "Expert (91+)"
-                              : f}
+                    : f === "scheduled"
+                      ? "Scheduled"
+                      : f === "Easy"
+                        ? "Easy (5-25)"
+                        : f === "Medium"
+                          ? "Medium (26-45)"
+                          : f === "Medium-Hard"
+                            ? "MED-HARD (46-65)"
+                            : f === "Hard"
+                              ? "Hard (66-90)"
+                              : f === "Expert"
+                                ? "Expert (91+)"
+                                : f}
               </button>
             ))}
             <input
               className="min-w-[170px] flex-1 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white"
-              placeholder="Search title or creator"
-              value={readySearchInput}
+              placeholder={
+                readyFilter === "scheduled"
+                  ? "Search challenges (title or creator, min 2 chars)"
+                  : "Search title or creator"
+              }
+              value={readyFilter === "scheduled" ? scheduledSearchInput : readySearchInput}
               onChange={(e) => {
                 const v = e.target.value;
-                setReadySearchInput(v);
-                applyReadySearchDebounced(v);
+                if (readyFilter === "scheduled") {
+                  setScheduledSearchInput(v);
+                  applyScheduledSearchDebounced(v);
+                } else {
+                  setReadySearchInput(v);
+                  applyReadySearchDebounced(v);
+                }
               }}
             />
           </div>
 
           <div className="grid max-h-[62vh] grid-cols-1 gap-2 overflow-y-auto pr-1">
-            {readyPoolVisible.map((a) => (
-              <ReadyAssetCard
-                key={a.id}
-                asset={a}
-                isDragging={draggingCardId === a.id}
-                onSelect={handleReadySelect}
-                onDragStart={handleReadyDragStart}
-                onDragEnd={handleReadyDragEnd}
-              />
-            ))}
+            {readyFilter === "scheduled" ? (
+              scheduledFetchBusy ? (
+                <p className="py-8 text-center text-xs text-white/55">Searching…</p>
+              ) : scheduledSearch.trim().length < 2 ? (
+                <p className="py-8 text-center text-xs text-white/55">
+                  Type at least 2 characters to search scheduled challenges.
+                </p>
+              ) : scheduledRows.length === 0 ? (
+                <p className="py-8 text-center text-xs text-white/55">No matching challenges.</p>
+              ) : (
+                scheduledRows.map((ch) => (
+                  <ScheduledChallengeRow
+                    key={ch.id}
+                    row={ch}
+                    isLiveSlot={Boolean(liveChallengeMap[ch.active_date]?.[Number(ch.position) || 1])}
+                    onOpen={(row) => void handleScheduledChallengeOpen(row)}
+                  />
+                ))
+              )
+            ) : (
+              readyPoolVisible.map((a) => (
+                <ReadyAssetCard
+                  key={a.id}
+                  asset={a}
+                  isDragging={draggingCardId === a.id}
+                  onSelect={handleReadySelect}
+                  onDragStart={handleReadyDragStart}
+                  onDragEnd={handleReadyDragEnd}
+                />
+              ))
+            )}
           </div>
-          {readyVisibleCount < readyPool.length ? (
+          {readyFilter !== "scheduled" && readyVisibleCount < readyPool.length ? (
             <div className="mt-2 flex justify-center">
               <button
                 type="button"
@@ -1626,20 +1843,22 @@ export function AssetLibraryClient({
               </button>
             </div>
           ) : null}
-          <div className="mt-3">
-            <button
-              type="button"
-              disabled={readyAssetCount === 0}
-              onClick={openAutoScheduleModal}
-              className={`w-full rounded px-3 py-2 text-sm font-bold ${
-                readyAssetCount === 0
-                  ? "cursor-not-allowed bg-[#7c3aed] text-white opacity-40"
-                  : "bg-[#7c3aed] text-white"
-              }`}
-            >
-              Auto-Schedule
-            </button>
-          </div>
+          {readyFilter !== "scheduled" ? (
+            <div className="mt-3">
+              <button
+                type="button"
+                disabled={readyAssetCount === 0}
+                onClick={openAutoScheduleModal}
+                className={`w-full rounded px-3 py-2 text-sm font-bold ${
+                  readyAssetCount === 0
+                    ? "cursor-not-allowed bg-[#7c3aed] text-white opacity-40"
+                    : "bg-[#7c3aed] text-white"
+                }`}
+              >
+                Auto-Schedule
+              </button>
+            </div>
+          ) : null}
         </>
       ) : (
         <div className="max-h-[62vh] space-y-2 overflow-y-auto pr-1">
