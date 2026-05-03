@@ -592,84 +592,178 @@ function GuessPersistenceHints({
   );
 }
 
-/** Answer reveal on image during auto-advance hold (desktop width only). */
-function DesktopChallengeAnswerOverlay({
-  solved,
-  answer,
-}: {
-  solved: boolean;
-  answer: number;
-}) {
+const challengeCompleteLabelStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+};
+
+const challengeCompleteNumberStyle: CSSProperties = {
+  fontSize: 72,
+  fontWeight: 800,
+  color: "#fff",
+  letterSpacing: "-2px",
+  lineHeight: 1,
+};
+
+const challengeCompleteUnitStyle: CSSProperties = {
+  fontSize: 16,
+  color: "rgba(255,255,255,0.6)",
+  marginTop: 4,
+};
+
+const challengeCompleteDividerStyle: CSSProperties = {
+  width: 40,
+  height: 2,
+  background: "rgba(255,255,255,0.2)",
+  borderRadius: 1,
+  margin: "10px auto",
+};
+
+/** Full-image reveal during auto-advance hold (mobile + desktop). */
+function ChallengeCompleteImageOverlay(
+  props:
+    | { variant: "solved"; answer: number; guessesUsed: number }
+    | { variant: "failed"; answer: number; guesses: GuessRow[] }
+    | { variant: "close"; answer: number; bestGuess: number },
+) {
+  if (props.variant === "solved") {
+    return (
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          borderRadius: 12,
+          zIndex: 10,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          pointerEvents: "none",
+          background:
+            "linear-gradient(135deg, rgba(16,185,129,0.92), rgba(5,150,105,0.95))",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+        }}
+      >
+        <span style={{ fontSize: 32, marginBottom: 8, lineHeight: 1 }} aria-hidden>
+          ✓
+        </span>
+        <div style={{ ...challengeCompleteLabelStyle, color: "rgba(255,255,255,0.7)" }}>
+          Correct answer
+        </div>
+        <div style={challengeCompleteNumberStyle}>{props.answer}</div>
+        <div style={challengeCompleteUnitStyle}>layers</div>
+        <div style={challengeCompleteDividerStyle} aria-hidden />
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
+          Solved in {props.guessesUsed}{" "}
+          {props.guessesUsed === 1 ? "guess" : "guesses"}
+        </div>
+      </div>
+    );
+  }
+
+  if (props.variant === "close") {
+    return (
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          borderRadius: 12,
+          zIndex: 10,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          pointerEvents: "none",
+          background:
+            "linear-gradient(135deg, rgba(245,158,11,0.92), rgba(217,119,6,0.95))",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+        }}
+      >
+        <span style={{ fontSize: 28, marginBottom: 8, lineHeight: 1 }} aria-hidden>
+          🔥
+        </span>
+        <div style={{ ...challengeCompleteLabelStyle, color: "rgba(255,255,255,0.7)" }}>
+          So close! Answer was
+        </div>
+        <div style={challengeCompleteNumberStyle}>{props.answer}</div>
+        <div style={challengeCompleteUnitStyle}>layers</div>
+        <div style={challengeCompleteDividerStyle} aria-hidden />
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
+          Your best guess: {props.bestGuess}
+        </div>
+      </div>
+    );
+  }
+
+  const lowChip: CSSProperties = {
+    padding: "4px 10px",
+    borderRadius: 6,
+    fontSize: 11,
+    fontWeight: 600,
+    background: "rgba(239,68,68,0.2)",
+    color: "#fca5a5",
+    border: "0.5px solid rgba(239,68,68,0.3)",
+  };
+  const highChip: CSSProperties = {
+    padding: "4px 10px",
+    borderRadius: 6,
+    fontSize: 11,
+    fontWeight: 600,
+    background: "rgba(245,158,11,0.2)",
+    color: "#fcd34d",
+    border: "0.5px solid rgba(245,158,11,0.3)",
+  };
+
   return (
     <div
       style={{
         position: "absolute",
         inset: 0,
+        borderRadius: 12,
         zIndex: 10,
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         pointerEvents: "none",
+        background:
+          "linear-gradient(135deg, rgba(15,5,32,0.92), rgba(28,10,50,0.96))",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
       }}
     >
+      <span style={{ fontSize: 24, color: "#ef4444", marginBottom: 8, lineHeight: 1 }} aria-hidden>
+        ✕
+      </span>
+      <div style={{ ...challengeCompleteLabelStyle, color: "#a855f7" }}>Answer was</div>
+      <div style={challengeCompleteNumberStyle}>{props.answer}</div>
+      <div style={challengeCompleteUnitStyle}>layers</div>
+      <div style={challengeCompleteDividerStyle} aria-hidden />
       <div
         style={{
-          background: "rgba(15, 5, 32, 0.82)",
-          backdropFilter: "blur(4px)",
-          WebkitBackdropFilter: "blur(4px)",
-          borderRadius: 12,
-          padding: "16px 28px",
           display: "flex",
-          flexDirection: "column",
+          flexDirection: "row",
+          flexWrap: "wrap",
           alignItems: "center",
-          gap: 10,
+          justifyContent: "center",
+          gap: 6,
+          marginTop: 4,
+          maxWidth: "100%",
+          padding: "0 12px",
         }}
       >
-        <div
-          style={{
-            fontSize: 12,
-            color: "#a855f7",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-        >
-          Answer
-        </div>
-        <div
-          style={{
-            display: "inline-flex",
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          {solved ? (
-            <span style={{ fontSize: 28, color: "#10b981", lineHeight: 1 }} aria-hidden>
-              ✓
-            </span>
-          ) : (
-            <span
-              style={{
-                fontSize: 22,
-                color: "#ef4444",
-                opacity: 0.72,
-                lineHeight: 1,
-              }}
-              aria-hidden
-            >
-              ×
-            </span>
-          )}
+        {props.guesses.map((g, i) => (
           <span
-            style={{
-              fontSize: 36,
-              fontWeight: 700,
-              color: "#f8f4ff",
-            }}
+            key={`${g.value}-${i}`}
+            style={g.direction === "low" ? lowChip : highChip}
           >
-            {answer}
+            {g.value}
           </span>
-        </div>
+        ))}
       </div>
     </div>
   );
@@ -1100,15 +1194,12 @@ export function DailyGameClient({
     useState(true);
   const prevChallengeImageIdRef = useRef<string | null | undefined>(undefined);
 
-  const [isDesktopLayout, setIsDesktopLayout] = useState(false);
-
   useEffect(() => {
     const check = () => {
       setIsMobile(
         window.innerWidth < 768 ||
           /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
       );
-      setIsDesktopLayout(window.innerWidth >= 768);
     };
     check();
     window.addEventListener("resize", check);
@@ -1445,15 +1536,62 @@ export function DailyGameClient({
     !solvedWithCorrect &&
     currentGuesses.length >= MAX_GUESSES;
 
-  const showDesktopAnswerOverlay =
-    isDesktopLayout &&
-    typeof currentAnswer === "number" &&
-    currentAnswer > 0 &&
-    currentFinished &&
-    ((solvedWithCorrect && pendingAutoAdvance) ||
-      (!solvedWithCorrect &&
-        failedWithMaxGuesses &&
-        pendingFailedAutoAdvance));
+  const challengeCompleteOverlay = useMemo(() => {
+    const show =
+      typeof currentAnswer === "number" &&
+      currentAnswer > 0 &&
+      currentFinished &&
+      ((solvedWithCorrect && pendingAutoAdvance) ||
+        (!solvedWithCorrect &&
+          failedWithMaxGuesses &&
+          pendingFailedAutoAdvance));
+    if (!show) {
+      return { visible: false as const };
+    }
+    const ans = currentAnswer as number;
+    if (solvedWithCorrect) {
+      return {
+        visible: true as const,
+        variant: "solved" as const,
+        answer: ans,
+        guessesUsed: currentGuesses.length,
+      };
+    }
+    const hadClose = currentGuesses.some((g) => g.verdict === "close");
+    if (hadClose) {
+      let bestV = currentGuesses[0]!.value;
+      let bestDist = Number.POSITIVE_INFINITY;
+      for (const g of currentGuesses) {
+        const d = Math.abs(g.value - ans);
+        if (d < bestDist) {
+          bestDist = d;
+          bestV = g.value;
+        }
+      }
+      return {
+        visible: true as const,
+        variant: "close" as const,
+        answer: ans,
+        bestGuess: bestV,
+      };
+    }
+    return {
+      visible: true as const,
+      variant: "failed" as const,
+      answer: ans,
+      guesses: currentGuesses,
+    };
+  }, [
+    currentAnswer,
+    currentFinished,
+    solvedWithCorrect,
+    failedWithMaxGuesses,
+    pendingAutoAdvance,
+    pendingFailedAutoAdvance,
+    currentGuesses,
+  ]);
+
+  const challengeCompleteOverlayVisible = challengeCompleteOverlay.visible;
 
   /** Current puzzle round is playable (input may be used; submit needs auth). */
   const roundActive = Boolean(
@@ -3349,6 +3487,8 @@ export function DailyGameClient({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
+                      overflow: "hidden",
+                      borderRadius: 12,
                     }}
                   >
                     {currentChallenge.image_url ? (
@@ -3375,11 +3515,26 @@ export function DailyGameClient({
                         }}
                       />
                     )}
-                    {showDesktopAnswerOverlay ? (
-                      <DesktopChallengeAnswerOverlay
-                        solved={solvedWithCorrect}
-                        answer={currentAnswer}
-                      />
+                    {challengeCompleteOverlay.visible ? (
+                      challengeCompleteOverlay.variant === "solved" ? (
+                        <ChallengeCompleteImageOverlay
+                          variant="solved"
+                          answer={challengeCompleteOverlay.answer}
+                          guessesUsed={challengeCompleteOverlay.guessesUsed}
+                        />
+                      ) : challengeCompleteOverlay.variant === "close" ? (
+                        <ChallengeCompleteImageOverlay
+                          variant="close"
+                          answer={challengeCompleteOverlay.answer}
+                          bestGuess={challengeCompleteOverlay.bestGuess}
+                        />
+                      ) : (
+                        <ChallengeCompleteImageOverlay
+                          variant="failed"
+                          answer={challengeCompleteOverlay.answer}
+                          guesses={challengeCompleteOverlay.guesses}
+                        />
+                      )
                     ) : null}
                   </div>
                 </div>
@@ -3484,6 +3639,8 @@ export function DailyGameClient({
                       gap: "5px",
                       padding: "0 14px",
                       paddingBottom: "max(env(safe-area-inset-bottom), 8px)",
+                      opacity: challengeCompleteOverlayVisible ? 0.4 : 1,
+                      pointerEvents: challengeCompleteOverlayVisible ? "none" : "auto",
                     }}
                   >
                   {currentFinished ? (
@@ -3641,10 +3798,11 @@ export function DailyGameClient({
                       }}
                     >
                       <div
-                        className="relative max-h-[54vh] w-full max-w-full"
+                        className="relative max-h-[54vh] w-full max-w-full overflow-hidden"
                         style={{
                           background: "transparent",
                           backgroundColor: "transparent",
+                          borderRadius: 12,
                         }}
                       >
                         {currentChallenge.image_url ? (
@@ -3666,11 +3824,26 @@ export function DailyGameClient({
                             }}
                           />
                         )}
-                        {showDesktopAnswerOverlay ? (
-                          <DesktopChallengeAnswerOverlay
-                            solved={solvedWithCorrect}
-                            answer={currentAnswer}
-                          />
+                        {challengeCompleteOverlay.visible ? (
+                          challengeCompleteOverlay.variant === "solved" ? (
+                            <ChallengeCompleteImageOverlay
+                              variant="solved"
+                              answer={challengeCompleteOverlay.answer}
+                              guessesUsed={challengeCompleteOverlay.guessesUsed}
+                            />
+                          ) : challengeCompleteOverlay.variant === "close" ? (
+                            <ChallengeCompleteImageOverlay
+                              variant="close"
+                              answer={challengeCompleteOverlay.answer}
+                              bestGuess={challengeCompleteOverlay.bestGuess}
+                            />
+                          ) : (
+                            <ChallengeCompleteImageOverlay
+                              variant="failed"
+                              answer={challengeCompleteOverlay.answer}
+                              guesses={challengeCompleteOverlay.guesses}
+                            />
+                          )
                         ) : null}
                       </div>
                     </div>
