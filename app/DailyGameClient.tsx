@@ -730,7 +730,7 @@ function ChallengeCompleteImageOverlay(
           alignItems: "center",
           justifyContent: "center",
           background:
-            "linear-gradient(135deg, rgba(245,158,11,0.92), rgba(217,119,6,0.95))",
+            "linear-gradient(160deg, rgba(15,5,32,0.95), rgba(28,10,50,0.97))",
           backdropFilter: "blur(8px)",
           WebkitBackdropFilter: "blur(8px)",
         }}
@@ -738,7 +738,7 @@ function ChallengeCompleteImageOverlay(
         <span style={{ fontSize: 28, marginBottom: 8, lineHeight: 1 }} aria-hidden>
           🔥
         </span>
-        <div style={{ ...challengeCompleteLabelStyle, color: "rgba(255,255,255,0.7)" }}>
+        <div style={{ ...challengeCompleteLabelStyle, color: "#f59e0b" }}>
           So close! Answer was
         </div>
         <div style={challengeCompleteNumberStyle}>{props.answer}</div>
@@ -770,9 +770,9 @@ function ChallengeCompleteImageOverlay(
     borderRadius: 6,
     fontSize: 11,
     fontWeight: 600,
-    background: "rgba(245,158,11,0.2)",
-    color: "#fcd34d",
-    border: "0.5px solid rgba(245,158,11,0.3)",
+    background: "rgba(139,92,246,0.2)",
+    color: "#c4b5fd",
+    border: "0.5px solid rgba(139,92,246,0.35)",
   };
 
   return (
@@ -3543,15 +3543,18 @@ export function DailyGameClient({
                   </div>
                 </div>
 
-                <GuessPersistenceHints
-                  showChips={guessPersistence.showChips}
-                  chips={guessPersistence.chips}
-                  rangeLine={guessPersistence.rangeLine}
-                  className={challengeVisualFadeClassName}
-                  style={{ margin: "0 14px" }}
-                />
+                {!challengeCompleteOverlayVisible ? (
+                  <GuessPersistenceHints
+                    showChips={guessPersistence.showChips}
+                    chips={guessPersistence.chips}
+                    rangeLine={guessPersistence.rangeLine}
+                    className={challengeVisualFadeClassName}
+                    style={{ margin: "0 14px" }}
+                  />
+                ) : null}
 
-                {isMobile ? (
+                {!challengeCompleteOverlayVisible ? (
+                  isMobile ? (
                   <div
                     style={{
                       flexShrink: 0,
@@ -3632,9 +3635,10 @@ export function DailyGameClient({
                       Press Enter to submit
                     </p>
                   </div>
-                )}
+                )
+                ) : null}
 
-                {isMobile ? (
+                {!challengeCompleteOverlayVisible && isMobile ? (
                   <div
                     style={{
                       flexShrink: 0,
@@ -3643,8 +3647,6 @@ export function DailyGameClient({
                       gap: "5px",
                       padding: "0 14px",
                       paddingBottom: "max(env(safe-area-inset-bottom), 8px)",
-                      opacity: challengeCompleteOverlayVisible ? 0.4 : 1,
-                      pointerEvents: challengeCompleteOverlayVisible ? "none" : "auto",
                     }}
                   >
                   {currentFinished ? (
@@ -3855,12 +3857,14 @@ export function DailyGameClient({
                     </div>
                   </div>
 
-                  <GuessPersistenceHints
-                    showChips={guessPersistence.showChips}
-                    chips={guessPersistence.chips}
-                    rangeLine={guessPersistence.rangeLine}
-                    className={challengeVisualFadeClassName}
-                  />
+                  {!challengeCompleteOverlayVisible ? (
+                    <GuessPersistenceHints
+                      showChips={guessPersistence.showChips}
+                      chips={guessPersistence.chips}
+                      rangeLine={guessPersistence.rangeLine}
+                      className={challengeVisualFadeClassName}
+                    />
+                  ) : null}
 
                   <div
                     className={`relative flex min-w-0 items-start justify-between gap-3 ${challengeVisualFadeClassName}`}
@@ -3952,7 +3956,8 @@ export function DailyGameClient({
                   </div>
 
                   <div className="flex min-w-0 flex-col gap-2">
-                    {failedWithMaxGuesses ? (
+                    {!challengeCompleteOverlayVisible &&
+                    failedWithMaxGuesses ? (
                       <div className="rounded-[var(--radius-card)] border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] px-4 py-3 text-center shadow-sm">
                         <div className="text-sm font-semibold text-[rgba(16,185,129,0.9)]">
                           Answer
@@ -3963,7 +3968,8 @@ export function DailyGameClient({
                       </div>
                     ) : null}
 
-                    {currentGuesses.length > 0 ? (
+                    {!challengeCompleteOverlayVisible &&
+                    currentGuesses.length > 0 ? (
                       <div
                         className={`flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] ${challengeVisualFadeClassName}`}
                         role="list"
@@ -3998,7 +4004,8 @@ export function DailyGameClient({
                       </div>
                     ) : null}
 
-                    {failedWithMaxGuesses ? (
+                    {!challengeCompleteOverlayVisible &&
+                    failedWithMaxGuesses ? (
                       !isLastChallenge ? (
                         <button
                           type="button"
@@ -4018,7 +4025,7 @@ export function DailyGameClient({
                           Next →
                         </button>
                       )
-                    ) : (
+                    ) : !challengeCompleteOverlayVisible ? (
                       <>
                         <div className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-3">
                           <input
@@ -4067,10 +4074,12 @@ export function DailyGameClient({
                           </p>
                         ) : null}
                       </>
-                    )}
+                    ) : null}
                   </div>
 
-                  {currentFinished && !failedWithMaxGuesses ? (
+                  {!challengeCompleteOverlayVisible &&
+                  currentFinished &&
+                  !failedWithMaxGuesses ? (
                     <div
                       className={`rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.6)] p-4 shadow-sm ${challengeVisualFadeClassName}`}
                     >
