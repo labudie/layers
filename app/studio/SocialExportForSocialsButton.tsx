@@ -62,19 +62,28 @@ async function resizeImageForSocial(imageUrl: string): Promise<Blob> {
     img.src = imageUrl;
   });
 
-  const MAX_WIDTH = 1080;
-  const scale = img.width > MAX_WIDTH ? MAX_WIDTH / img.width : 1;
-  const width = Math.round(img.width * scale);
-  const height = Math.round(img.height * scale);
+  const TARGET_W = 1080;
+  const TARGET_H = 1350; // 4:5 ratio
 
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = TARGET_W;
+  canvas.height = TARGET_H;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("No canvas context");
 
-  ctx.drawImage(img, 0, 0, width, height);
+  // Fill background with brand dark purple
+  ctx.fillStyle = "#0f0520";
+  ctx.fillRect(0, 0, TARGET_W, TARGET_H);
+
+  // Scale image to fit within canvas maintaining aspect ratio
+  const scale = Math.min(TARGET_W / img.width, TARGET_H / img.height);
+  const width = Math.round(img.width * scale);
+  const height = Math.round(img.height * scale);
+  const x = Math.round((TARGET_W - width) / 2);
+  const y = Math.round((TARGET_H - height) / 2);
+
+  ctx.drawImage(img, x, y, width, height);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -132,7 +141,7 @@ export function SocialExportForSocialsButton() {
         if (!url || !imgFolder) continue;
         downloaded += 1;
         setProgressLabel(
-          `Downloading image ${downloaded} of ${totalImages}… Resizing for social (1080px max)…`,
+          `Downloading image ${downloaded} of ${totalImages}… Resizing to 4:5 for social (1080×1350px)…`,
         );
 
         const stem = buildZipImageName(row).replace(/\.png$/i, "");
