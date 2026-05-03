@@ -971,14 +971,36 @@ export function AssetLibraryClient({
         setToast({ type: "error", text: error.message });
         return;
       }
-      if (!assetRow) {
-        setToast({
-          type: "error",
-          text: "No studio asset is linked to this challenge yet. Schedule it from the calendar first.",
-        });
-        return;
+      let slot: AssetRow;
+      if (assetRow) {
+        slot = mapDbRecordToAssetRow(assetRow as Record<string, unknown>);
+      } else {
+        const { data: chExtra } = await supabase()
+          .from("challenges")
+          .select("category, is_sponsored, sponsor_name")
+          .eq("id", ch.id)
+          .maybeSingle();
+        const ex = (chExtra ?? {}) as {
+          category?: string | null;
+          is_sponsored?: boolean | null;
+          sponsor_name?: string | null;
+        };
+        slot = {
+          id: ch.id,
+          title: ch.title,
+          creator_name: ch.creator_name,
+          software: ch.software ?? "Photoshop",
+          category: String(ex.category ?? "Other"),
+          layer_count: ch.layer_count,
+          is_sponsored: Boolean(ex.is_sponsored),
+          sponsor_name: ex.sponsor_name != null ? String(ex.sponsor_name) : null,
+          image_url: ch.image_url,
+          status: "published",
+          scheduled_date: ch.active_date,
+          scheduled_position: Number(ch.position) || 1,
+          challenge_id: ch.id,
+        };
       }
-      const slot = mapDbRecordToAssetRow(assetRow as Record<string, unknown>);
       setSlotEdit({
         slot,
         slotIndex,

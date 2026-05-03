@@ -69,6 +69,7 @@ export function ProfileBottomSheet({
   const dragging = useRef(false);
   const [dragOffset, setDragOffset] = useState(0);
   const [viewportH, setViewportH] = useState(1);
+  const [isDesktop, setIsDesktop] = useState(false);
 
   const dragStartY = useRef(0);
   const dragStartTime = useRef(0);
@@ -95,10 +96,13 @@ export function ProfileBottomSheet({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const setVh = () => setViewportH(window.innerHeight || 1);
-    setVh();
-    window.addEventListener("resize", setVh);
-    return () => window.removeEventListener("resize", setVh);
+    const update = () => {
+      setViewportH(window.innerHeight || 1);
+      setIsDesktop(window.innerWidth >= 768 && !("ontouchstart" in window));
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
   }, []);
 
   // Block touch events from leaking to page behind the sheet.
@@ -321,9 +325,41 @@ export function ProfileBottomSheet({
           onTouchEnd={onHandleTouchEnd}
         >
           <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.2)" }} />
-          {snap === "collapsed" && (
+          {snap === "collapsed" && !isDesktop ? (
             <div style={{ fontSize: 10, color: "#6b7280" }}>↑ Swipe up to expand</div>
-          )}
+          ) : null}
+          {snap === "collapsed" && isDesktop ? (
+            <button
+              type="button"
+              onClick={() => setSnap("expanded")}
+              style={{
+                fontSize: 13,
+                color: "#a855f7",
+                cursor: "pointer",
+                background: "transparent",
+                border: "none",
+                padding: "4px 0",
+              }}
+            >
+              View full profile ↑
+            </button>
+          ) : null}
+          {snap === "expanded" && isDesktop ? (
+            <button
+              type="button"
+              onClick={() => setSnap("collapsed")}
+              style={{
+                fontSize: 13,
+                color: "#a855f7",
+                cursor: "pointer",
+                background: "transparent",
+                border: "none",
+                padding: "4px 0",
+              }}
+            >
+              ↓ Collapse
+            </button>
+          ) : null}
         </div>
 
         <div className="shrink-0 px-4 pt-0">
