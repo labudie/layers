@@ -592,6 +592,89 @@ function GuessPersistenceHints({
   );
 }
 
+/** Answer reveal on image during auto-advance hold (desktop width only). */
+function DesktopChallengeAnswerOverlay({
+  solved,
+  answer,
+}: {
+  solved: boolean;
+  answer: number;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 10,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        pointerEvents: "none",
+      }}
+    >
+      <div
+        style={{
+          background: "rgba(15, 5, 32, 0.82)",
+          backdropFilter: "blur(4px)",
+          WebkitBackdropFilter: "blur(4px)",
+          borderRadius: 12,
+          padding: "16px 28px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 12,
+            color: "#a855f7",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          Answer
+        </div>
+        <div
+          style={{
+            display: "inline-flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          {solved ? (
+            <span style={{ fontSize: 28, color: "#10b981", lineHeight: 1 }} aria-hidden>
+              ✓
+            </span>
+          ) : (
+            <span
+              style={{
+                fontSize: 22,
+                color: "#ef4444",
+                opacity: 0.72,
+                lineHeight: 1,
+              }}
+              aria-hidden
+            >
+              ×
+            </span>
+          )}
+          <span
+            style={{
+              fontSize: 36,
+              fontWeight: 700,
+              color: "#f8f4ff",
+            }}
+          >
+            {answer}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function canvasSeedForChallenge(ch: Challenge): number {
   let h = 0;
   for (let i = 0; i < ch.id.length; i++) {
@@ -1017,12 +1100,15 @@ export function DailyGameClient({
     useState(true);
   const prevChallengeImageIdRef = useRef<string | null | undefined>(undefined);
 
+  const [isDesktopLayout, setIsDesktopLayout] = useState(false);
+
   useEffect(() => {
     const check = () => {
       setIsMobile(
         window.innerWidth < 768 ||
           /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
       );
+      setIsDesktopLayout(window.innerWidth >= 768);
     };
     check();
     window.addEventListener("resize", check);
@@ -1358,6 +1444,16 @@ export function DailyGameClient({
     currentFinished &&
     !solvedWithCorrect &&
     currentGuesses.length >= MAX_GUESSES;
+
+  const showDesktopAnswerOverlay =
+    isDesktopLayout &&
+    typeof currentAnswer === "number" &&
+    currentAnswer > 0 &&
+    currentFinished &&
+    ((solvedWithCorrect && pendingAutoAdvance) ||
+      (!solvedWithCorrect &&
+        failedWithMaxGuesses &&
+        pendingFailedAutoAdvance));
 
   /** Current puzzle round is playable (input may be used; submit needs auth). */
   const roundActive = Boolean(
@@ -3241,32 +3337,51 @@ export function DailyGameClient({
                     alignItems: "center",
                     justifyContent: "center",
                     overflow: "hidden",
+                    position: "relative",
                   }}
                 >
-                  {currentChallenge.image_url ? (
-                    <CompactChallengeMotionImage
-                      challengeId={currentChallenge.id}
-                      src={displayChallengeImageUrl ?? ""}
-                      alt={currentChallenge.title ?? "Challenge image"}
-                      loaded={challengeMainImageLoaded}
-                      feedbackClassName={imageFeedbackClassName}
-                      onLoaded={() => setChallengeMainImageLoaded(true)}
-                      onOpenZoom={openActiveChallengeZoom}
-                    />
-                  ) : (
-                    <canvas
-                      ref={canvasRef}
-                      className="bg-transparent"
-                      style={{
-                        maxWidth: "100%",
-                        maxHeight: "100%",
-                        display: "block",
-                        borderRadius: "12px",
-                        width: "100%",
-                        height: "100%",
-                      }}
-                    />
-                  )}
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      height: "100%",
+                      minHeight: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {currentChallenge.image_url ? (
+                      <CompactChallengeMotionImage
+                        challengeId={currentChallenge.id}
+                        src={displayChallengeImageUrl ?? ""}
+                        alt={currentChallenge.title ?? "Challenge image"}
+                        loaded={challengeMainImageLoaded}
+                        feedbackClassName={imageFeedbackClassName}
+                        onLoaded={() => setChallengeMainImageLoaded(true)}
+                        onOpenZoom={openActiveChallengeZoom}
+                      />
+                    ) : (
+                      <canvas
+                        ref={canvasRef}
+                        className="bg-transparent"
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                          display: "block",
+                          borderRadius: "12px",
+                          width: "100%",
+                          height: "100%",
+                        }}
+                      />
+                    )}
+                    {showDesktopAnswerOverlay ? (
+                      <DesktopChallengeAnswerOverlay
+                        solved={solvedWithCorrect}
+                        answer={currentAnswer}
+                      />
+                    ) : null}
+                  </div>
                 </div>
 
                 <GuessPersistenceHints
@@ -3551,6 +3666,12 @@ export function DailyGameClient({
                             }}
                           />
                         )}
+                        {showDesktopAnswerOverlay ? (
+                          <DesktopChallengeAnswerOverlay
+                            solved={solvedWithCorrect}
+                            answer={currentAnswer}
+                          />
+                        ) : null}
                       </div>
                     </div>
                     </div>
