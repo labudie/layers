@@ -50,11 +50,17 @@ export default async function StudioAssetsPage() {
   }
   const liveCountsByDate: Record<string, number> = {};
   const liveChallengeIdByDatePosition: Record<string, Record<number, string>> = {};
+  const challengeCountByActiveDate: Record<string, number> = {};
   for (const row of (publishedChallengeRows ?? []) as Array<{
     id: string;
     active_date: string | null;
     position: number | null;
   }>) {
+    const rawDate = row.active_date;
+    if (rawDate != null && String(rawDate).trim() !== "") {
+      const dateKey = String(rawDate).slice(0, 10);
+      challengeCountByActiveDate[dateKey] = (challengeCountByActiveDate[dateKey] ?? 0) + 1;
+    }
     const date = row.active_date ?? "";
     const pos = row.position ?? 0;
     if (!date || pos < 1 || pos > 5) continue;
@@ -119,6 +125,7 @@ export default async function StudioAssetsPage() {
         adminUserId={adminUserId}
         liveCountsByDate={liveCountsByDate}
         liveChallengeIdByDatePosition={liveChallengeIdByDatePosition}
+        challengeCountByActiveDate={challengeCountByActiveDate}
       />
     </AppSiteChrome>
   );

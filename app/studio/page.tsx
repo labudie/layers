@@ -725,6 +725,7 @@ export default async function AdminPage({
   let workspacePendingSubmissions: PendingSubmissionRow[] = [];
   let workspaceLiveCountsByDate: Record<string, number> = {};
   let workspaceLiveChallengeIdByDatePosition: Record<string, Record<number, string>> = {};
+  let workspaceChallengeCountByActiveDate: Record<string, number> = {};
   if (tab === "workspace") {
     const { data: assetRows, error: assetsError } = await sb
       .from("assets")
@@ -785,6 +786,12 @@ export default async function AdminPage({
       active_date: string | null;
       position: number | null;
     }>) {
+      const rawDate = row.active_date;
+      if (rawDate != null && String(rawDate).trim() !== "") {
+        const dateKey = String(rawDate).slice(0, 10);
+        workspaceChallengeCountByActiveDate[dateKey] =
+          (workspaceChallengeCountByActiveDate[dateKey] ?? 0) + 1;
+      }
       const date = row.active_date ?? "";
       const pos = row.position ?? 0;
       if (!date || pos < 1 || pos > 5) continue;
@@ -971,6 +978,7 @@ export default async function AdminPage({
             showBackLink={false}
             liveCountsByDate={workspaceLiveCountsByDate}
             liveChallengeIdByDatePosition={workspaceLiveChallengeIdByDatePosition}
+            challengeCountByActiveDate={workspaceChallengeCountByActiveDate}
           />
         ) : tab === "submissions" ? (
           <div className="rounded-2xl border border-white/10 bg-[rgba(26,10,46,0.65)] p-5">

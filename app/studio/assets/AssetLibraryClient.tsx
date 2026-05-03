@@ -670,6 +670,7 @@ export function AssetLibraryClient({
   showBackLink = true,
   liveCountsByDate,
   liveChallengeIdByDatePosition,
+  challengeCountByActiveDate,
 }: {
   initialAssets: AssetRow[];
   pendingSubmissions: PendingSubmissionRow[];
@@ -677,6 +678,8 @@ export function AssetLibraryClient({
   showBackLink?: boolean;
   liveCountsByDate: Record<string, number>;
   liveChallengeIdByDatePosition: Record<string, Record<number, string>>;
+  /** Per calendar day: count(*) of challenges rows for that active_date (matches grouped count). */
+  challengeCountByActiveDate: Record<string, number>;
 }) {
   const router = useRouter();
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("assets");
@@ -1049,13 +1052,13 @@ export function AssetLibraryClient({
     for (const cell of m.flat()) {
       if (!cell) continue;
       const ymd = toYmd(cell);
-      const c = scheduledByDate.counts[ymd] ?? 0;
+      const c = challengeCountByActiveDate[ymd] ?? 0;
       if (c === 5) full += 1;
       else if (c === 0) empty += 1;
-      else incomplete += 1;
+      else if (c > 0 && c < 5) incomplete += 1;
     }
     return { full, incomplete, empty };
-  }, [viewMonth.y, viewMonth.m, scheduledByDate.counts]);
+  }, [viewMonth.y, viewMonth.m, challengeCountByActiveDate]);
 
   const ingestFiles = async (fileList: FileList | File[]) => {
     const files = Array.from(fileList).filter((f) => isRasterGameImage(f) || isPsdFile(f)).slice(0, 50);
