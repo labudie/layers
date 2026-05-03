@@ -683,36 +683,45 @@ function ChallengeCompleteImageOverlay(
         style={{
           position: "absolute",
           inset: 0,
-          borderRadius: 12,
+          borderRadius: "12px",
+          overflow: "hidden",
           zIndex: 10,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background:
-            "linear-gradient(135deg, rgba(16,185,129,0.92), rgba(5,150,105,0.95))",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
         }}
       >
-        <span style={{ fontSize: 32, marginBottom: 8, lineHeight: 1 }} aria-hidden>
-          ✓
-        </span>
-        <div style={{ ...challengeCompleteLabelStyle, color: "rgba(255,255,255,0.7)" }}>
-          Correct answer
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            minHeight: "100%",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background:
+              "linear-gradient(135deg, rgba(16,185,129,0.92), rgba(5,150,105,0.95))",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+        >
+          <span style={{ fontSize: 32, marginBottom: 8, lineHeight: 1 }} aria-hidden>
+            ✓
+          </span>
+          <div style={{ ...challengeCompleteLabelStyle, color: "rgba(255,255,255,0.7)" }}>
+            Correct answer
+          </div>
+          <div style={challengeCompleteNumberStyle}>{props.answer}</div>
+          <div style={challengeCompleteUnitStyle}>layers</div>
+          <div style={challengeCompleteDividerStyle} aria-hidden />
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
+            Solved in {props.guessesUsed}{" "}
+            {props.guessesUsed === 1 ? "guess" : "guesses"}
+          </div>
+          <ChallengeCompleteAdvanceButton
+            isLastChallenge={isLastChallenge}
+            onAdvance={onAdvance}
+            disabled={advanceDisabled}
+          />
         </div>
-        <div style={challengeCompleteNumberStyle}>{props.answer}</div>
-        <div style={challengeCompleteUnitStyle}>layers</div>
-        <div style={challengeCompleteDividerStyle} aria-hidden />
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
-          Solved in {props.guessesUsed}{" "}
-          {props.guessesUsed === 1 ? "guess" : "guesses"}
-        </div>
-        <ChallengeCompleteAdvanceButton
-          isLastChallenge={isLastChallenge}
-          onAdvance={onAdvance}
-          disabled={advanceDisabled}
-        />
       </div>
     );
   }
@@ -723,35 +732,44 @@ function ChallengeCompleteImageOverlay(
         style={{
           position: "absolute",
           inset: 0,
-          borderRadius: 12,
+          borderRadius: "12px",
+          overflow: "hidden",
           zIndex: 10,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background:
-            "linear-gradient(160deg, rgba(15,5,32,0.95), rgba(28,10,50,0.97))",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
         }}
       >
-        <span style={{ fontSize: 28, marginBottom: 8, lineHeight: 1 }} aria-hidden>
-          🔥
-        </span>
-        <div style={{ ...challengeCompleteLabelStyle, color: "#f59e0b" }}>
-          So close! Answer was
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            minHeight: "100%",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background:
+              "linear-gradient(160deg, rgba(15,5,32,0.95), rgba(28,10,50,0.97))",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+        >
+          <span style={{ fontSize: 28, marginBottom: 8, lineHeight: 1 }} aria-hidden>
+            🔥
+          </span>
+          <div style={{ ...challengeCompleteLabelStyle, color: "#f59e0b" }}>
+            So close! Answer was
+          </div>
+          <div style={challengeCompleteNumberStyle}>{props.answer}</div>
+          <div style={challengeCompleteUnitStyle}>layers</div>
+          <div style={challengeCompleteDividerStyle} aria-hidden />
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
+            Your best guess: {props.bestGuess}
+          </div>
+          <ChallengeCompleteAdvanceButton
+            isLastChallenge={isLastChallenge}
+            onAdvance={onAdvance}
+            disabled={advanceDisabled}
+          />
         </div>
-        <div style={challengeCompleteNumberStyle}>{props.answer}</div>
-        <div style={challengeCompleteUnitStyle}>layers</div>
-        <div style={challengeCompleteDividerStyle} aria-hidden />
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
-          Your best guess: {props.bestGuess}
-        </div>
-        <ChallengeCompleteAdvanceButton
-          isLastChallenge={isLastChallenge}
-          onAdvance={onAdvance}
-          disabled={advanceDisabled}
-        />
       </div>
     );
   }
@@ -780,52 +798,61 @@ function ChallengeCompleteImageOverlay(
       style={{
         position: "absolute",
         inset: 0,
-        borderRadius: 12,
+        borderRadius: "12px",
+        overflow: "hidden",
         zIndex: 10,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        background:
-          "linear-gradient(135deg, rgba(15,5,32,0.92), rgba(28,10,50,0.96))",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
       }}
     >
-      <span style={{ fontSize: 24, color: "#ef4444", marginBottom: 8, lineHeight: 1 }} aria-hidden>
-        ✕
-      </span>
-      <div style={{ ...challengeCompleteLabelStyle, color: "#a855f7" }}>Answer was</div>
-      <div style={challengeCompleteNumberStyle}>{props.answer}</div>
-      <div style={challengeCompleteUnitStyle}>layers</div>
-      <div style={challengeCompleteDividerStyle} aria-hidden />
       <div
         style={{
+          width: "100%",
+          height: "100%",
+          minHeight: "100%",
           display: "flex",
-          flexDirection: "row",
-          flexWrap: "wrap",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: 6,
-          marginTop: 4,
-          maxWidth: "100%",
-          padding: "0 12px",
+          background:
+            "linear-gradient(135deg, rgba(15,5,32,0.92), rgba(28,10,50,0.96))",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
         }}
       >
-        {props.guesses.map((g, i) => (
-          <span
-            key={`${g.value}-${i}`}
-            style={g.direction === "low" ? lowChip : highChip}
-          >
-            {g.value}
-          </span>
-        ))}
+        <span style={{ fontSize: 24, color: "#ef4444", marginBottom: 8, lineHeight: 1 }} aria-hidden>
+          ✕
+        </span>
+        <div style={{ ...challengeCompleteLabelStyle, color: "#a855f7" }}>Answer was</div>
+        <div style={challengeCompleteNumberStyle}>{props.answer}</div>
+        <div style={challengeCompleteUnitStyle}>layers</div>
+        <div style={challengeCompleteDividerStyle} aria-hidden />
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            marginTop: 4,
+            maxWidth: "100%",
+            padding: "0 12px",
+          }}
+        >
+          {props.guesses.map((g, i) => (
+            <span
+              key={`${g.value}-${i}`}
+              style={g.direction === "low" ? lowChip : highChip}
+            >
+              {g.value}
+            </span>
+          ))}
+        </div>
+        <ChallengeCompleteAdvanceButton
+          isLastChallenge={isLastChallenge}
+          onAdvance={onAdvance}
+          disabled={advanceDisabled}
+        />
       </div>
-      <ChallengeCompleteAdvanceButton
-        isLastChallenge={isLastChallenge}
-        onAdvance={onAdvance}
-        disabled={advanceDisabled}
-      />
     </div>
   );
 }
@@ -958,8 +985,13 @@ const CompactChallengeMotionImage = memo(function CompactChallengeMotionImage({
 }) {
   return (
     <AnimatePresence mode="wait" initial={false}>
-      <motion.div
+      <motion.img
         key={challengeId}
+        src={src}
+        alt={alt}
+        loading="eager"
+        decoding="async"
+        onLoad={onLoaded}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{
           opacity: loaded ? 1 : 0,
@@ -970,30 +1002,16 @@ const CompactChallengeMotionImage = memo(function CompactChallengeMotionImage({
           duration: 0.25,
           ease: "easeOut",
         }}
+        className={`cursor-zoom-in ${feedbackClassName}`}
+        onClick={onOpenZoom}
         style={{
-          position: "relative",
-          overflow: "hidden",
-          borderRadius: "12px",
           maxWidth: "100%",
           maxHeight: "100%",
+          objectFit: "contain",
+          borderRadius: "12px",
+          display: "block",
         }}
-      >
-        <img
-          src={src}
-          alt={alt}
-          loading="eager"
-          decoding="async"
-          onLoad={onLoaded}
-          className={`cursor-zoom-in ${feedbackClassName}`}
-          onClick={onOpenZoom}
-          style={{
-            maxWidth: "100%",
-            maxHeight: "100%",
-            objectFit: "contain",
-            display: "block",
-          }}
-        />
-      </motion.div>
+      />
     </AnimatePresence>
   );
 });
@@ -1015,8 +1033,13 @@ const StandardChallengeMotionImage = memo(function StandardChallengeMotionImage(
 }) {
   return (
     <AnimatePresence mode="wait" initial={false}>
-      <motion.div
+      <motion.img
         key={challengeId}
+        src={src}
+        alt={alt}
+        loading="eager"
+        decoding="async"
+        onLoad={onLoaded}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{
           opacity: loaded ? 1 : 0,
@@ -1027,30 +1050,18 @@ const StandardChallengeMotionImage = memo(function StandardChallengeMotionImage(
           duration: 0.25,
           ease: "easeOut",
         }}
+        className="block h-full max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain"
         style={{
-          position: "relative",
+          borderRadius: "14px",
           overflow: "hidden",
-          borderRadius: "12px",
-          maxWidth: "100%",
-          maxHeight: "54vh",
+          display: "block",
+          width: "100%",
+          height: "100%",
+          background: "transparent",
+          backgroundColor: "transparent",
         }}
-      >
-        <img
-          src={src}
-          alt={alt}
-          loading="eager"
-          decoding="async"
-          onLoad={onLoaded}
-          className="block max-h-[54vh] w-full max-w-full cursor-zoom-in object-contain"
-          style={{
-            display: "block",
-            height: "auto",
-            background: "transparent",
-            backgroundColor: "transparent",
-          }}
-          onClick={onOpenZoom}
-        />
-      </motion.div>
+        onClick={onOpenZoom}
+      />
     </AnimatePresence>
   );
 });
@@ -3492,11 +3503,14 @@ export function DailyGameClient({
                   <div
                     style={{
                       position: "relative",
+                      width: "100%",
+                      height: "100%",
+                      minHeight: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                       overflow: "hidden",
-                      borderRadius: "12px",
-                      maxWidth: "100%",
-                      maxHeight: "100%",
-                      alignSelf: "center",
+                      borderRadius: 12,
                     }}
                   >
                     {currentChallenge.image_url ? (
@@ -3510,25 +3524,18 @@ export function DailyGameClient({
                         onOpenZoom={openActiveChallengeZoom}
                       />
                     ) : (
-                      <div
+                      <canvas
+                        ref={canvasRef}
+                        className="bg-transparent"
                         style={{
-                          position: "relative",
-                          overflow: "hidden",
-                          borderRadius: "12px",
                           maxWidth: "100%",
                           maxHeight: "100%",
+                          display: "block",
+                          borderRadius: "12px",
+                          width: "100%",
+                          height: "100%",
                         }}
-                      >
-                        <canvas
-                          ref={canvasRef}
-                          className="bg-transparent"
-                          style={{
-                            maxWidth: "100%",
-                            maxHeight: "100%",
-                            display: "block",
-                          }}
-                        />
-                      </div>
+                      />
                     )}
                     {challengeCompleteOverlay.visible ? (
                       challengeCompleteOverlay.variant === "solved" ? (
@@ -3816,13 +3823,11 @@ export function DailyGameClient({
                       }}
                     >
                       <div
-                        className="max-h-[54vh] w-full max-w-full"
+                        className="relative max-h-[54vh] w-full max-w-full overflow-hidden"
                         style={{
-                          position: "relative",
-                          overflow: "hidden",
-                          borderRadius: "12px",
                           background: "transparent",
                           backgroundColor: "transparent",
+                          borderRadius: 12,
                         }}
                       >
                         {currentChallenge.image_url ? (
@@ -3835,24 +3840,14 @@ export function DailyGameClient({
                             onOpenZoom={openActiveChallengeZoom}
                           />
                         ) : (
-                          <div
+                          <canvas
+                            ref={canvasRef}
+                            className="block h-[54vh] w-full max-w-full"
                             style={{
-                              position: "relative",
-                              overflow: "hidden",
-                              borderRadius: "12px",
-                              maxWidth: "100%",
-                              maxHeight: "54vh",
+                              background: "transparent",
+                              backgroundColor: "transparent",
                             }}
-                          >
-                            <canvas
-                              ref={canvasRef}
-                              className="block max-h-[54vh] w-full max-w-full bg-transparent"
-                              style={{
-                                background: "transparent",
-                                backgroundColor: "transparent",
-                              }}
-                            />
-                          </div>
+                          />
                         )}
                         {challengeCompleteOverlay.visible ? (
                           challengeCompleteOverlay.variant === "solved" ? (
