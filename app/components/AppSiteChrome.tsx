@@ -231,21 +231,21 @@ export function AppSiteChrome({
         >
           <div className="flex flex-1 flex-col overflow-y-auto px-3 pb-4 pt-6">
             <div className="flex flex-col items-stretch px-2 pb-4">
-              <div className="mx-auto h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-white/15 bg-[var(--accent)]/20">
-                {signedIn && profileAvatarUrl ? (
-                  <img
-                    src={profileAvatarUrl}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-2xl text-white/40">
-                    👤
-                  </div>
-                )}
-              </div>
               {signedIn ? (
                 <>
+                  <div className="mx-auto h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-white/15 bg-[var(--accent)]/20">
+                    {profileAvatarUrl ? (
+                      <img
+                        src={profileAvatarUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-2xl text-white/40">
+                        👤
+                      </div>
+                    )}
+                  </div>
                   <div className="mt-3 text-center">
                     <span className="text-lg font-bold text-white">
                       <AtUsernameDisplay
@@ -272,9 +272,18 @@ export function AppSiteChrome({
                   </div>
                 </>
               ) : (
-                <p className="mt-3 text-center text-sm text-white/55">
-                  Sign in to save progress
-                </p>
+                <div className="flex flex-col items-stretch gap-4 pt-1">
+                  <p className="text-center text-sm text-white/50">
+                    Sign in to save your progress
+                  </p>
+                  <Link
+                    href="/login"
+                    className="tap-press flex min-h-[48px] items-center justify-center rounded-xl bg-[#7c3aed] px-4 text-[15px] font-bold text-white shadow-lg shadow-violet-500/20 transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-[#6d28d9] hover:brightness-105 active:brightness-95"
+                    onClick={() => setDrawerOpen(false)}
+                  >
+                    Sign in with Google
+                  </Link>
+                </div>
               )}
             </div>
 
@@ -339,19 +348,7 @@ export function AppSiteChrome({
                 </span>
                 Sign Out
               </button>
-            ) : (
-              <Link
-                href="/login"
-                style={{ "--drawer-delay": "150ms" } as CSSProperties}
-                className={`${drawerNavClass} mt-2 text-[var(--accent2)]`}
-                onClick={() => setDrawerOpen(false)}
-              >
-                <span className={drawerIconClass} aria-hidden>
-                  →
-                </span>
-                Sign in
-              </Link>
-            )}
+            ) : null}
           </div>
         </nav>
       </div>

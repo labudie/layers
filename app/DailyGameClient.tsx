@@ -338,6 +338,69 @@ function verdictForGuess(guess: number, answer: number) {
   };
 }
 
+type GuestStoredChallenge = { guesses: GuessRow[]; solved: boolean };
+
+function guestStorageKey(todayDate: string) {
+  return `layers_guest_${todayDate}`;
+}
+
+function readGuestDayMap(
+  todayDate: string,
+): Record<string, GuestStoredChallenge> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(guestStorageKey(todayDate));
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      return {};
+    }
+    return parsed as Record<string, GuestStoredChallenge>;
+  } catch {
+    return {};
+  }
+}
+
+function writeGuestDayChallenge(
+  todayDate: string,
+  challengeId: string,
+  guesses: GuessRow[],
+  solved: boolean,
+) {
+  if (typeof window === "undefined" || !challengeId) return;
+  try {
+    const existing = readGuestDayMap(todayDate);
+    existing[challengeId] = { guesses: [...guesses], solved };
+    localStorage.setItem(
+      guestStorageKey(todayDate),
+      JSON.stringify(existing),
+    );
+  } catch {
+    /* ignore quota */
+  }
+}
+
+function restoreGuestGuessesForChallenge(
+  stored: GuestStoredChallenge | undefined,
+  answer: number,
+): GuessRow[] {
+  if (!stored?.guesses?.length || !answer || answer <= 0) return [];
+  const out: GuessRow[] = [];
+  for (const raw of stored.guesses.slice(0, MAX_GUESSES)) {
+    const v =
+      raw && typeof raw === "object" && "value" in raw
+        ? Math.max(0, Math.floor(Number((raw as GuessRow).value)))
+        : NaN;
+    if (!Number.isFinite(v)) continue;
+    out.push({ value: v, ...verdictForGuess(v, answer) });
+  }
+  return out.slice(0, MAX_GUESSES);
+}
+
 function emojiForVerdict(v: GuessRow["verdict"]) {
   if (v === "correct") return "🟩";
   if (v === "close") return "🟨";
@@ -1662,7 +1725,7 @@ export function DailyGameClient({
 
   const challengeCompleteOverlayVisible = challengeCompleteOverlay.visible;
 
-  /** Current puzzle round is playable (input may be used; submit needs auth). */
+  /** Current puzzle round is playable (input may be used; submit allowed for guests too). */
   const roundActive = Boolean(
     !showSummary &&
       currentChallenge?.id &&
@@ -1671,9 +1734,9 @@ export function DailyGameClient({
       !currentFinished
   );
 
-  /** Persisting guesses/results requires a signed-in user. */
+  /** Guests submit without Supabase; signed-in users need session + user id. */
   const canSubmitGuess = Boolean(
-    roundActive && signedIn && userId
+    roundActive && (userId ? signedIn && !!userId : true),
   );
 
   const guessPersistence = useMemo(() => {
@@ -1848,12 +1911,46 @@ export function DailyGameClient({
       }
 
       if (!userId) {
-        if (!cancelled) {
-          setGuessesByIndex(list.map(() => []));
-          setCurrentChallengeIndex(0);
-          setShowSummary(false);
-          setGameDataReady(true);
+        const todayEastern = todayYYYYMMDDUSEastern();
+        const map = readGuestDayMap(todayEastern);
+        const matrix: GuessRow[][] = [];
+        for (const ch of list) {
+          const answer = ch.layer_count;
+          if (!ch.id || !answer || answer <= 0) {
+            matrix.push([]);
+            continue;
+          }
+          matrix.push(restoreGuestGuessesForChallenge(map[ch.id], answer));
         }
+        while (matrix.length < list.length) {
+          matrix.push([]);
+        }
+        if (cancelled) return;
+
+        setGuessesByIndex(matrix);
+
+        let allDone = true;
+        let firstOpen = 0;
+        for (let i = 0; i < list.length; i++) {
+          const ans = list[i].layer_count ?? 0;
+          const g = matrix[i] ?? [];
+          const fin = isChallengeFinished(ans, g);
+          if (!fin) {
+            allDone = false;
+            firstOpen = i;
+            break;
+          }
+        }
+
+        if (allDone) {
+          setShowSummary(true);
+          setCurrentChallengeIndex(Math.max(0, list.length - 1));
+        } else {
+          setShowSummary(false);
+          setCurrentChallengeIndex(firstOpen);
+        }
+
+        setGameDataReady(true);
         return;
       }
 
@@ -2299,6 +2396,10 @@ export function DailyGameClient({
       setLeaderPreview([]);
       return;
     }
+    if (!userId) {
+      setLeaderPreview([]);
+      return;
+    }
     const ids = challengeIdsKey.split(",").filter(Boolean);
     if (!ids.length) {
       setLeaderPreview([]);
@@ -2355,7 +2456,7 @@ export function DailyGameClient({
     return () => {
       cancelled = true;
     };
-  }, [showDailyHome, challengeIdsKey]);
+  }, [showDailyHome, challengeIdsKey, userId]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -2409,7 +2510,10 @@ export function DailyGameClient({
 
   const submitGuess = useCallback(async () => {
     if (!roundActive || typeof guessInput !== "number" || !currentAnswer) return;
-    if (!userId || !signedIn || !currentChallenge?.id) return;
+    if (!currentChallenge?.id) return;
+    if (userId) {
+      if (!signedIn) return;
+    }
 
     const idx = currentChallengeIndex;
     const g = guessesByIndex[idx] ?? [];
@@ -2419,15 +2523,17 @@ export function DailyGameClient({
     const attemptNumber = g.length + 1;
     const nextRow: GuessRow = { value: v, verdict, direction, closeness };
 
-    const { error } = await supabase().from("guesses").insert({
-      user_id: userId,
-      challenge_id: currentChallenge.id,
-      guess: v,
-      attempt_number: attemptNumber,
-      is_correct: verdict === "correct",
-    });
+    if (userId) {
+      const { error } = await supabase().from("guesses").insert({
+        user_id: userId,
+        challenge_id: currentChallenge.id,
+        guess: v,
+        attempt_number: attemptNumber,
+        is_correct: verdict === "correct",
+      });
 
-    if (error) return;
+      if (error) return;
+    }
 
     applyGuessFeedback(verdict);
 
@@ -2462,6 +2568,18 @@ export function DailyGameClient({
             : undefined,
         fallbackIndex: idx,
       });
+    }
+
+    if (!userId) {
+      const todayEastern = todayYYYYMMDDUSEastern();
+      const persisted = [...finishedNext].slice(0, MAX_GUESSES);
+      const solved = persisted.some((row) => row.verdict === "correct");
+      writeGuestDayChallenge(
+        todayEastern,
+        currentChallenge.id,
+        persisted,
+        solved,
+      );
     }
 
     setGuessesByIndex((prev) => {
@@ -3080,48 +3198,71 @@ export function DailyGameClient({
               </button>
             </div>
 
-            <div className="mt-12 w-full max-w-md text-left min-w-0">
-              <div className="mb-3">
-                <Link
-                  href="/leaderboard"
-                  className="inline-flex min-h-[44px] items-center text-xs font-medium text-[#a0a0b0] transition-opacity hover:opacity-90 active:opacity-80"
-                >
-                  Leaderboard
-                </Link>
-                <p className="mt-0.5 text-xs text-white/45">
-                  {formatLeaderboardPreviewDateEastern()}
-                </p>
-              </div>
-              <div className="overflow-hidden rounded-[var(--radius-card)] border border-white/10 bg-black/25">
-                {leaderPreview.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-white/55">
-                    No scores yet — be the first on the board.
+            {userId ? (
+              <div className="mt-12 w-full max-w-md min-w-0 text-left">
+                <div className="mb-3">
+                  <Link
+                    href="/leaderboard"
+                    className="inline-flex min-h-[44px] items-center text-xs font-medium text-[#a0a0b0] transition-opacity hover:opacity-90 active:opacity-80"
+                  >
+                    Leaderboard
+                  </Link>
+                  <p className="mt-0.5 text-xs text-white/45">
+                    {formatLeaderboardPreviewDateEastern()}
                   </p>
-                ) : (
-                  <ul className="divide-y divide-white/5">
-                    {leaderPreview.map((row) => (
-                      <li
-                        key={row.userId}
-                        className="flex items-center gap-3 px-4 py-3 text-sm"
-                      >
-                        <span className="w-8 font-mono font-bold text-white/50">
-                          {row.rank}
-                        </span>
-                        <span className="min-w-0 flex-1 font-semibold text-white">
-                          <ProfileUsernameLink
-                            username={row.username}
-                            fallbackDisplay={shortUserIdLabel(row.userId)}
-                          />
-                        </span>
-                        <span className="shrink-0 tabular-nums text-white/80">
-                          {row.totalAttempts} attempts
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                </div>
+                <div className="overflow-hidden rounded-[var(--radius-card)] border border-white/10 bg-black/25">
+                  {leaderPreview.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-sm text-white/55">
+                      No scores yet — be the first on the board.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-white/5">
+                      {leaderPreview.map((row) => (
+                        <li
+                          key={row.userId}
+                          className="flex items-center gap-3 px-4 py-3 text-sm"
+                        >
+                          <span className="w-8 font-mono font-bold text-white/50">
+                            {row.rank}
+                          </span>
+                          <span className="min-w-0 flex-1 font-semibold text-white">
+                            <ProfileUsernameLink
+                              username={row.username}
+                              fallbackDisplay={shortUserIdLabel(row.userId)}
+                            />
+                          </span>
+                          <span className="shrink-0 tabular-nums text-white/80">
+                            {row.totalAttempts} attempts
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div
+                className="mx-auto mt-12 w-full max-w-md text-center"
+                style={{
+                  background: "#1a0a2e",
+                  border: "0.5px solid #7c3aed44",
+                  borderRadius: 12,
+                  padding: 20,
+                }}
+              >
+                <p className="text-sm leading-relaxed text-white/90">
+                  Create a free account to save your streak and appear on the
+                  leaderboard
+                </p>
+                <Link
+                  href="/login"
+                  className="mt-5 inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-[#7c3aed] px-6 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition hover:bg-[#6d28d9]"
+                >
+                  Sign in with Google
+                </Link>
+              </div>
+            )}
           </div>
         ) : showSummary && showResultsDetail ? (
           <div className="mt-8 space-y-6">
@@ -4088,15 +4229,16 @@ export function DailyGameClient({
                           </button>
                         </div>
 
-                        {!signedIn && roundActive ? (
+                        {!userId && roundActive ? (
                           <p className="text-center text-sm text-white/55">
-                            Sign in to save your progress —{" "}
+                            Progress is saved on this device for today —{" "}
                             <Link
                               href="/login"
                               className="font-semibold text-[var(--text)] underline-offset-2 hover:underline"
                             >
-                              Sign in
-                            </Link>
+                              Sign in with Google
+                            </Link>{" "}
+                            to sync streak and leaderboard.
                           </p>
                         ) : null}
                       </>
