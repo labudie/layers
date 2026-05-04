@@ -1244,7 +1244,7 @@ export function DailyGameClient({
     "idle",
   );
   const [gameDataReady, setGameDataReady] = useState(
-    () => challengesFromServer.length === 0,
+    () => challengesFromServer.length === 0 || userId == null,
   );
 
   const showDailyHome = total > 0 && showSummary && !showResultsDetail;
@@ -1735,15 +1735,14 @@ export function DailyGameClient({
       if (!cid) return;
 
       const sb = supabase();
-      const {
-        data: { user },
-        error: authError,
-      } = await sb.auth.getUser();
+      const { data: authData, error: authError } = await sb.auth.getUser();
       if (authError) {
         console.error("[results] auth error", authError);
         return;
       }
-      if (!user?.id) return;
+      const user = authData?.user ?? null;
+      const uid = user?.id;
+      if (!uid) return;
 
       const solved = guesses.some((x) => x.verdict === "correct");
       const attempts_used = guesses.length;
@@ -1806,7 +1805,7 @@ export function DailyGameClient({
 
       const { error } = await sb.from("results").upsert(
         {
-          user_id: user.id,
+          user_id: uid,
           challenge_id: resolvedId,
           solved,
           attempts_used,

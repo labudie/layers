@@ -51,9 +51,8 @@ export default async function Home() {
   let userId: string | null = null;
   let userEmail: string | null = null;
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data } = await supabase.auth.getUser();
+    const user = data?.user ?? null;
     userId = user?.id ?? null;
     userEmail = user?.email ?? null;
   } catch {
