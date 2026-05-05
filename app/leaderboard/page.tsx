@@ -48,7 +48,7 @@ type CreatorLeaderboardRow = {
   creator_name: string | null;
   username: string | null;
   avatar_url: string | null;
-  submission_count: number;
+  featured_count: number;
 };
 
 const ROW_PAD = "py-2 px-1";
@@ -239,40 +239,73 @@ export default async function LeaderboardPage({
       });
     }
 
-    const { data: submissionsData, error: submissionsError } = await supabase
-      .from("submissions")
-      .select("creator_name, user_id")
-      .eq("status", "approved");
+    const { data: challengesData, error: challengesError } = await supabase
+      .from("challenges")
+      .select("creator_name, creator_user_id")
+      .not("creator_name", "is", null);
 
-    if (submissionsError) {
-      logSupabaseError("[leaderboard] submissions fetch failed", submissionsError);
+    if (challengesError) {
+      logSupabaseError("[leaderboard] challenges fetch failed", challengesError);
     } else {
-      const subRows = (submissionsData ?? []) as Array<{
+      const challengeRows = (challengesData ?? []) as Array<{
         creator_name: string | null;
-        user_id: string;
+        creator_user_id: string | null;
       }>;
 
-      const submissionUserIds = [
+      const byCreator = new Map<
+        string,
+        {
+          creator_name: string | null;
+          profile_user_id: string | null;
+          featured_count: number;
+        }
+      >();
+
+      for (const raw of challengeRows) {
+        const trimmed = raw.creator_name?.trim();
+        if (!trimmed) continue;
+
+        const key = creatorKey(trimmed);
+        if (!key) continue;
+
+        const uid = raw.creator_user_id?.trim() || null;
+
+        const cur = byCreator.get(key);
+        if (!cur) {
+          byCreator.set(key, {
+            creator_name: raw.creator_name,
+            profile_user_id: uid,
+            featured_count: 1,
+          });
+        } else {
+          cur.featured_count += 1;
+          if (!cur.profile_user_id && uid) {
+            cur.profile_user_id = uid;
+          }
+        }
+      }
+
+      const profileIds = [
         ...new Set(
-          subRows.map((r) => r.user_id?.trim()).filter((id): id is string =>
-            Boolean(id),
-          ),
+          [...byCreator.values()]
+            .map((v) => v.profile_user_id?.trim())
+            .filter((id): id is string => Boolean(id)),
         ),
       ];
 
-      const profilesBySubmitter = new Map<
+      const profilesByCreatorUser = new Map<
         string,
         { username: string | null; avatar_url: string | null }
       >();
-      for (let i = 0; i < submissionUserIds.length; i += PROFILE_ID_BATCH) {
-        const chunk = submissionUserIds.slice(i, i + PROFILE_ID_BATCH);
+      for (let i = 0; i < profileIds.length; i += PROFILE_ID_BATCH) {
+        const chunk = profileIds.slice(i, i + PROFILE_ID_BATCH);
         const { data: profs, error: profErr } = await supabase
           .from("profiles")
           .select("id, username, avatar_url")
           .in("id", chunk);
         if (profErr) {
           logSupabaseError(
-            "[leaderboard] profiles (submissions) fetch failed",
+            "[leaderboard] profiles (challenges) fetch failed",
             profErr,
           );
           break;
@@ -283,57 +316,34 @@ export default async function LeaderboardPage({
             username: string | null;
             avatar_url: string | null;
           };
-          profilesBySubmitter.set(r.id, {
+          profilesByCreatorUser.set(r.id, {
             username: r.username,
             avatar_url: r.avatar_url,
           });
         }
       }
 
-      const byCreator = new Map<
-        string,
-        {
-          creator_name: string | null;
-          username: string | null;
-          avatar_url: string | null;
-          submission_count: number;
-        }
-      >();
-
-      for (const raw of subRows) {
-        const key = creatorKey(raw.creator_name);
-        if (!key) continue;
-
-        const uid = raw.user_id?.trim();
-        const p = uid ? profilesBySubmitter.get(uid) : undefined;
-
-        const cur = byCreator.get(key);
-        if (!cur) {
-          byCreator.set(key, {
-            creator_name: raw.creator_name,
+      creatorRows = [...byCreator.values()]
+        .map((v) => {
+          const p = v.profile_user_id
+            ? profilesByCreatorUser.get(v.profile_user_id)
+            : undefined;
+          return {
+            creator_name: v.creator_name,
             username: p?.username ?? null,
             avatar_url: p?.avatar_url ?? null,
-            submission_count: 1,
-          });
-        } else {
-          cur.submission_count += 1;
-          if (!cur.username?.trim() && p?.username?.trim()) {
-            cur.username = p.username;
+            featured_count: v.featured_count,
+          } satisfies CreatorLeaderboardRow;
+        })
+        .sort((a, b) => {
+          if (b.featured_count !== a.featured_count) {
+            return b.featured_count - a.featured_count;
           }
-          if (!cur.avatar_url?.trim() && p?.avatar_url?.trim()) {
-            cur.avatar_url = p.avatar_url;
-          }
-        }
-      }
-
-      creatorRows = [...byCreator.values()].sort((a, b) => {
-        if (b.submission_count !== a.submission_count) {
-          return b.submission_count - a.submission_count;
-        }
-        return creatorKey(a.creator_name).localeCompare(
-          creatorKey(b.creator_name),
-        );
-      });
+          return creatorKey(a.creator_name).localeCompare(
+            creatorKey(b.creator_name),
+          );
+        })
+        .slice(0, 50);
     }
   } catch (e) {
     console.error("[leaderboard] Supabase fetch failed", e);
@@ -342,7 +352,7 @@ export default async function LeaderboardPage({
   const tabSubline =
     tab === "all-time"
       ? "Since launch · All players"
-      : "Approved community submissions";
+      : "Ranked by challenges featured in-game";
 
   return (
     <AppSiteChrome title="Leaderboard">
@@ -473,10 +483,10 @@ export default async function LeaderboardPage({
                           </>
                         )}
                         <span className="shrink-0 text-right text-sm font-medium tabular-nums text-[#f8f4ff]">
-                          {row.submission_count}{" "}
-                          {row.submission_count === 1
-                            ? "submission"
-                            : "submissions"}
+                          {row.featured_count}{" "}
+                          {row.featured_count === 1
+                            ? "challenge featured"
+                            : "challenges featured"}
                         </span>
                       </div>
                     );
