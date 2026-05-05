@@ -21,14 +21,18 @@ import { stripAtHandle } from "@/lib/username-display";
 type ProfileEmbed = {
   username: string | null;
   avatar_url: string | null;
-  current_streak?: number | null;
+  current_streak: number;
 };
 
-function unwrapProfile<T extends { username?: string | null }>(
-  p: T | T[] | null | undefined,
-): T | null {
-  if (p == null) return null;
-  return Array.isArray(p) ? (p[0] ?? null) : p;
+const PROFILE_ID_BATCH = 150;
+
+function logSupabaseError(scope: string, err: { message?: string; code?: string; details?: string }) {
+  console.error(
+    scope,
+    err.message ?? "(no message)",
+    err.code ? `code=${err.code}` : "",
+    err.details ? `details=${err.details}` : "",
+  );
 }
 
 type AllTimeLeaderboardRow = {
@@ -128,19 +132,53 @@ export default async function LeaderboardPage({
   try {
     const { data: resultsData, error: resultsError } = await supabase
       .from("results")
-      .select(
-        "user_id, attempts_used, profiles(username, avatar_url, current_streak)",
-      )
+      .select("user_id, attempts_used")
       .order("created_at", { ascending: false });
 
     if (resultsError) {
-      console.error("[leaderboard] results fetch failed", resultsError);
+      logSupabaseError("[leaderboard] results fetch failed", resultsError);
     } else {
-      type ResultPick = {
+      const resultRows = (resultsData ?? []) as Array<{
         user_id: string;
         attempts_used: number | null;
-        profiles: ProfileEmbed | ProfileEmbed[] | null;
-      };
+      }>;
+
+      const resultUserIds = [
+        ...new Set(
+          resultRows.map((r) => r.user_id?.trim()).filter((id): id is string =>
+            Boolean(id),
+          ),
+        ),
+      ];
+
+      const profilesByUserId = new Map<string, ProfileEmbed>();
+      for (let i = 0; i < resultUserIds.length; i += PROFILE_ID_BATCH) {
+        const chunk = resultUserIds.slice(i, i + PROFILE_ID_BATCH);
+        const { data: profs, error: profErr } = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url, current_streak")
+          .in("id", chunk);
+        if (profErr) {
+          logSupabaseError("[leaderboard] profiles (results) fetch failed", profErr);
+          break;
+        }
+        for (const row of profs ?? []) {
+          const r = row as {
+            id: string;
+            username: string | null;
+            avatar_url: string | null;
+            current_streak: number | null;
+          };
+          profilesByUserId.set(r.id, {
+            username: r.username,
+            avatar_url: r.avatar_url,
+            current_streak: Math.max(
+              0,
+              Math.floor(Number(r.current_streak) || 0),
+            ),
+          });
+        }
+      }
 
       const byUser = new Map<
         string,
@@ -153,11 +191,11 @@ export default async function LeaderboardPage({
         }
       >();
 
-      for (const raw of (resultsData ?? []) as unknown as ResultPick[]) {
+      for (const raw of resultRows) {
         const uid = raw.user_id?.trim();
         if (!uid) continue;
 
-        const p = unwrapProfile(raw.profiles);
+        const p = profilesByUserId.get(uid);
         const attempts = Math.max(
           0,
           Math.floor(Number(raw.attempts_used) || 0),
@@ -170,10 +208,7 @@ export default async function LeaderboardPage({
             total_guesses: 0,
             username: p?.username ?? null,
             avatar_url: p?.avatar_url ?? null,
-            current_streak: Math.max(
-              0,
-              Math.floor(Number(p?.current_streak) || 0),
-            ),
+            current_streak: p?.current_streak ?? 0,
           };
           byUser.set(uid, agg);
         }
@@ -206,19 +241,54 @@ export default async function LeaderboardPage({
 
     const { data: submissionsData, error: submissionsError } = await supabase
       .from("submissions")
-      .select("creator_name, profiles(username, avatar_url)")
+      .select("creator_name, user_id")
       .eq("status", "approved");
 
     if (submissionsError) {
-      console.error("[leaderboard] submissions fetch failed", submissionsError);
+      logSupabaseError("[leaderboard] submissions fetch failed", submissionsError);
     } else {
-      type SubPick = {
+      const subRows = (submissionsData ?? []) as Array<{
         creator_name: string | null;
-        profiles: Pick<ProfileEmbed, "username" | "avatar_url"> | Pick<
-          ProfileEmbed,
-          "username" | "avatar_url"
-        >[] | null;
-      };
+        user_id: string;
+      }>;
+
+      const submissionUserIds = [
+        ...new Set(
+          subRows.map((r) => r.user_id?.trim()).filter((id): id is string =>
+            Boolean(id),
+          ),
+        ),
+      ];
+
+      const profilesBySubmitter = new Map<
+        string,
+        { username: string | null; avatar_url: string | null }
+      >();
+      for (let i = 0; i < submissionUserIds.length; i += PROFILE_ID_BATCH) {
+        const chunk = submissionUserIds.slice(i, i + PROFILE_ID_BATCH);
+        const { data: profs, error: profErr } = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url")
+          .in("id", chunk);
+        if (profErr) {
+          logSupabaseError(
+            "[leaderboard] profiles (submissions) fetch failed",
+            profErr,
+          );
+          break;
+        }
+        for (const row of profs ?? []) {
+          const r = row as {
+            id: string;
+            username: string | null;
+            avatar_url: string | null;
+          };
+          profilesBySubmitter.set(r.id, {
+            username: r.username,
+            avatar_url: r.avatar_url,
+          });
+        }
+      }
 
       const byCreator = new Map<
         string,
@@ -230,11 +300,13 @@ export default async function LeaderboardPage({
         }
       >();
 
-      for (const raw of (submissionsData ?? []) as unknown as SubPick[]) {
+      for (const raw of subRows) {
         const key = creatorKey(raw.creator_name);
         if (!key) continue;
 
-        const p = unwrapProfile(raw.profiles);
+        const uid = raw.user_id?.trim();
+        const p = uid ? profilesBySubmitter.get(uid) : undefined;
+
         const cur = byCreator.get(key);
         if (!cur) {
           byCreator.set(key, {
