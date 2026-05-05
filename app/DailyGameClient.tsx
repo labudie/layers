@@ -84,7 +84,6 @@ import { AtHandle } from "@/lib/AtHandle";
 import {
   CreatorProfileLink,
   profileHandleLinkClass,
-  ProfileUsernameLink,
 } from "@/lib/profile-handle-link";
 import { APP_LOGO_INGAME_SRC } from "@/lib/app-logo";
 import { SITE_SHARE_URL } from "@/lib/site-url";
@@ -234,21 +233,6 @@ function isDuplicateInsertError(error: unknown) {
 }
 
 let userBadgesAvailabilityCache: boolean | null = null;
-
-/** Long month + day + year in US Eastern (e.g. "March 27, 2026"). */
-function formatLeaderboardPreviewDateEastern() {
-  return new Date().toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "America/New_York",
-  });
-}
-
-function shortUserIdLabel(userId: string) {
-  const id = userId?.trim() ?? "";
-  return id.length <= 8 ? id : `${id.slice(0, 8)}…`;
-}
 
 function mulberry32(seed: number) {
   let t = seed >>> 0;
@@ -1294,14 +1278,6 @@ export function DailyGameClient({
   );
   /** When true, show full per-challenge results; when false but showSummary, show premium daily home. */
   const [showResultsDetail, setShowResultsDetail] = useState(false);
-  const [leaderPreview, setLeaderPreview] = useState<
-    Array<{
-      rank: number;
-      userId: string;
-      username: string | null;
-      totalAttempts: number;
-    }>
-  >([]);
   const [easternHeroSeconds, setEasternHeroSeconds] = useState(0);
   const [shareFeedback, setShareFeedback] = useState<"idle" | "copied" | "shared">(
     "idle",
@@ -2391,73 +2367,6 @@ export function DailyGameClient({
     return () => window.clearInterval(id);
   }, [showNoChallengesHome, showSummary, showResultsDetail, total]);
 
-  useEffect(() => {
-    if (!showDailyHome) {
-      setLeaderPreview([]);
-      return;
-    }
-    if (!userId) {
-      setLeaderPreview([]);
-      return;
-    }
-    const ids = challengeIdsKey.split(",").filter(Boolean);
-    if (!ids.length) {
-      setLeaderPreview([]);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const { data, error } = await supabase()
-        .from("results")
-        .select("user_id, attempts_used, solved")
-        .in("challenge_id", ids);
-      if (cancelled) return;
-      if (error || !data?.length) {
-        setLeaderPreview([]);
-        return;
-      }
-      const agg = new Map<string, { attempts: number; solved: number }>();
-      for (const r of data as Array<{
-        user_id: string;
-        attempts_used: number | null;
-        solved: boolean | null;
-      }>) {
-        const o = agg.get(r.user_id) ?? { attempts: 0, solved: 0 };
-        o.attempts += Math.max(0, Math.floor(Number(r.attempts_used) || 0));
-        o.solved += r.solved === true ? 1 : 0;
-        agg.set(r.user_id, o);
-      }
-      const sorted = [...agg.entries()].sort(
-        (a, b) =>
-          a[1].attempts - b[1].attempts || b[1].solved - a[1].solved
-      );
-      const top = sorted.slice(0, 3);
-      const uids = top.map((t) => t[0]);
-      const { data: profs } = await supabase()
-        .from("profiles")
-        .select("id, username")
-        .in("id", uids);
-      if (cancelled) return;
-      const uname = new Map(
-        (profs ?? []).map((p: { id: string; username: string | null }) => [
-          p.id,
-          p.username,
-        ])
-      );
-      setLeaderPreview(
-        top.map(([uid, v], i) => ({
-          rank: i + 1,
-          userId: uid,
-          username: (uname.get(uid) as string | null | undefined) ?? null,
-          totalAttempts: v.attempts,
-        }))
-      );
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [showDailyHome, challengeIdsKey, userId]);
-
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     // If an uploaded image exists, we don't need (and don't mount) the canvas.
@@ -3198,50 +3107,7 @@ export function DailyGameClient({
               </button>
             </div>
 
-            {userId ? (
-              <div className="mt-12 w-full max-w-md min-w-0 text-left">
-                <div className="mb-3">
-                  <Link
-                    href="/leaderboard"
-                    className="inline-flex min-h-[44px] items-center text-xs font-medium text-[#a0a0b0] transition-opacity hover:opacity-90 active:opacity-80"
-                  >
-                    Leaderboard
-                  </Link>
-                  <p className="mt-0.5 text-xs text-white/45">
-                    {formatLeaderboardPreviewDateEastern()}
-                  </p>
-                </div>
-                <div className="overflow-hidden rounded-[var(--radius-card)] border border-white/10 bg-black/25">
-                  {leaderPreview.length === 0 ? (
-                    <p className="px-4 py-6 text-center text-sm text-white/55">
-                      No scores yet — be the first on the board.
-                    </p>
-                  ) : (
-                    <ul className="divide-y divide-white/5">
-                      {leaderPreview.map((row) => (
-                        <li
-                          key={row.userId}
-                          className="flex items-center gap-3 px-4 py-3 text-sm"
-                        >
-                          <span className="w-8 font-mono font-bold text-white/50">
-                            {row.rank}
-                          </span>
-                          <span className="min-w-0 flex-1 font-semibold text-white">
-                            <ProfileUsernameLink
-                              username={row.username}
-                              fallbackDisplay={shortUserIdLabel(row.userId)}
-                            />
-                          </span>
-                          <span className="shrink-0 tabular-nums text-white/80">
-                            {row.totalAttempts} attempts
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            ) : (
+            {!userId ? (
               <div
                 className="mx-auto mt-12 w-full max-w-md text-center"
                 style={{
@@ -3262,7 +3128,7 @@ export function DailyGameClient({
                   Sign in with Google
                 </Link>
               </div>
-            )}
+            ) : null}
           </div>
         ) : showSummary && showResultsDetail ? (
           <div className="mt-8 space-y-6">
