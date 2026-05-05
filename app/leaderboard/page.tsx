@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import type { CSSProperties } from "react";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { AppSiteChrome } from "@/app/components/AppSiteChrome";
 import { LeaderboardPullToRefresh } from "@/app/components/LeaderboardPullToRefresh";
 import { LeaderboardScrollUnlock } from "@/app/components/LeaderboardScrollUnlock";
@@ -61,29 +62,6 @@ function shortUsername(userId: string) {
   return id.length <= 8 ? id : id.slice(0, 8);
 }
 
-function trunc8Handle(raw: string | null | undefined, fallbackId: string) {
-  const h = stripAtHandle(raw ?? "").trim() || shortUsername(fallbackId);
-  return h.length <= 8 ? h : `${h.slice(0, 8)}`;
-}
-
-/** `ymd` is en-CA Eastern calendar date (YYYY-MM-DD). */
-function formatEasternLongDate(ymd: string) {
-  const [ys, ms, ds] = ymd.split("-");
-  const y = Number(ys);
-  const m = Number(ms);
-  const d = Number(ds);
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
-    return ymd;
-  }
-  const instant = new Date(Date.UTC(y, m - 1, d, 16, 0, 0));
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    timeZone: "America/New_York",
-  }).format(instant);
-}
-
 function rankTextClass(rank: number) {
   if (rank === 1) return "text-[#f59e0b]";
   if (rank === 2) return "text-[#9ca3af]";
@@ -125,91 +103,24 @@ function LeaderboardAvatar({
   );
 }
 
-const PODIUM = {
-  1: {
-    avatar: 44,
-    border: "#f59e0b",
-    podiumH: 40,
-    label: "#f59e0b" as const,
-  },
-  2: {
-    avatar: 36,
-    border: "#9ca3af",
-    podiumH: 28,
-    label: "#9ca3af" as const,
-  },
-  3: {
-    avatar: 32,
-    border: "#b45309",
-    podiumH: 20,
-    label: "#b45309" as const,
-  },
-} as const;
-
-function DailyPodiumSlot({
-  rank,
-  row,
-}: {
-  rank: 1 | 2 | 3;
-  row: DailyLeaderboardRow;
-}) {
-  const cfg = PODIUM[rank];
-  const handle = trunc8Handle(row.username, row.user_id);
-  return (
-    <div className="flex min-w-0 flex-1 flex-col items-center">
-      <ProfileUsernameLink
-        username={row.username ?? undefined}
-        fallbackDisplay={shortUsername(row.user_id)}
-      >
-        <span
-          className="inline-flex rounded-full"
-          style={{ boxShadow: `0 0 0 2px ${cfg.border}` }}
-        >
-          <LeaderboardAvatar
-            url={row.avatar_url}
-            label={row.username ?? row.user_id}
-            sizePx={cfg.avatar}
-            className="border-0"
-          />
-        </span>
-      </ProfileUsernameLink>
-      <div
-        className="mt-2 w-full truncate text-center text-xs font-semibold text-white/90"
-        title={stripAtHandle(row.username ?? "") || row.user_id}
-      >
-        {handle}
-      </div>
-      <div className="mt-0.5 text-center text-[10px] leading-tight text-white/55">
-        {row.solved_count}/{DAILY_CHALLENGE_TOTAL} · {row.total_guesses} guesses
-      </div>
-      <div
-        className="mt-3 flex w-full max-w-[5.5rem] flex-col items-center justify-center rounded-t-md bg-[#1a0a2e] sm:max-w-[6.5rem]"
-        style={{
-          height: cfg.podiumH,
-          borderRadius: "6px 6px 0 0",
-        }}
-      >
-        <span
-          className="text-sm font-bold tabular-nums"
-          style={{ color: cfg.label }}
-        >
-          {rank}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 export default async function LeaderboardPage({
   searchParams,
 }: {
   searchParams?: Promise<{ tab?: string }>;
 }) {
   const params = (await searchParams) ?? {};
+  const rawTab = params.tab;
+  if (
+    rawTab === "daily" ||
+    (rawTab != null &&
+      rawTab !== "" &&
+      rawTab !== "all-time" &&
+      rawTab !== "creators")
+  ) {
+    redirect("/leaderboard?tab=all-time");
+  }
   const tab: LeaderboardTabId =
-    params.tab === "all-time" || params.tab === "creators"
-      ? params.tab
-      : "daily";
+    rawTab === "creators" ? "creators" : "all-time";
 
   const supabase = createSupabaseServerClient(await cookies());
 
@@ -378,7 +289,7 @@ export default async function LeaderboardPage({
     console.error("[leaderboard] Supabase fetch failed", e);
   }
 
-  const empty = !dailyRows.length;
+  void dailyRows;
 
   const thumbByCreator = new Map<string, string>();
   for (const raw of challengeThumbRows ?? []) {
@@ -393,11 +304,9 @@ export default async function LeaderboardPage({
   }
 
   const tabSubline =
-    tab === "daily"
-      ? `${formatEasternLongDate(today)} · Daily results`
-      : tab === "all-time"
-        ? "Since launch · All players"
-        : "Ranked by downloads";
+    tab === "all-time"
+      ? "Since launch · All players"
+      : "Ranked by downloads";
 
   return (
     <AppSiteChrome title="Leaderboard">
@@ -410,69 +319,7 @@ export default async function LeaderboardPage({
             <LeaderboardTabBar current={tab} />
 
             <LeaderboardTabPanel key={tab} tab={tab}>
-              {tab === "daily" ? (
-                empty ? (
-                  <p className="mt-10 text-center text-lg font-semibold text-white/75">
-                    No results yet
-                  </p>
-                ) : (
-                  <div className="mt-6">
-                    {dailyRows.length >= 3 ? (
-                      <>
-                        <div className="flex items-end justify-center gap-2 sm:gap-6">
-                          <DailyPodiumSlot rank={2} row={dailyRows[1]} />
-                          <DailyPodiumSlot rank={1} row={dailyRows[0]} />
-                          <DailyPodiumSlot rank={3} row={dailyRows[2]} />
-                        </div>
-                        <div
-                          className="my-4 h-[0.5px] bg-white/[0.05]"
-                          aria-hidden
-                        />
-                      </>
-                    ) : null}
-                    <div>
-                      {(dailyRows.length >= 3
-                        ? dailyRows.slice(3)
-                        : dailyRows
-                      ).map((row, i) => {
-                        const rank = dailyRows.length >= 3 ? i + 4 : i + 1;
-                        return (
-                          <div
-                            key={row.user_id}
-                            className={`lb-stagger-row flex min-w-0 items-center gap-2 ${ROW_PAD} ${ROW_BORDER} last:border-b-0`}
-                            style={{ "--lb-i": i } as CSSProperties}
-                          >
-                            <span
-                              className={`w-5 shrink-0 text-center text-xs font-semibold tabular-nums ${rankTextClass(rank)}`}
-                            >
-                              {rank}
-                            </span>
-                            <ProfileUsernameLink
-                              username={row.username ?? undefined}
-                              fallbackDisplay={shortUsername(row.user_id)}
-                            >
-                              <LeaderboardAvatar
-                                url={row.avatar_url}
-                                label={row.username ?? row.user_id}
-                                sizePx={28}
-                              />
-                            </ProfileUsernameLink>
-                            <span className="min-w-0 flex-1 truncate text-sm text-white/90">
-                              <ProfileUsernameLink
-                                username={row.username ?? undefined}
-                                fallbackDisplay={shortUsername(row.user_id)}
-                              />
-                            </span>
-                            <span className="shrink-0 text-right text-sm tabular-nums text-white/85">
-                              {row.solved_count}/{DAILY_CHALLENGE_TOTAL}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )
-              ) : tab === "all-time" ? (
+              {tab === "all-time" ? (
                 !(allTimeProfiles?.length ?? 0) ? (
                   <p className="mt-10 text-center text-lg font-semibold text-white/75">
                     No players yet
@@ -534,7 +381,7 @@ export default async function LeaderboardPage({
                     })}
                   </div>
                 )
-              ) : !(creatorRows?.length ?? 0) ? (
+              ) : tab === "creators" && !(creatorRows?.length ?? 0) ? (
                 <p className="mt-10 text-center text-lg font-semibold text-white/75">
                   No creators yet
                 </p>

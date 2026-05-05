@@ -4,10 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, type ReactNode } from "react";
 
-export type LeaderboardTabId = "daily" | "all-time" | "creators";
+export type LeaderboardTabId = "all-time" | "creators";
 
 const TABS: { id: LeaderboardTabId; label: string }[] = [
-  { id: "daily", label: "Daily" },
   { id: "all-time", label: "All Time" },
   { id: "creators", label: "Creators" },
 ];
@@ -49,7 +48,7 @@ export function LeaderboardSwipeArea({
 }) {
   const router = useRouter();
   const touchStartX = useRef<number | null>(null);
-  const order: LeaderboardTabId[] = ["daily", "all-time", "creators"];
+  const order: LeaderboardTabId[] = ["all-time", "creators"];
 
   return (
     <div
