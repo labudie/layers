@@ -1340,6 +1340,7 @@ export function DailyGameClient({
   const startedChallengeIdsRef = useRef<Set<string>>(new Set());
   const completedChallengeIdsRef = useRef<Set<string>>(new Set());
   const dailyCompletedKeyRef = useRef<string | null>(null);
+  const dailyCompleteSignupPromptShownRef = useRef(false);
   const modalPullStartYRef = useRef<number | null>(null);
   const modalScaleRef = useRef(modalScale);
   const [modalPullDy, setModalPullDy] = useState(0);
@@ -1554,11 +1555,23 @@ export function DailyGameClient({
     if (showSummary || !startedChallenge?.id) return;
     if (startedChallengeIdsRef.current.has(startedChallenge.id)) return;
     startedChallengeIdsRef.current.add(startedChallenge.id);
+    const position =
+      typeof startedChallenge.position === "number"
+        ? startedChallenge.position
+        : currentChallengeIndex + 1;
     posthog?.capture("challenge_started", {
-      challenge_id: startedChallenge.id,
-      challenge_index: currentChallengeIndex + 1,
+      challenge_position: position,
+      day_number: dayNumber,
+      is_guest: userId == null,
     });
-  }, [showSummary, challenges, currentChallengeIndex, posthog]);
+  }, [
+    showSummary,
+    challenges,
+    currentChallengeIndex,
+    posthog,
+    dayNumber,
+    userId,
+  ]);
 
   useEffect(() => {
     if (fadeTimeoutRef.current != null) {
@@ -2292,8 +2305,26 @@ export function DailyGameClient({
     const key = `${challengeIdsKey}:${solvedCount}`;
     if (dailyCompletedKeyRef.current === key) return;
     dailyCompletedKeyRef.current = key;
-    posthog?.capture("daily_completed", { total_solved: solvedCount });
-  }, [showSummary, challengeIdsKey, challenges.length, guessesByIndex, posthog]);
+    const totalGuesses = guessesByIndex.reduce((acc, g) => acc + g.length, 0);
+    posthog?.capture("daily_complete", {
+      total_solved: solvedCount,
+      total_guesses: totalGuesses,
+      is_guest: userId == null,
+    });
+  }, [showSummary, challengeIdsKey, challenges.length, guessesByIndex, posthog, userId]);
+
+  useEffect(() => {
+    if (!showDailyHome || userId) {
+      dailyCompleteSignupPromptShownRef.current = false;
+      return;
+    }
+    if (dailyCompleteSignupPromptShownRef.current) return;
+    dailyCompleteSignupPromptShownRef.current = true;
+    posthog?.capture("signup_prompt_shown", {
+      trigger: "daily_complete",
+      is_guest: true,
+    });
+  }, [showDailyHome, userId, posthog]);
 
   useEffect(() => {
     if (!showSummary) {
@@ -2446,11 +2477,17 @@ export function DailyGameClient({
 
     applyGuessFeedback(verdict);
 
+    const challengePosition =
+      typeof currentChallenge.position === "number"
+        ? currentChallenge.position
+        : idx + 1;
+    const isCorrect = verdict === "correct";
+
     posthog?.capture("guess_submitted", {
-      guess_number: attemptNumber,
-      is_correct: verdict === "correct",
-      attempts_used: attemptNumber,
-      challenge_id: currentChallenge.id,
+      challenge_position: challengePosition,
+      attempt_number: attemptNumber,
+      is_correct: isCorrect,
+      is_guest: userId == null,
     });
 
     if (
@@ -2459,9 +2496,10 @@ export function DailyGameClient({
     ) {
       completedChallengeIdsRef.current.add(currentChallenge.id);
       posthog?.capture("challenge_completed", {
-        solved: verdict === "correct",
+        challenge_position: challengePosition,
+        solved: isCorrect,
         attempts_used: attemptNumber,
-        challenge_id: currentChallenge.id,
+        is_guest: userId == null,
       });
     }
 
@@ -3123,6 +3161,11 @@ export function DailyGameClient({
                 </p>
                 <Link
                   href="/login"
+                  onClick={() => {
+                    posthog?.capture("signup_clicked", {
+                      trigger: "daily_complete",
+                    });
+                  }}
                   className="mt-5 inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-[#7c3aed] px-6 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition hover:bg-[#6d28d9]"
                 >
                   Sign in with Google

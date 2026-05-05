@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { usePostHog } from "posthog-js/react";
 import {
   useCallback,
   useEffect,
@@ -118,6 +119,7 @@ export function AppSiteChrome({
   suppressSiteHeader = false,
 }: AppSiteChromeProps) {
   const router = useRouter();
+  const posthog = usePostHog();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement | null>(null);
 
@@ -128,6 +130,7 @@ export function AppSiteChrome({
   const [profileStreak, setProfileStreak] = useState(0);
   const [profileTotalSolved, setProfileTotalSolved] = useState(0);
   const [sheetUsername, setSheetUsername] = useState<string | null>(null);
+  const navDrawerSignupPromptShownRef = useRef(false);
 
   const loadNavProfile = useCallback(async () => {
     const sb = supabase();
@@ -186,6 +189,20 @@ export function AppSiteChrome({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [drawerOpen]);
+
+  useEffect(() => {
+    if (!drawerOpen) {
+      navDrawerSignupPromptShownRef.current = false;
+      return;
+    }
+    if (signedIn) return;
+    if (navDrawerSignupPromptShownRef.current) return;
+    navDrawerSignupPromptShownRef.current = true;
+    posthog?.capture("signup_prompt_shown", {
+      trigger: "nav_drawer",
+      is_guest: true,
+    });
+  }, [drawerOpen, signedIn, posthog]);
 
   useEffect(() => {
     const onOpenMenu = () => setDrawerOpen(true);
@@ -279,7 +296,12 @@ export function AppSiteChrome({
                   <Link
                     href="/login"
                     className="tap-press flex min-h-[48px] items-center justify-center rounded-xl bg-[#7c3aed] px-4 text-[15px] font-bold text-white shadow-lg shadow-violet-500/20 transition-[background-color,transform,filter] duration-150 [transition-timing-function:var(--smooth)] hover:bg-[#6d28d9] hover:brightness-105 active:brightness-95"
-                    onClick={() => setDrawerOpen(false)}
+                    onClick={() => {
+                      posthog?.capture("signup_clicked", {
+                        trigger: "nav_drawer",
+                      });
+                      setDrawerOpen(false);
+                    }}
                   >
                     Sign in with Google
                   </Link>
