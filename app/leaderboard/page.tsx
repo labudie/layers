@@ -18,35 +18,33 @@ import {
 } from "@/lib/profile-handle-link";
 import { stripAtHandle } from "@/lib/username-display";
 
-/** Aggregated daily row (one per user) built from `results` + `profiles`. */
-type DailyLeaderboardRow = {
+type ProfileEmbed = {
+  username: string | null;
+  avatar_url: string | null;
+  current_streak?: number | null;
+};
+
+function unwrapProfile<T extends { username?: string | null }>(
+  p: T | T[] | null | undefined,
+): T | null {
+  if (p == null) return null;
+  return Array.isArray(p) ? (p[0] ?? null) : p;
+}
+
+type AllTimeLeaderboardRow = {
   user_id: string;
   username: string | null;
   avatar_url: string | null;
-  /** Capped at `DAILY_CHALLENGE_TOTAL`. */
-  solved_count: number;
-  /** Sum of `attempts_used` across all of today’s result rows for this user. */
+  current_streak: number;
+  days_played: number;
   total_guesses: number;
-  /** Earliest `created_at` among those rows (ms); for sorting only. */
-  first_completion_at: number | null;
 };
 
-const DAILY_CHALLENGE_TOTAL = 5;
-
-type ProfileRow = {
-  id: string;
-  username: string | null;
-  total_solved: number | null;
-  longest_streak: number | null;
-  current_streak: number | null;
-  avatar_url: string | null;
-};
-
-type CreatorRow = {
+type CreatorLeaderboardRow = {
   creator_name: string | null;
-  total_submissions: number | null;
-  total_downloads: number | null;
-  total_players: number | null;
+  username: string | null;
+  avatar_url: string | null;
+  submission_count: number;
 };
 
 const ROW_PAD = "py-2 px-1";
@@ -124,189 +122,155 @@ export default async function LeaderboardPage({
 
   const supabase = createSupabaseServerClient(await cookies());
 
-  const today = new Date().toLocaleDateString("en-CA", {
-    timeZone: "America/New_York",
-  });
-
-  let dailyRows: DailyLeaderboardRow[] = [];
-  let allTimeProfiles: ProfileRow[] | null = null;
-  let creatorRows: CreatorRow[] | null = null;
-  let challengeThumbRows: Array<{
-    creator_name?: string | null;
-    image_url?: string | null;
-  }> | null = null;
+  let allTimeRows: AllTimeLeaderboardRow[] = [];
+  let creatorRows: CreatorLeaderboardRow[] = [];
 
   try {
-    const { data: todayChallenges } = await supabase
-      .from("challenges")
-      .select("id")
-      .eq("active_date", today);
-
-    const todayIds = (todayChallenges ?? []).map((c) => c.id);
-
-    if (todayIds.length > 0) {
-    const { data: resultsData } = await supabase
+    const { data: resultsData, error: resultsError } = await supabase
       .from("results")
-      .select("user_id, solved, attempts_used, challenge_id, created_at")
-      .in("challenge_id", todayIds);
+      .select(
+        "user_id, attempts_used, profiles(username, avatar_url, current_streak)",
+      )
+      .order("created_at", { ascending: false });
 
-    type ResultPick = {
-      user_id: string;
-      solved: boolean | null;
-      attempts_used: number | null;
-      challenge_id: string;
-      created_at: string | null;
-    };
+    if (resultsError) {
+      console.error("[leaderboard] results fetch failed", resultsError);
+    } else {
+      type ResultPick = {
+        user_id: string;
+        attempts_used: number | null;
+        profiles: ProfileEmbed | ProfileEmbed[] | null;
+      };
 
-    const resultsList = (resultsData ?? []) as ResultPick[];
-
-    const userIds = [
-      ...new Set(
-        resultsList.map((r) => r.user_id).filter((id): id is string => Boolean(id))
-      ),
-    ];
-
-    const profilesById = new Map<
-      string,
-      { username: string | null; avatar_url: string | null }
-    >();
-
-    if (userIds.length > 0) {
-      const { data: profilesData } = await supabase
-        .from("profiles")
-        .select("id, username, avatar_url")
-        .in("id", userIds);
-
-      for (const p of profilesData ?? []) {
-        const row = p as {
-          id: string;
+      const byUser = new Map<
+        string,
+        {
+          days_played: number;
+          total_guesses: number;
           username: string | null;
           avatar_url: string | null;
-        };
-        profilesById.set(row.id, {
-          username: row.username,
-          avatar_url: row.avatar_url,
-        });
-      }
-    }
+          current_streak: number;
+        }
+      >();
 
-    const byUser = new Map<
-      string,
-      {
-        solved_count: number;
-        total_guesses: number;
-        first_completion_at: number | null;
-      }
-    >();
+      for (const raw of (resultsData ?? []) as unknown as ResultPick[]) {
+        const uid = raw.user_id?.trim();
+        if (!uid) continue;
 
-    for (const r of resultsList) {
-      const uid = r.user_id;
-      if (!uid) continue;
+        const p = unwrapProfile(raw.profiles);
+        const attempts = Math.max(
+          0,
+          Math.floor(Number(raw.attempts_used) || 0),
+        );
 
-      let agg = byUser.get(uid);
-      if (!agg) {
-        agg = {
-          solved_count: 0,
-          total_guesses: 0,
-          first_completion_at: null,
-        };
-        byUser.set(uid, agg);
-      }
-
-      if (r.solved === true) {
-        agg.solved_count += 1;
-      }
-
-      const attempts =
-        r.attempts_used === null || r.attempts_used === undefined
-          ? NaN
-          : Number(r.attempts_used);
-      if (Number.isFinite(attempts)) {
+        let agg = byUser.get(uid);
+        if (!agg) {
+          agg = {
+            days_played: 0,
+            total_guesses: 0,
+            username: p?.username ?? null,
+            avatar_url: p?.avatar_url ?? null,
+            current_streak: Math.max(
+              0,
+              Math.floor(Number(p?.current_streak) || 0),
+            ),
+          };
+          byUser.set(uid, agg);
+        }
+        agg.days_played += 1;
         agg.total_guesses += attempts;
       }
 
-      const createdMs = r.created_at ? Date.parse(r.created_at) : NaN;
-      if (Number.isFinite(createdMs)) {
-        agg.first_completion_at =
-          agg.first_completion_at === null
-            ? createdMs
-            : Math.min(agg.first_completion_at, createdMs);
-      }
-    }
-
-    dailyRows = [...byUser.entries()].map(([user_id, v]) => {
-      const p = profilesById.get(user_id);
-      return {
+      allTimeRows = [...byUser.entries()].map(([user_id, v]) => ({
         user_id,
-        username: p?.username ?? null,
-        avatar_url: p?.avatar_url ?? null,
-        solved_count: Math.min(DAILY_CHALLENGE_TOTAL, v.solved_count),
+        username: v.username,
+        avatar_url: v.avatar_url,
+        current_streak: v.current_streak,
+        days_played: v.days_played,
         total_guesses: v.total_guesses,
-        first_completion_at: v.first_completion_at,
-      };
-    });
+      }));
 
-    dailyRows.sort((a, b) => {
-      if (b.solved_count !== a.solved_count) {
-        return b.solved_count - a.solved_count;
-      }
-      if (a.total_guesses !== b.total_guesses) {
-        return a.total_guesses - b.total_guesses;
-      }
-      const fa = a.first_completion_at ?? Number.POSITIVE_INFINITY;
-      const fb = b.first_completion_at ?? Number.POSITIVE_INFINITY;
-      if (fa !== fb) return fa - fb;
-      return a.user_id.localeCompare(b.user_id);
-    });
+      allTimeRows.sort((a, b) => {
+        if (b.days_played !== a.days_played) {
+          return b.days_played - a.days_played;
+        }
+        if (a.total_guesses !== b.total_guesses) {
+          return a.total_guesses - b.total_guesses;
+        }
+        if (b.current_streak !== a.current_streak) {
+          return b.current_streak - a.current_streak;
+        }
+        return a.user_id.localeCompare(b.user_id);
+      });
     }
 
-    const { data: profilesOut } = await supabase
-      .from("profiles")
-      .select(
-        "id, username, total_solved, longest_streak, current_streak, avatar_url",
-      )
-      .order("total_solved", { ascending: false })
-      .order("longest_streak", { ascending: false })
-      .order("username", { ascending: true });
+    const { data: submissionsData, error: submissionsError } = await supabase
+      .from("submissions")
+      .select("creator_name, profiles(username, avatar_url)")
+      .eq("status", "approved");
 
-    const { data: creatorsOut } = await supabase
-      .from("creator_leaderboard")
-      .select("creator_name, total_submissions, total_downloads, total_players")
-      .order("total_downloads", { ascending: false })
-      .order("total_submissions", { ascending: false })
-      .order("total_players", { ascending: false });
+    if (submissionsError) {
+      console.error("[leaderboard] submissions fetch failed", submissionsError);
+    } else {
+      type SubPick = {
+        creator_name: string | null;
+        profiles: Pick<ProfileEmbed, "username" | "avatar_url"> | Pick<
+          ProfileEmbed,
+          "username" | "avatar_url"
+        >[] | null;
+      };
 
-    const { data: thumbsOut } = await supabase
-      .from("challenges")
-      .select("creator_name, image_url, active_date")
-      .not("image_url", "is", null)
-      .order("active_date", { ascending: false });
+      const byCreator = new Map<
+        string,
+        {
+          creator_name: string | null;
+          username: string | null;
+          avatar_url: string | null;
+          submission_count: number;
+        }
+      >();
 
-    allTimeProfiles = profilesOut as ProfileRow[] | null;
-    creatorRows = creatorsOut as CreatorRow[] | null;
-    challengeThumbRows = thumbsOut;
+      for (const raw of (submissionsData ?? []) as unknown as SubPick[]) {
+        const key = creatorKey(raw.creator_name);
+        if (!key) continue;
+
+        const p = unwrapProfile(raw.profiles);
+        const cur = byCreator.get(key);
+        if (!cur) {
+          byCreator.set(key, {
+            creator_name: raw.creator_name,
+            username: p?.username ?? null,
+            avatar_url: p?.avatar_url ?? null,
+            submission_count: 1,
+          });
+        } else {
+          cur.submission_count += 1;
+          if (!cur.username?.trim() && p?.username?.trim()) {
+            cur.username = p.username;
+          }
+          if (!cur.avatar_url?.trim() && p?.avatar_url?.trim()) {
+            cur.avatar_url = p.avatar_url;
+          }
+        }
+      }
+
+      creatorRows = [...byCreator.values()].sort((a, b) => {
+        if (b.submission_count !== a.submission_count) {
+          return b.submission_count - a.submission_count;
+        }
+        return creatorKey(a.creator_name).localeCompare(
+          creatorKey(b.creator_name),
+        );
+      });
+    }
   } catch (e) {
     console.error("[leaderboard] Supabase fetch failed", e);
-  }
-
-  void dailyRows;
-
-  const thumbByCreator = new Map<string, string>();
-  for (const raw of challengeThumbRows ?? []) {
-    const ch = raw as {
-      creator_name?: string | null;
-      image_url?: string | null;
-    };
-    const key = creatorKey(ch.creator_name);
-    const url = ch.image_url?.trim();
-    if (!key || !url || thumbByCreator.has(key)) continue;
-    thumbByCreator.set(key, url);
   }
 
   const tabSubline =
     tab === "all-time"
       ? "Since launch · All players"
-      : "Ranked by downloads";
+      : "Approved community submissions";
 
   return (
     <AppSiteChrome title="Leaderboard">
@@ -320,21 +284,18 @@ export default async function LeaderboardPage({
 
             <LeaderboardTabPanel key={tab} tab={tab}>
               {tab === "all-time" ? (
-                !(allTimeProfiles?.length ?? 0) ? (
+                !allTimeRows.length ? (
                   <p className="mt-10 text-center text-lg font-semibold text-white/75">
                     No players yet
                   </p>
                 ) : (
                   <div className="mt-6">
-                    {(allTimeProfiles ?? []).map((row, i) => {
+                    {allTimeRows.map((row, i) => {
                       const rank = i + 1;
-                      const streak = Math.max(
-                        0,
-                        Math.floor(Number(row.current_streak) || 0),
-                      );
+                      const streak = row.current_streak;
                       return (
                         <div
-                          key={`${row.id}-${i}`}
+                          key={row.user_id}
                           className={`lb-stagger-row flex min-w-0 items-center gap-2 ${ROW_PAD} ${ROW_BORDER} last:border-b-0`}
                           style={{ "--lb-i": i } as CSSProperties}
                         >
@@ -345,11 +306,11 @@ export default async function LeaderboardPage({
                           </span>
                           <ProfileUsernameLink
                             username={row.username ?? undefined}
-                            fallbackDisplay={shortUsername(row.id)}
+                            fallbackDisplay={shortUsername(row.user_id)}
                           >
                             <LeaderboardAvatar
                               url={row.avatar_url}
-                              label={row.username ?? row.id}
+                              label={row.username ?? row.user_id}
                               sizePx={28}
                             />
                           </ProfileUsernameLink>
@@ -357,45 +318,47 @@ export default async function LeaderboardPage({
                             <span className="min-w-0 truncate">
                               <ProfileUsernameLink
                                 username={row.username ?? undefined}
-                                fallbackDisplay={shortUsername(row.id)}
+                                fallbackDisplay={shortUsername(row.user_id)}
                               />
                             </span>
                             {streak >= 3 ? (
-                              <span
-                                className="shrink-0 rounded px-[5px] py-0.5 text-[9px] font-semibold text-[#a855f7]"
-                                style={{
-                                  background: "#7c3aed22",
-                                  borderRadius: 4,
-                                  padding: "2px 5px",
-                                }}
-                              >
+                              <span className="shrink-0 text-[9px] font-semibold text-[#a855f7]">
                                 🔥{streak}
                               </span>
                             ) : null}
                           </span>
-                          <span className="shrink-0 text-right text-sm tabular-nums text-white/85">
-                            {row.total_solved ?? 0} solved
+                          <span className="shrink-0 text-right text-sm tabular-nums">
+                            <span className="text-[#f8f4ff]">
+                              {row.days_played}{" "}
+                              {row.days_played === 1 ? "day" : "days"}
+                            </span>
+                            <span className="text-white/35"> · </span>
+                            <span className="text-[#a0a0b0]">
+                              {row.total_guesses}{" "}
+                              {row.total_guesses === 1 ? "guess" : "guesses"}
+                            </span>
                           </span>
                         </div>
                       );
                     })}
                   </div>
                 )
-              ) : tab === "creators" && !(creatorRows?.length ?? 0) ? (
+              ) : !creatorRows.length ? (
                 <p className="mt-10 text-center text-lg font-semibold text-white/75">
                   No creators yet
                 </p>
               ) : (
                 <div className="mt-6">
-                  {(creatorRows ?? []).map((row, i) => {
+                  {creatorRows.map((row, i) => {
                     const rank = i + 1;
-                    const key = creatorKey(row.creator_name);
-                    const thumb = key ? thumbByCreator.get(key) : undefined;
-                    const subs = row.total_submissions ?? 0;
-                    const dls = row.total_downloads ?? 0;
+                    const handle = stripAtHandle(row.creator_name ?? "");
+                    const labelForAvatar =
+                      row.username?.trim() || handle || "?";
+                    const fallback = handle || "—";
+
                     return (
                       <div
-                        key={`${row.creator_name ?? "creator"}-${i}`}
+                        key={`${creatorKey(row.creator_name)}-${i}`}
                         className={`lb-stagger-row flex min-w-0 items-center gap-2 ${ROW_PAD} ${ROW_BORDER} last:border-b-0`}
                         style={{ "--lb-i": i } as CSSProperties}
                       >
@@ -404,43 +367,45 @@ export default async function LeaderboardPage({
                         >
                           {rank}
                         </span>
-                        <CreatorProfileLink raw={row.creator_name}>
-                          <span
-                            className="inline-flex h-9 w-9 shrink-0 overflow-hidden rounded-md border-[0.5px] border-white/10 bg-[#1a0a2e]"
-                            style={{ borderRadius: 6 }}
-                          >
-                            {thumb ? (
-                              <img
-                                src={thumb}
-                                alt=""
-                                className="h-full w-full object-cover"
-                                width={36}
-                                height={36}
+                        {stripAtHandle(row.username ?? "").length ? (
+                          <>
+                            <ProfileUsernameLink
+                              username={row.username ?? undefined}
+                              fallbackDisplay={fallback}
+                            >
+                              <LeaderboardAvatar
+                                url={row.avatar_url}
+                                label={labelForAvatar}
+                                sizePx={28}
                               />
-                            ) : (
-                              <span className="flex h-full w-full items-center justify-center text-xs font-bold text-white/80">
-                                {(stripAtHandle(row.creator_name ?? "").slice(0, 1) ||
-                                  "?").toUpperCase()}
-                              </span>
-                            )}
-                          </span>
-                        </CreatorProfileLink>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-bold text-white">
-                            <CreatorProfileLink raw={row.creator_name} />
-                          </div>
-                          <div className="truncate text-xs text-[#6b7280]">
-                            {subs} challenges featured
-                          </div>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <div className="text-sm font-semibold tabular-nums text-[#a855f7]">
-                            ↓{dls}
-                          </div>
-                          <div className="text-xs tabular-nums text-[#6b7280]">
-                            {subs}
-                          </div>
-                        </div>
+                            </ProfileUsernameLink>
+                            <span className="min-w-0 flex-1 truncate text-sm text-white/90">
+                              <ProfileUsernameLink
+                                username={row.username ?? undefined}
+                                fallbackDisplay={fallback}
+                              />
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <CreatorProfileLink raw={row.creator_name}>
+                              <LeaderboardAvatar
+                                url={row.avatar_url}
+                                label={labelForAvatar}
+                                sizePx={28}
+                              />
+                            </CreatorProfileLink>
+                            <span className="min-w-0 flex-1 truncate text-sm text-white/90">
+                              <CreatorProfileLink raw={row.creator_name} />
+                            </span>
+                          </>
+                        )}
+                        <span className="shrink-0 text-right text-sm font-medium tabular-nums text-[#f8f4ff]">
+                          {row.submission_count}{" "}
+                          {row.submission_count === 1
+                            ? "submission"
+                            : "submissions"}
+                        </span>
                       </div>
                     );
                   })}
